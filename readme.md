@@ -155,6 +155,14 @@ Bilingual SEL activity with full voiceover. Tap the wheel, name the feeling, sco
 <img width="46%" src="https://github-profile-summary-cards.vercel.app/api/cards/repos-per-language?username=ananya-goswami&theme=github_dark" alt="top languages by repo" />
 <img width="46%" src="https://github-profile-summary-cards.vercel.app/api/cards/most-commit-language?username=ananya-goswami&theme=github_dark" alt="top languages by commit" />
 
+<br/><br/>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/snake-dark.svg" />
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/snake.svg" />
+  <img width="95%" alt="contribution snake" src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/snake.svg" />
+</picture>
+
 </div>
 
 <br/>
