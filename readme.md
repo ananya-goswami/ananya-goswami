@@ -14,7 +14,7 @@
 
 <br/>
 
-<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/projects.svg" width="100%" alt="featured projects" />
+<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/projects.svg?v=2" width="100%" alt="featured projects" />
 
 </div>
 
@@ -115,7 +115,7 @@ n8n · WAHA · Railway · Claude API · Web Audio · IndexedDB · a lot of plain
 
 <br/><br/>
 
-<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/stats.svg" width="84%" alt="high scores" />
+<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/stats.svg?v=2" width="84%" alt="high scores" />
 
 <br/><br/>
 
