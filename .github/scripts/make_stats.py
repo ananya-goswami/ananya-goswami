@@ -5,7 +5,7 @@ import os
 import urllib.request
 
 USER = "ananya-goswami"
-OUT = os.environ.get("STATS_OUT", "dist/stats.svg")
+OUT = os.environ.get("STATS_OUT", "dist/highscores.svg")
 TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
 HEAD = {"Accept": "application/vnd.github+json", "User-Agent": "profile-stats"}
