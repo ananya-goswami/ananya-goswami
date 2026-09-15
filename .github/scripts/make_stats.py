@@ -5,7 +5,7 @@ import os
 import urllib.request
 
 USER = "ananya-goswami"
-OUT = os.environ.get("STATS_OUT", "dist/highscores.svg")
+OUT = os.environ.get("STATS_OUT", "dist/highscores-v2.svg")
 TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
 HEAD = {"Accept": "application/vnd.github+json", "User-Agent": "profile-stats"}
@@ -106,7 +106,7 @@ def esc(s):
 def build(d, g=None):
     """Stats panel: streak band on top, stats list and language split below."""
     g = g or {}
-    W, H = 1000, 470
+    W, H = 1000, 444
     first = (g.get("first_day") or "")[:10]
 
     # ---- top band: three columns split by dividers ----
@@ -196,12 +196,7 @@ def build(d, g=None):
 </style>
 <rect width="{W}" height="{H}" rx="14" fill="url(#bgG)"/>
 <ellipse cx="500" cy="{H}" rx="540" ry="230" fill="url(#glowA)"/>
-<rect x="1" y="1" width="{W - 2}" height="30" rx="14" fill="#0a1114"/>
-<rect x="1" y="20" width="{W - 2}" height="11" fill="#0a1114"/>
-<circle cx="24" cy="16" r="4.5" fill="#ff5f57"/><circle cx="40" cy="16" r="4.5" fill="#febc2e"/><circle cx="56" cy="16" r="4.5" fill="#28c840"/>
-<text class="mono" x="78" y="21" font-size="12" fill="#4e6b66">ananya@github:~/stats</text>
-<text class="mono pulse" x="{W - 24}" y="21" font-size="12" text-anchor="end" fill="#9BE7C4">rebuilt daily</text>
-<line x1="1" y1="31" x2="{W - 1}" y2="31" stroke="#9BE7C4" stroke-opacity=".18"/>
+<g transform="translate(0 -26)">
 {band}
 <line x1="34" y1="214" x2="{W - 34}" y2="214" stroke="#132824"/>
 <rect x="34" y="230" width="430" height="200" rx="12" fill="#070f13" stroke="#152e2a"/>
@@ -211,6 +206,7 @@ def build(d, g=None):
 <text class="mono" x="530" y="262" font-size="14" font-weight="700" fill="#9BE7C4">Most Used Languages</text>
 <rect x="{bar_x}" y="{bar_y}" width="{bar_w}" height="11" rx="5.5" fill="#101d21"/>
 {seg}{legend}
+</g>
 <g clip-path="url(#win)"><rect width="{W}" height="{H}" fill="url(#scan)"/></g>
 <rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="14" fill="none" stroke="#9BE7C4" stroke-opacity=".26"/>
 </svg>
@@ -276,8 +272,7 @@ def build_projects(index):
 <rect width="{W}" height="{H}" rx="14" fill="url(#bgG)"/>
 <ellipse cx="1000" cy="380" rx="360" ry="240" fill="url(#glowB)"/>
 <rect x="1" y="1" width="{W - 2}" height="32" rx="14" fill="#0a1114"/><rect x="1" y="22" width="{W - 2}" height="11" fill="#0a1114"/>
-<circle cx="26" cy="17" r="4.5" fill="#ff5f57"/><circle cx="43" cy="17" r="4.5" fill="#febc2e"/><circle cx="60" cy="17" r="4.5" fill="#28c840"/>
-<text class="mono" x="84" y="22" font-size="12" fill="#4e6b66">ananya@github: ~/projects</text>
+<text class="mono" x="30" y="22" font-size="12" fill="#4e6b66">~/projects</text>
 <line x1="1" y1="33" x2="{W - 1}" y2="33" stroke="#00FF9C" stroke-opacity=".18"/>
 <text class="mono" x="26" y="68" font-size="14" fill="#3ddc97" fill-opacity=".8" xml:space="preserve">$ ls ~/projects --featured</text>
 <rect class="car" x="232" y="56" width="8" height="15" fill="#00FF9C" fill-opacity=".8"/>
@@ -322,7 +317,7 @@ def build_snake_panel(src_path, out_path):
     inner_w = W - 64
     k = inner_w / vw
     inner_h = (vh - 34) * k
-    H = int(inner_h + 84)
+    H = int(inner_h + 52)
 
     inner = re.sub(r"^<svg[^>]*>", "", svg, count=1)[: -len("</svg>")]
     vb = [float(v) for v in re.search(r'viewBox="([^"]+)"', head).group(1).split()]
@@ -343,13 +338,7 @@ def build_snake_panel(src_path, out_path):
   @keyframes spulse {{ 0%,100% {{ opacity: .45 }} 50% {{ opacity: 1 }} }}</style>
 <rect width="{W}" height="{H}" rx="14" fill="url(#sbg)"/>
 <ellipse cx="500" cy="{H}" rx="520" ry="200" fill="url(#sglow)"/>
-<rect x="1" y="1" width="{W - 2}" height="30" rx="14" fill="#0a1114"/>
-<rect x="1" y="20" width="{W - 2}" height="11" fill="#0a1114"/>
-<circle cx="24" cy="16" r="4.5" fill="#ff5f57"/><circle cx="40" cy="16" r="4.5" fill="#febc2e"/><circle cx="56" cy="16" r="4.5" fill="#28c840"/>
-<text class="smono" x="78" y="21" font-size="12" fill="#4e6b66">ananya@github:~/contributions</text>
-<text class="smono spulse" x="{W - 24}" y="21" font-size="12" text-anchor="end" fill="#9BE7C4">eating the grid</text>
-<line x1="1" y1="31" x2="{W - 1}" y2="31" stroke="#9BE7C4" stroke-opacity=".18"/>
-<svg x="32" y="52" width="{inner_w}" height="{inner_h:.0f}" viewBox="{view}" preserveAspectRatio="xMidYMid meet">
+<svg x="32" y="26" width="{inner_w}" height="{inner_h:.0f}" viewBox="{view}" preserveAspectRatio="xMidYMid meet">
 {inner}
 </svg>
 <g clip-path="url(#swin)"><rect width="{W}" height="{H}" fill="url(#sscan)"/></g>
@@ -370,8 +359,8 @@ if __name__ == "__main__":
     out_dir = os.path.dirname(OUT) or "."
     os.makedirs(out_dir, exist_ok=True)
     open(OUT, "w").write(build(data, g))
-    open(os.path.join(out_dir, "projects.svg"), "w").write(build_projects(data["index"]))
-    for src, dst in (("snake-dark.svg", "snake-panel.svg"),):
+    open(os.path.join(out_dir, "projects-v2.svg"), "w").write(build_projects(data["index"]))
+    for src, dst in (("snake-dark.svg", "snake-panel-v2.svg"),):
         p = os.path.join(out_dir, src)
         if os.path.exists(p):
             build_snake_panel(p, os.path.join(out_dir, dst))
