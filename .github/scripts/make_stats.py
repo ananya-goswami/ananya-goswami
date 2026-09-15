@@ -217,6 +217,77 @@ def build(d, g=None):
 '''
 
 
+
+
+FEATURED = [
+    ("Competition-Zone", "Competition Zone", "PROTOTYPE",
+     "contest platform: entries, results, trophy room, XP"),
+    ("fln-animation-toolkit", "FLN Animation Kit", "TOOLKIT",
+     "7 drop-in animations for learning apps, fully tunable"),
+    ("Keyword-class9", "Spot the Scam", "CLASS 9 / CYBER",
+     "find the bait, then stop, verify, report. helpline 1930"),
+    ("think-ask-act", "Think Ask Act", "CYBER SAFETY",
+     "sequence the response: think, ask an adult, act after"),
+    ("calm-or-react", "Calm or React", "CYBER SAFETY",
+     "sort the message, name the emotion the scam leans on"),
+    ("feeling-wheel-tap", "Feeling Wheel Tap", "SEL",
+     "pause, notice, name the feeling, take back control"),
+]
+
+
+def build_projects(index):
+    W, H = 1200, 452
+    CW, CH, GX, GY = 566, 104, 22, 16
+    cards = ""
+    for i, (repo, title, tag, blurb) in enumerate(FEATURED):
+        col, row = i % 2, i // 2
+        x = 26 + col * (CW + GX)
+        y = 96 + row * (CH + GY)
+        meta = index.get(repo, {})
+        live = bool((meta.get("homepage") or "").strip())
+        langs = " / ".join(meta.get("langs", [])[:3]) or "html / css / js"
+        cards += f'''
+  <g>
+    <rect x="{x}" y="{y}" width="{CW}" height="{CH}" rx="9" fill="#050d0b" stroke="#00FF9C" stroke-opacity=".20"/>
+    <text class="mono" x="{x + 16}" y="{y + 22}" font-size="11" fill="#3f5f58">~/{esc(repo)}</text>
+    <text class="mono" x="{x + CW - 16}" y="{y + 22}" font-size="10.5" text-anchor="end" letter-spacing="1.3"
+          fill="{'#00FF9C' if live else '#3f5f58'}">{'● LIVE' if live else '○ REPO'}</text>
+    <text class="mono" x="{x + 16}" y="{y + 48}" font-size="16" font-weight="700" fill="#E8FFF6">{esc(title)}</text>
+    <text class="mono" x="{x + 16}" y="{y + 70}" font-size="12.5" fill="#7f9c96">{esc(blurb)}</text>
+    <text class="mono" x="{x + 16}" y="{y + 90}" font-size="11" fill="#22D3EE" fill-opacity=".85">{esc(langs)}</text>
+    <text class="mono" x="{x + CW - 16}" y="{y + 90}" font-size="10.5" text-anchor="end" letter-spacing="1.4"
+          fill="#3ddc97" fill-opacity=".8">{esc(tag)}</text>
+  </g>'''
+
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="featured projects">
+<defs>
+  <linearGradient id="bgG" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#04070a"/><stop offset="55%" stop-color="#060e11"/><stop offset="100%" stop-color="#04090c"/>
+  </linearGradient>
+  <radialGradient id="glowB"><stop offset="0%" stop-color="#22D3EE" stop-opacity=".12"/><stop offset="100%" stop-color="#22D3EE" stop-opacity="0"/></radialGradient>
+  <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#7fffd4" fill-opacity=".03"/></pattern>
+  <clipPath id="win"><rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="14"/></clipPath>
+</defs>
+<style>
+  .mono {{ font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }}
+  .car {{ animation: blink 1.05s steps(1) infinite; }}
+  @keyframes blink {{ 0%,48% {{ opacity: 1 }} 49%,100% {{ opacity: 0 }} }}
+</style>
+<rect width="{W}" height="{H}" rx="14" fill="url(#bgG)"/>
+<ellipse cx="1000" cy="380" rx="360" ry="240" fill="url(#glowB)"/>
+<rect x="1" y="1" width="{W - 2}" height="32" rx="14" fill="#0a1114"/><rect x="1" y="22" width="{W - 2}" height="11" fill="#0a1114"/>
+<circle cx="26" cy="17" r="4.5" fill="#ff5f57"/><circle cx="43" cy="17" r="4.5" fill="#febc2e"/><circle cx="60" cy="17" r="4.5" fill="#28c840"/>
+<text class="mono" x="84" y="22" font-size="12" fill="#4e6b66">ananya@github: ~/projects</text>
+<line x1="1" y1="33" x2="{W - 1}" y2="33" stroke="#00FF9C" stroke-opacity=".18"/>
+<text class="mono" x="26" y="68" font-size="14" fill="#3ddc97" fill-opacity=".8" xml:space="preserve">$ ls ~/projects --featured</text>
+<rect class="car" x="232" y="56" width="8" height="15" fill="#00FF9C" fill-opacity=".8"/>
+{cards}
+<g clip-path="url(#win)"><rect width="{W}" height="{H}" fill="url(#scan)"/></g>
+<rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="14" fill="none" stroke="#00FF9C" stroke-opacity=".26"/>
+</svg>
+'''
+
+
 SNAKE_PALETTE = {
     "--cb": "#0e1a1f",      # cell border
     "--cs": "#C4A8FF",      # the snake, violet so it reads over the grid
