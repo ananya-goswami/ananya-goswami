@@ -10,11 +10,11 @@
 
 <br/><br/>
 
-<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/highscores.svg" width="100%" alt="contributions, streaks and language split" />
+<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/highscores-v2.svg" width="100%" alt="contributions, streaks and language split" />
 
 <br/><br/>
 
-<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/snake-panel.svg" width="100%" alt="contribution snake" />
+<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/snake-panel-v2.svg" width="100%" alt="contribution snake" />
 
 <br/><br/>
 
@@ -22,7 +22,7 @@
 
 <br/>
 
-<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/projects.svg" width="100%" alt="featured projects" />
+<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/projects-v2.svg" width="100%" alt="featured projects" />
 
 </div>
 
