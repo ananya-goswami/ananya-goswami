@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/hero-v4.svg" width="100%" alt="Ananya Goswami, senior product associate" />
+<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/hero-v5.svg" width="100%" alt="Ananya Goswami, senior product associate" />
 
 <br/>
 
