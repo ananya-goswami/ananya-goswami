@@ -50,51 +50,125 @@ def collect():
     }
 
 
+
+
+GQL = """query($login:String!){
+  user(login:$login){
+    contributionsCollection{
+      totalCommitContributions
+      contributionCalendar{ totalContributions weeks{ contributionDays{ date contributionCount } } }
+    }
+    pullRequests{ totalCount }
+    issues{ totalCount }
+    repositories(first:100, ownerAffiliations:OWNER, isFork:false){ nodes{ stargazerCount } }
+  }
+}"""
+
+
+def graph():
+    """contribution calendar, streaks, stars, PRs and issues in one call"""
+    body = json.dumps({"query": GQL, "variables": {"login": USER}}).encode()
+    req = urllib.request.Request("https://api.github.com/graphql", data=body, headers={
+        **HEAD, "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        data = json.load(r)["data"]["user"]
+
+    days = [d for w in data["contributionsCollection"]["contributionCalendar"]["weeks"]
+            for d in w["contributionDays"]]
+    days.sort(key=lambda d: d["date"])
+    best = run = 0
+    for d in days:
+        run = run + 1 if d["contributionCount"] > 0 else 0
+        best = max(best, run)
+    current = 0
+    for d in reversed(days):
+        if d["contributionCount"] > 0:
+            current += 1
+        elif current or d is not days[-1]:
+            break
+    return {
+        "contributions": data["contributionsCollection"]["contributionCalendar"]["totalContributions"],
+        "commits": data["contributionsCollection"]["totalCommitContributions"],
+        "current_streak": current,
+        "longest_streak": best,
+        "stars": sum(n["stargazerCount"] for n in data["repositories"]["nodes"]),
+        "prs": data["pullRequests"]["totalCount"],
+        "issues": data["issues"]["totalCount"],
+        "first_day": days[0]["date"] if days else "",
+        "last_day": days[-1]["date"] if days else "",
+    }
+
+
 def esc(s):
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def build(d):
-    W, H = 1000, 300
-    langs = d["langs"]
-    rows = [
+def build(d, g=None):
+    """HIGH SCORES panel: streaks and contribution totals on top, repo facts below."""
+    g = g or {}
+    W, H = 1000, 424
+    tiles = [
+        (str(g.get("contributions", "-")), "TOTAL CONTRIBUTIONS", g.get("first_day", "")[:10] + " to now"),
+        (str(g.get("current_streak", "-")), "CURRENT STREAK", "days in a row"),
+        (str(g.get("longest_streak", "-")), "LONGEST STREAK", "best run so far"),
+    ]
+    tw, gap, x0 = 300, 26, 34
+    tile_svg = ""
+    for i, (val, label, sub) in enumerate(tiles):
+        x = x0 + i * (tw + gap)
+        mid = x + tw / 2
+        tile_svg += f'''
+  <g>
+    <rect x="{x}" y="52" width="{tw}" height="118" rx="12" fill="#081014" stroke="#1d3b36"/>
+    <text class="mono" x="{mid:.0f}" y="108" text-anchor="middle" font-size="42" font-weight="700" fill="url(#num)">{esc(val)}</text>
+    <text class="mono" x="{mid:.0f}" y="132" text-anchor="middle" font-size="11" letter-spacing="2.2" fill="#9BE7C4">{label}</text>
+    <text class="mono" x="{mid:.0f}" y="152" text-anchor="middle" font-size="10.5" fill="#4e6b66">{esc(sub)}</text>
+  </g>'''
+
+    facts = [
         ("PUBLIC REPOS", str(d["repos"])),
         ("LIVE BUILDS", str(d["deployed"])),
+        ("COMMITS THIS YEAR", str(g.get("commits", "-"))),
+        ("PULL REQUESTS", str(g.get("prs", "-"))),
         ("CLASSES SERVED", "6 to 9"),
         ("LANGUAGES", "hi / en, bilingual by default"),
     ]
-    body, y = "", 96
-    for label, val in rows:
-        dots = "." * max(2, 26 - len(label))
-        body += (f'<text class="mono" x="34" y="{y}" font-size="14.5" fill="#4e6b66" xml:space="preserve">'
+    body, y = "", 212
+    for i, (label, val) in enumerate(facts):
+        col = i % 2
+        if col == 0 and i:
+            y += 25
+        x = 34 if col == 0 else 520
+        dots = "." * max(2, 22 - len(label))
+        body += (f'<text class="mono" x="{x}" y="{y}" font-size="13.5" fill="#4e6b66" xml:space="preserve">'
                  f'{label} {dots} <tspan fill="#E8FFF6" font-weight="700">{esc(val)}</tspan></text>\n')
-        y += 26
 
-    y += 14
-    body += (f'<text class="mono" x="34" y="{y}" font-size="14.5" fill="#3ddc97" fill-opacity=".75" '
+    y += 44
+    body += (f'<text class="mono" x="34" y="{y}" font-size="13.5" fill="#3ddc97" fill-opacity=".75" '
              f'xml:space="preserve">$ gh api /languages</text>\n')
-    y += 28
-    colors = ["#00FF9C", "#22D3EE", "#7CF3D0"]
-    for i, (lang, b) in enumerate(langs):
+    y += 27
+    colors = ["#9BE7C4", "#8FD4F5", "#B9A7FA"]
+    for i, (lang, b) in enumerate(d["langs"]):
         frac = b / d["total_bytes"]
-        filled = int(round(frac * 34))
-        bar = "\u2588" * filled + "\u2591" * (34 - filled)
+        filled = int(round(frac * 38))
+        bar = "\u2588" * filled + "\u2591" * (38 - filled)
         pct = f"{frac * 100:.0f}%"
         name = (esc(lang) + " " * 12)[:12]
-        body += (f'<text class="mono" x="34" y="{y}" font-size="14.5" fill="{colors[i]}" xml:space="preserve">'
-                 f'{name}<tspan fill="#8fb3ad">{pct:>4}</tspan>  {bar}</text>\n')
-        y += 25
+        body += (f'<text class="mono" x="34" y="{y}" font-size="13.5" fill="{colors[i]}" xml:space="preserve">'
+                 f'{name}<tspan fill="#7f9c96">{pct:>4}</tspan>  {bar}</text>\n')
+        y += 24
 
     return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="high scores">
 <defs>
   <linearGradient id="bgG" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0%" stop-color="#04070a"/><stop offset="60%" stop-color="#060d10"/><stop offset="100%" stop-color="#04090c"/>
+    <stop offset="0%" stop-color="#04070a"/><stop offset="60%" stop-color="#060e12"/><stop offset="100%" stop-color="#04090c"/>
   </linearGradient>
-  <radialGradient id="glowA"><stop offset="0%" stop-color="#00FF9C" stop-opacity=".13"/><stop offset="100%" stop-color="#00FF9C" stop-opacity="0"/></radialGradient>
-  <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
-    <rect width="4" height="1" fill="#7fffd4" fill-opacity=".03"/>
-  </pattern>
-  <clipPath id="win"><rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="12"/></clipPath>
+  <linearGradient id="num" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#F2FBF8"/><stop offset="1" stop-color="#8FD4F5"/>
+  </linearGradient>
+  <radialGradient id="glowA"><stop offset="0%" stop-color="#9BE7C4" stop-opacity=".12"/><stop offset="100%" stop-color="#9BE7C4" stop-opacity="0"/></radialGradient>
+  <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#7fffd4" fill-opacity=".03"/></pattern>
+  <clipPath id="win"><rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="14"/></clipPath>
 </defs>
 <style>
   .mono {{ font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }}
@@ -103,22 +177,21 @@ def build(d):
   .pulse {{ animation: pulse 3.6s ease-in-out infinite; }}
   @keyframes pulse {{ 0%,100% {{ opacity: .45 }} 50% {{ opacity: 1 }} }}
 </style>
-<rect width="{W}" height="{H}" rx="12" fill="url(#bgG)"/>
-<ellipse cx="820" cy="250" rx="320" ry="200" fill="url(#glowA)"/>
-<rect x="1" y="1" width="{W - 2}" height="30" rx="12" fill="#0a1114"/>
+<rect width="{W}" height="{H}" rx="14" fill="url(#bgG)"/>
+<ellipse cx="830" cy="360" rx="330" ry="220" fill="url(#glowA)"/>
+<rect x="1" y="1" width="{W - 2}" height="30" rx="14" fill="#0a1114"/>
 <rect x="1" y="20" width="{W - 2}" height="11" fill="#0a1114"/>
 <circle cx="24" cy="16" r="4.5" fill="#ff5f57"/><circle cx="40" cy="16" r="4.5" fill="#febc2e"/><circle cx="56" cy="16" r="4.5" fill="#28c840"/>
 <text class="mono" x="78" y="21" font-size="12" fill="#4e6b66">ananya@github:~/stats</text>
-<text class="mono pulse" x="{W - 24}" y="21" font-size="12" text-anchor="end" fill="#00FF9C">rebuilt daily</text>
-<line x1="1" y1="31" x2="{W - 1}" y2="31" stroke="#00FF9C" stroke-opacity=".18"/>
-<text class="mono" x="34" y="66" font-size="14.5" fill="#3ddc97" fill-opacity=".75" xml:space="preserve">$ gh api /users/ananya-goswami</text>
-{body}<rect class="car" x="34" y="{y - 12}" width="8" height="15" fill="#00FF9C"/>
+<text class="mono pulse" x="{W - 24}" y="21" font-size="12" text-anchor="end" fill="#9BE7C4">rebuilt daily</text>
+<line x1="1" y1="31" x2="{W - 1}" y2="31" stroke="#9BE7C4" stroke-opacity=".18"/>
+{tile_svg}
+<text class="mono" x="34" y="192" font-size="13.5" fill="#3ddc97" fill-opacity=".75" xml:space="preserve">$ gh api /users/ananya-goswami</text>
+{body}<rect class="car" x="34" y="{y - 12}" width="8" height="14" fill="#9BE7C4"/>
 <g clip-path="url(#win)"><rect width="{W}" height="{H}" fill="url(#scan)"/></g>
-<rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="12" fill="none" stroke="#00FF9C" stroke-opacity=".26"/>
+<rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="14" fill="none" stroke="#9BE7C4" stroke-opacity=".26"/>
 </svg>
 '''
-
-
 
 
 FEATURED = [
@@ -190,9 +263,91 @@ def build_projects(index):
 '''
 
 
+
+
+SNAKE_PALETTE = {
+    "--cb": "#0d181c",      # cell border
+    "--cs": "#9BE7C4",      # the snake
+    "--ce": "#0b1519",      # empty cell
+    "--c0": "#0b1519",
+    "--c1": "#143a33",
+    "--c2": "#1d6a56",
+    "--c3": "#35a583",
+    "--c4": "#7DF0C8",
+}
+
+
+def build_snake_panel(src_path, out_path):
+    """Recolour the generated snake and sit it inside a matching terminal panel."""
+    import re
+    svg = open(src_path).read()
+
+    def repalette(m):
+        return "".join(f"{k}:{v};" for k, v in SNAKE_PALETTE.items()).rstrip(";")
+    svg = re.sub(r"(?<=:root\{)[^}]*", repalette, svg, count=1)
+    # a soft glow on the snake body and rounder cells
+    svg = svg.replace("</style>", ".s{filter:drop-shadow(0 0 2.5px #9BE7C4)}.c{rx:3px;ry:3px}</style>", 1)
+
+    head = re.match(r"<svg[^>]*>", svg).group(0)
+    vw = float(re.search(r'width="([0-9.]+)"', head).group(1))
+    vh = float(re.search(r'height="([0-9.]+)"', head).group(1))
+
+    W = 1000
+    inner_w = W - 64
+    k = inner_w / vw
+    inner_h = (vh - 34) * k
+    H = int(inner_h + 84)
+
+    inner = re.sub(r"^<svg[^>]*>", "", svg, count=1)[: -len("</svg>")]
+    vb = [float(v) for v in re.search(r'viewBox="([^"]+)"', head).group(1).split()]
+    vb[3] -= 34                      # the source leaves an empty band under the grid
+    view = " ".join(f"{v:g}" for v in vb)
+
+    panel = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="contribution snake">
+<defs>
+  <linearGradient id="sbg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#04070a"/><stop offset="60%" stop-color="#060e12"/><stop offset="100%" stop-color="#04090c"/>
+  </linearGradient>
+  <radialGradient id="sglow"><stop offset="0%" stop-color="#9BE7C4" stop-opacity=".12"/><stop offset="100%" stop-color="#9BE7C4" stop-opacity="0"/></radialGradient>
+  <pattern id="sscan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#7fffd4" fill-opacity=".028"/></pattern>
+  <clipPath id="swin"><rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="14"/></clipPath>
+</defs>
+<style>.smono {{ font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }}
+  .spulse {{ animation: spulse 3.6s ease-in-out infinite; }}
+  @keyframes spulse {{ 0%,100% {{ opacity: .45 }} 50% {{ opacity: 1 }} }}</style>
+<rect width="{W}" height="{H}" rx="14" fill="url(#sbg)"/>
+<ellipse cx="500" cy="{H}" rx="520" ry="200" fill="url(#sglow)"/>
+<rect x="1" y="1" width="{W - 2}" height="30" rx="14" fill="#0a1114"/>
+<rect x="1" y="20" width="{W - 2}" height="11" fill="#0a1114"/>
+<circle cx="24" cy="16" r="4.5" fill="#ff5f57"/><circle cx="40" cy="16" r="4.5" fill="#febc2e"/><circle cx="56" cy="16" r="4.5" fill="#28c840"/>
+<text class="smono" x="78" y="21" font-size="12" fill="#4e6b66">ananya@github:~/contributions</text>
+<text class="smono spulse" x="{W - 24}" y="21" font-size="12" text-anchor="end" fill="#9BE7C4">eating the grid</text>
+<line x1="1" y1="31" x2="{W - 1}" y2="31" stroke="#9BE7C4" stroke-opacity=".18"/>
+<svg x="32" y="52" width="{inner_w}" height="{inner_h:.0f}" viewBox="{view}" preserveAspectRatio="xMidYMid meet">
+{inner}
+</svg>
+<g clip-path="url(#swin)"><rect width="{W}" height="{H}" fill="url(#sscan)"/></g>
+<rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="14" fill="none" stroke="#9BE7C4" stroke-opacity=".26"/>
+</svg>
+'''
+    open(out_path, "w").write(panel)
+    return W, H
+
+
 if __name__ == "__main__":
     data = collect()
-    os.makedirs(os.path.dirname(OUT) or ".", exist_ok=True)
-    open(OUT, "w").write(build(data))
-    open(os.path.join(os.path.dirname(OUT) or ".", "projects.svg"), "w").write(build_projects(data["index"]))
-    print("wrote panels:", data["repos"], "repos,", data["deployed"], "live builds")
+    try:
+        g = graph()
+    except Exception as exc:                 # never fail the whole build on one API hiccup
+        print("graphql skipped:", exc)
+        g = {}
+    out_dir = os.path.dirname(OUT) or "."
+    os.makedirs(out_dir, exist_ok=True)
+    open(OUT, "w").write(build(data, g))
+    open(os.path.join(out_dir, "projects.svg"), "w").write(build_projects(data["index"]))
+    for src, dst in (("snake-dark.svg", "snake-panel.svg"),):
+        p = os.path.join(out_dir, src)
+        if os.path.exists(p):
+            build_snake_panel(p, os.path.join(out_dir, dst))
+            print("wrote", dst)
+    print("panels:", data["repos"], "repos,", data["deployed"], "live,", g.get("contributions"), "contributions")
