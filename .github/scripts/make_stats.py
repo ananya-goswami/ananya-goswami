@@ -296,32 +296,33 @@ def build_projects(index):
 
 RUN_LEVELS = ["#1b2c33", "#2f7f68", "#3fae86", "#5FD8A8", "#8FE9F5"]
 RUN_SKIN = {
-    "shell": "#B9C7D4",     # robot chassis (legacy)
-    "shade": "#7C94A6",
-    "visor": "#08161c",
-    "eye": "#5FD8A8",
-    "cap_h": "#5FD8A8",     # pixel hero: cap
-    "cap_hd": "#2f7f68",
-    "face": "#F7E3C6",
-    "ink": "#08161c",
-    "coat": "#3FAE86",
-    "coat_d": "#24725C",
-    "belt": "#FFD54A",
-    "pants": "#1F5E72",
-    "boot": "#E0A42B",
+    "cap": "#2C3E5C",       # avatar
+    "cap_dk": "#3D5480",
+    "hair": "#241E33",
+    "skin": "#EFC09A",
+    "ink": "#0b1016",
+    "coat": "#1F4A63",
+    "zip": "#5FD8A8",
+    "pants": "#16202B",
+    "shoe": "#E8EEF2",
+    "shell": "#4CAF50",     # turtle
+    "shell_lt": "#7BD97B",
+    "shell_dk": "#2E7D32",
+    "skin_g": "#CDE58C",
+    "leaf": "#7BD97B",      # leaf
+    "leaf_dk": "#3FAE86",
+    "croc": "#4FA85F",      # croc
+    "croc_dk": "#2E7D32",
+    "croc_lt": "#9BE7C4",
+    "q_fill": "#0f2b2c",    # mystery block
+    "q_edge": "#5FD8A8",
+    "q_glyph": "#CFEAE3",
+    "star": "#5FD8A8",
+    "spark": "#9BE7C4",
     "hill": "#0d2129",      # scenery
-    "hill2": "#102a30",
     "cloud": "#16333c",
+    "grass": "#2f7f68",
     "brick": "#0f1d23",
-    "flag": "#5FD8A8",
-    "bolt": "#FFD54A",      # coins
-    "bolt_dk": "#E0A42B",
-    "cap": "#E1554E",       # mushroom
-    "cap_dot": "#FFF1E0",
-    "stem": "#F5E3C8",
-    "shellg": "#4CAF50",    # turtle
-    "shellg_dk": "#2E7D32",
-    "skin": "#CDE58C",
     "ground": "#14242b",
     "ground_top": "#2f7f68",
 }
@@ -351,86 +352,122 @@ def _px(rows, pal, px=1.0, ox=0.0, oy=0.0):
     return "".join(out)
 
 
+# the avatar: cap, dark wavy hair, navy-teal jacket
 HERO_A = [
-    "..HHHHH...",
-    ".HHHHHHHH.",
-    ".HHHHHHHH.",
-    "..dddddd..",
-    "..FFFFFF..",
-    "..FeFFeF..",
-    "..FFFFFF..",
-    ".CCCCCCCC.",
-    "cCCCBBCCCc",
-    "cCCCCCCCCc",
-    "..PPPPPP..",
-    "..PP..PP..",
-    "..PP..PP..",
-    ".SSS..SSS.",
+    "...KKKKK....",
+    "..KKtKKKKK..",
+    ".kkkkkkkkkk.",
+    ".hhFFFFFFhh.",
+    ".hhFeFFeFhh.",
+    ".hhFFFFFFhh.",
+    ".hhhFFFFhhh.",
+    "..hhhhhhhh..",
+    ".JJJJJJJJJJ.",
+    "hJJJJtJJJJJh",
+    "hJJJJtJJJJJh",
+    ".JJJJJJJJJJ.",
+    "..PPPPPPPP..",
+    "..PPP..PPP..",
+    "..PPP..PPP..",
+    "..WWW..WWW..",
 ]
 HERO_B = [
-    "..HHHHH...",
-    ".HHHHHHHH.",
-    ".HHHHHHHH.",
-    "..dddddd..",
-    "..FFFFFF..",
-    "..FeFFeF..",
-    "..FFFFFF..",
-    ".CCCCCCCC.",
-    "cCCCBBCCCc",
-    "cCCCCCCCCc",
-    "..PPPPPP..",
-    ".PPP..PPP.",
-    ".PP....PP.",
-    "SS......SS",
+    "...KKKKK....",
+    "..KKtKKKKK..",
+    ".kkkkkkkkkk.",
+    ".hhFFFFFFhh.",
+    ".hhFeFFeFhh.",
+    ".hhFFFFFFhh.",
+    ".hhhFFFFhhh.",
+    "..hhhhhhhh..",
+    ".JJJJJJJJJJ.",
+    "hJJJJtJJJJJh",
+    "hJJJJtJJJJJh",
+    ".JJJJJJJJJJ.",
+    "..PPPPPPPP..",
+    ".PPPP..PPPP.",
+    ".PPP....PPP.",
+    "WWW......WWW",
 ]
 HERO_JUMP = [
-    "c.HHHHH..c",
-    "ccHHHHHHcc",
-    ".cHHHHHHc.",
-    "..dddddd..",
-    "..FFFFFF..",
-    "..FeFFeF..",
-    "..FFFFFF..",
-    "..CCCCCC..",
-    "..CCBBCC..",
-    "..CCCCCC..",
-    "..PPPPPP..",
-    ".PPPPPPPP.",
-    "SSS....SSS",
-    "..........",
+    "...KKKKK....",
+    "..KKtKKKKK..",
+    ".kkkkkkkkkk.",
+    ".hhFFFFFFhh.",
+    ".hhFeFFeFhh.",
+    ".hhFFFFFFhh.",
+    ".hhhFFFFhhh.",
+    "J.hhhhhhhh.J",
+    "JJJJJJJJJJJJ",
+    "hJJJJtJJJJJh",
+    "hJJJJtJJJJJh",
+    ".JJJJJJJJJJ.",
+    "..PPPPPPPP..",
+    ".PPPP..PPPP.",
+    "..PPP..PPP..",
+    ".WWW....WWW.",
 ]
-COIN_PX = [
-    "..gg..",
-    ".gllg.",
-    ".glgg.",
-    ".gggg.",
-    ".gggg.",
-    "..gg..",
+
+SHELL_PX = [
+    "..GGGG..",
+    ".GssssG.",
+    "GsSSSSsG",
+    "GssssssG",
+    ".GGGGGG.",
 ]
-MUSH_PX = [
-    "..mmmm..",
-    ".mwwmmm.",
-    "mmwwmmwm",
-    "mmmmmwwm",
-    "mwmmmmmm",
-    ".ssFFss.",
-    "..FFFF..",
+TURTLE_PX = [
+    "..GGGG.....",
+    ".GssssG.nnn",
+    "GsSSSSsGnen",
+    "GssssssGnnn",
+    ".GGGGGG....",
+    "..n..n.....",
 ]
-TURT_PX = [
-    "..tttt..",
-    ".tggggt.",
-    "ktgggggt",
-    "kkggggg.",
-    ".kkkkkk.",
-    "..k..k..",
+LEAF_PX = [
+    "......LL",
+    "....LLLL",
+    "..LLLvLL",
+    ".LLLvLLL",
+    "LLLvLLL.",
+    ".LvLLL..",
+    "v.......",
+]
+CROC_PX = [
+    "...d.d.d...",
+    ".ccccccccc.",
+    "cccccccceCC",
+    ".cccccccCww",
+    "..c....c...",
+]
+STAR_PX = [
+    "...s...",
+    "..sss..",
+    "sssssss",
+    ".sssss.",
+    "..sss..",
+    ".s...s.",
+]
+QBLOCK_PX = [
+    "..qqq..",
+    ".q...q.",
+    "....qq.",
+    "...qq..",
+    "...q...",
+    ".......",
+    "...q...",
+]
+GRASS_PX = [
+    ".v.v.v.",
+    "v.vvv.v",
+    "..vvv..",
 ]
 
 
 def _hero_pal():
     S = RUN_SKIN
-    return {"H": S["cap_h"], "d": S["cap_hd"], "F": S["face"], "e": S["ink"],
-            "C": S["coat"], "c": S["coat_d"], "B": S["belt"], "P": S["pants"],
-            "S": S["boot"]}
+    return {"K": S["cap"], "k": S["cap_dk"], "h": S["hair"], "F": S["skin"],
+            "e": S["ink"], "J": S["coat"], "t": S["zip"], "P": S["pants"],
+            "W": S["shoe"]}
 
 
 def _levels(weeks):
@@ -452,8 +489,44 @@ def _levels(weeks):
     return out
 
 
+def _keys(vals, times, T):
+    """Clamp and monotonise keyTimes, returning the SMIL strings."""
+    ks = [min(max(t / T, 0.0), 1.0) for t in times]
+    for i in range(1, len(ks)):
+        ks[i] = max(ks[i], ks[i - 1])
+    return ";".join(vals), ";".join(f"{k:.5f}" for k in ks)
+
+
+def _prize(sprites, cx, cy, t, T, path, life):
+    """A prize popping out of a block at (cx, cy) and living for `life` seconds.
+
+    sprites: [(svg, from_dt, to_dt)] - each sprite visible over its own window.
+    path:    [(dt, x, y)] - offsets from the block, in order.
+    """
+    vals = ["0,0"] + [f"{x:.1f},{y:.1f}" for _, x, y in path] + [f"{path[-1][1]:.1f},{path[-1][2]:.1f}"]
+    times = [0.0] + [t + dt for dt, _, _ in path] + [T]
+    move_v, move_k = _keys(vals, times, T)
+
+    op_v, op_k = _keys(["0", "0", "1", "1", "0", "0"],
+                       [0.0, t, t + 0.06, t + life - 0.35, t + life, T], T)
+
+    inner = ""
+    for svg, a, b in sprites:
+        sv, sk = _keys(["0", "0", "1", "1", "0", "0"],
+                       [0.0, t + a, t + a + 0.02, t + b, t + b + 0.02, T], T)
+        inner += (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s"'
+                  f' repeatCount="indefinite" values="{sv}" keyTimes="{sk}"/>{svg}</g>')
+
+    return (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
+            f' values="{op_v}" keyTimes="{op_k}"/>'
+            f'<g transform="translate({cx} {cy})">'
+            f'<animateTransform attributeName="transform" type="translate" dur="{T}s"'
+            f' repeatCount="indefinite" additive="sum" calcMode="linear"'
+            f' values="{move_v}" keyTimes="{move_k}"/>{inner}</g></g>')
+
+
 def build_runner_panel(weeks, total=None):
-    """A little pixel robot runs the contribution grid, popping the days you showed up on."""
+    """The avatar runs the contribution grid, popping mystery blocks open."""
     CELL, PITCH, TOP = 12, 16, 26
     grid = _levels(weeks)
     cols = len(grid)
@@ -462,6 +535,7 @@ def build_runner_panel(weeks, total=None):
     GROUND = GRID_BOT + 20           # standing surface
     IH = GROUND + 16
     T = 24.0                         # seconds per loop
+    S = RUN_SKIN
 
     X0, X1 = -22.0, GW + 22.0
 
@@ -476,12 +550,12 @@ def build_runner_panel(weeks, total=None):
         apex = GROUND - (cell_bottom + 16)    # how high the feet have to go
         if apex > 80 or i - last_col < 2:     # out of reach, or too soon after the last hop
             continue
-        events.append({"col": i, "row": r, "apex": max(10.0, apex),
+        events.append({"col": i, "row": r, "lv": col[r], "apex": max(10.0, apex),
                        "x": i * PITCH + 2 + CELL / 2.0})
         last_col = i
-    if len(events) > 16:                      # thin them out, keep the spread
-        step = len(events) / 16.0
-        events = [events[int(k * step)] for k in range(16)]
+    if len(events) > 14:                      # thin them out, keep the spread
+        step = len(events) / 14.0
+        events = [events[int(k * step)] for k in range(14)]
 
     # ---- pace it: dash across the quiet months, cruise through the busy ones ----
     stops = [X0] + [e["x"] for e in events] + [X1]
@@ -498,11 +572,7 @@ def build_runner_panel(weeks, total=None):
     run_x = (";".join(f"{x:.1f},{GROUND}" for x in stops),
              ";".join(f"{m / T:.5f}" for m in marks))
 
-    prize = {}                                # most blocks give a coin
-    if len(events) >= 4:
-        prize[len(events) // 2] = "mushroom"
-
-    # ---- robot vertical track ----
+    # ---- avatar vertical track ----
     JD = 0.66
     vals, keys = ["0,0"], [0.0]
     for e in events:
@@ -516,15 +586,15 @@ def build_runner_panel(weeks, total=None):
     keys = [min(max(k, 0.0), 1.0) for k in keys]
     for i in range(1, len(keys)):              # keyTimes must never step backwards
         keys[i] = max(keys[i], keys[i - 1])
-    robot_y = (";".join(vals), ";".join(f"{k:.5f}" for k in keys))
+    hero_y = (";".join(vals), ";".join(f"{k:.5f}" for k in keys))
 
-    # thruster fires only while airborne
+    # airborne flag, used to swap in the jump frame
     fl_v, fl_k = ["0"], [0.0]
     for e in events:
         t0, t1 = e["t"] - JD / 2, e["t"] + JD / 2
-        for frac, o in ((0.0, 0.0), (0.18, 1.0), (0.82, 1.0), (1.0, 0.0)):
+        for frac, o in ((0.0, 0), (0.18, 1), (0.82, 1), (1.0, 0)):
             fl_k.append((t0 + frac * (t1 - t0)) / T)
-            fl_v.append(str(o))
+            fl_v.append("1" if o else "0")
     fl_k.append(1.0)
     fl_v.append("0")
     fl_k = [min(max(k, 0.0), 1.0) for k in fl_k]
@@ -549,67 +619,57 @@ def build_runner_panel(weeks, total=None):
                 f'<animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"'
                 f' values="0,0;0,0;0,-6;0,0;0,0" keyTimes="0;{a:.5f};{b:.5f};{c:.5f};1"/>'
                 f'<animate attributeName="fill" dur="{T}s" repeatCount="indefinite"'
-                f' values="{fill};{fill};#FFF3C4;{RUN_LEVELS[1]};{RUN_LEVELS[1]}"'
+                f' values="{fill};{fill};{S["spark"]};{RUN_LEVELS[1]};{RUN_LEVELS[1]}"'
                 f' keyTimes="0;{a:.5f};{b:.5f};{c:.5f};1"/>'
                 f'</rect>')
 
-    # ---- what comes out of each block ----
+    # ---- the mystery blocks sitting on those cells until they are hit ----
+    qpal = {"q": S["q_glyph"]}
+    blocks = ""
+    for e in events:
+        x, y = e["col"] * PITCH + 2, TOP + e["row"] * PITCH
+        t = e["t"]
+        qv, qk = _keys(["1", "1", "0", "0"], [0.0, t, t + 0.06, T], T)
+        blocks += (f'<g><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
+                   f' values="{qv}" keyTimes="{qk}"/>'
+                   f'<rect x="{x + 0.6}" y="{y + 0.6}" width="{CELL - 1.2}" height="{CELL - 1.2}" rx="2.4"'
+                   f' fill="{S["q_fill"]}" stroke="{S["q_edge"]}" stroke-width="1.1"/>'
+                   f'{_px(QBLOCK_PX, qpal, 1.25, x + CELL / 2, y + CELL / 2 + 4.4)}</g>')
+
+    # ---- what each block gives up ----
+    shell_svg = _px(SHELL_PX, {"G": S["shell_dk"], "s": S["shell"], "S": S["shell_lt"]}, 1.5, 0, 0)
+    turtle_svg = _px(TURTLE_PX, {"G": S["shell_dk"], "s": S["shell"], "S": S["shell_lt"],
+                                 "n": S["skin_g"]}, 1.5, 0, 0)
+    leaf_svg = _px(LEAF_PX, {"L": S["leaf"], "v": S["leaf_dk"]}, 1.4, 0, 0)
+    croc_svg = _px(CROC_PX, {"c": S["croc"], "d": S["croc_dk"], "e": S["ink"], "C": S["croc_lt"], "w": "#EDF5F0"}, 1.4, 0, 0)
+
     pops = []
-    for k, e in enumerate(events):
+    for e in events:
         cx = e["col"] * PITCH + 2 + CELL / 2
         cy = TOP + e["row"] * PITCH
-        a, b, c = e["t"] / T, (e["t"] + 0.1) / T, (e["t"] + 0.75) / T
-        dyg = GROUND - cy          # how far down to the ground from this block
-        if prize.get(k) == "mushroom":
-            pops.append(
-                f'<g opacity="0"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
-                f' values="0;0;1;1;0;0" keyTimes="0;{a:.5f};{b:.5f};{(e["t"]+2.5)/T:.5f};{(e["t"]+2.8)/T:.5f};1"/>'
-                f'<g transform="translate({cx} {cy})">'
-                f'<animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"'
-                f' additive="sum" values="0,0;0,0;0,-16;0,-16;18,{dyg};94,{dyg};94,{dyg}"'
-                f' keyTimes="0;{a:.5f};{b:.5f};{(e["t"]+0.5)/T:.5f};{(e["t"]+1.1)/T:.5f};{(e["t"]+2.8)/T:.5f};1"/>'
-                f'{_px(MUSH_PX, {"m": RUN_SKIN["cap"], "w": RUN_SKIN["cap_dot"], "F": RUN_SKIN["stem"], "s": "#D8C3A2"}, 1.6, 0, 5.6)}'
-                f'</g></g>')
-        else:
-            pops.append(
-                f'<g opacity="0"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
-                f' values="0;0;1;1;0;0" keyTimes="0;{a:.5f};{b:.5f};{(e["t"]+0.5)/T:.5f};{c:.5f};1"/>'
-                f'<g transform="translate({cx} {cy})">'
-                f'<animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"'
-                f' additive="sum" values="0,0;0,0;0,-20;0,-24;0,-24"'
-                f' keyTimes="0;{a:.5f};{b:.5f};{c:.5f};1"/>'
-                f'<g><animateTransform attributeName="transform" type="scale" dur="0.62s"'
-                f' repeatCount="indefinite" values="1,1;0.15,1;1,1;0.15,1;1,1" keyTimes="0;0.25;0.5;0.75;1"/>'
-                f'{_px(COIN_PX, {"g": RUN_SKIN["bolt"], "l": "#FFF3C4"}, 1.5, 0, 4.5)}'
-                f'</g></g></g>')
+        t, dyg = e["t"], GROUND - cy
+        if e["lv"] >= 3:                       # busy day: a shell that wakes up and follows
+            pops.append(_prize(
+                [(shell_svg, 0.0, 1.9), (turtle_svg, 1.9, 5.2)],
+                cx, cy, t, T,
+                [(0.06, 0, 0), (0.42, 6, -18), (0.9, 14, dyg), (1.9, 52, dyg),
+                 (3.6, 96, dyg), (5.2, 132, dyg)], 5.4))
+        elif e["lv"] == 2:                     # steady day: a leaf drifting down
+            pops.append(_prize(
+                [(leaf_svg, 0.0, 3.4)],
+                cx, cy, t, T,
+                [(0.06, 0, 0), (0.4, 4, -20), (1.0, -6, dyg * 0.45), (1.7, 6, dyg * 0.8),
+                 (2.2, 2, dyg), (3.4, 2, dyg)], 3.6))
+        else:                                  # quiet day: a little croc trots off
+            pops.append(_prize(
+                [(croc_svg, 0.0, 4.4)],
+                cx, cy, t, T,
+                [(0.06, 0, 0), (0.4, 4, -16), (0.9, 10, dyg), (2.4, 58, dyg),
+                 (4.4, 124, dyg)], 4.6))
 
-    # ---- one turtle, timed to wander under a jump ----
-    turtle = ""
-    if events:
-        e = events[len(events) // 3]
-        vt = (GW + 44.0) / T * 0.55
-        lead = min(6.0, e["t"] - 0.2)
-        xt0 = e["x"] + vt * lead
-        ts = e["t"] - lead
-        te = ts + (xt0 + 30) / vt
-        te = min(te, T)
-        turtle = (
-            f'<g opacity="0"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
-            f' values="0;0;1;1;0;0" keyTimes="0;{ts/T:.5f};{(ts+0.25)/T:.5f};{(te-0.25)/T:.5f};{te/T:.5f};1"/>'
-            f'<g transform="translate({xt0} {GROUND})">'
-            f'<animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"'
-            f' additive="sum" values="0,0;0,0;{-vt*(te-ts):.1f},0;{-vt*(te-ts):.1f},0"'
-            f' keyTimes="0;{ts/T:.5f};{te/T:.5f};1"/>'
-            f'<g><animateTransform attributeName="transform" type="translate" dur="0.5s"'
-            f' repeatCount="indefinite" values="0,0;0,-1;0,0" keyTimes="0;0.5;1"/>'
-            f'{_px(TURT_PX, {"t": RUN_SKIN["shellg_dk"], "g": RUN_SKIN["shellg"], "k": RUN_SKIN["skin"]}, 1.7, 0, 0)}'
-            f'<rect x="-6.8" y="-6.4" width="1.6" height="1.6" fill="#18321a"/>'
-            f'</g></g></g>')
-
-    # ---- the pixel hero ----
-    S = RUN_SKIN
+    # ---- the avatar ----
     HP = _hero_pal()
-    PX = 1.15
+    PX = 1.08
     run_a = _px(HERO_A, HP, PX)
     run_b = _px(HERO_B, HP, PX)
     jump_f = _px(HERO_JUMP, HP, PX)
@@ -617,12 +677,12 @@ def build_runner_panel(weeks, total=None):
     air_k = ";".join(f"{k:.5f}" for k in fl_k)
     gnd_v = ";".join("1" if v == "0" else "0" for v in fl_v)
 
-    robot = f'''<g>
+    hero = f'''<g>
   <animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"
     calcMode="linear" values="{run_x[0]}" keyTimes="{run_x[1]}"/>
   <g>
     <animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"
-      calcMode="linear" values="{robot_y[0]}" keyTimes="{robot_y[1]}"/>
+      calcMode="linear" values="{hero_y[0]}" keyTimes="{hero_y[1]}"/>
     <ellipse cx="0" cy="0" rx="7" ry="2" fill="#000" fill-opacity=".35"/>
     <g opacity="1">
       <animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"
@@ -640,7 +700,7 @@ def build_runner_panel(weeks, total=None):
   </g>
 </g>'''
 
-    # ---- scenery: pixel clouds up top, low hills along the ground ----
+    # ---- scenery: clouds, hills, grass tufts and a few sparkles ----
     scenery = ""
     for cx in range(40, GW, 210):
         scenery += (f'<g fill="{S["cloud"]}" transform="translate({cx} 6)">'
@@ -650,6 +710,13 @@ def build_runner_panel(weeks, total=None):
         scenery += (f'<g fill="{S["hill"]}" transform="translate({hx} {GROUND})">'
                     f'<rect x="18" y="-4" width="48" height="4"/><rect x="26" y="-8" width="32" height="4"/>'
                     f'<rect x="34" y="-12" width="16" height="4"/></g>')
+    for gx in range(24, GW, 76):
+        scenery += _px(GRASS_PX, {"v": S["grass"]}, 1.5, gx, GROUND)
+    for k, sx in enumerate(range(60, GW, 118)):
+        sy = 150 + (k % 3) * 8
+        scenery += (f'<rect x="{sx}" y="{GROUND - sy % 30 - 14}" width="1.6" height="1.6" fill="{S["spark"]}"'
+                    f' fill-opacity=".55"><animate attributeName="fill-opacity" values=".15;.6;.15"'
+                    f' dur="{2.2 + (k % 4) * 0.5}s" repeatCount="indefinite"/></rect>')
 
     bricks = ""
     for bx in range(0, GW, 16):
@@ -662,9 +729,9 @@ def build_runner_panel(weeks, total=None):
 <rect x="0" y="{GROUND}" width="{GW}" height="1.6" fill="{S['ground_top']}" fill-opacity=".8"/>
 {bricks}
 {''.join(cells)}
+{blocks}
 {''.join(pops)}
-{turtle}
-{robot}
+{hero}
 </svg>'''
 
     W = 1000
@@ -675,7 +742,7 @@ def build_runner_panel(weeks, total=None):
     hud = ""
     if total is not None:
         hud = (f'<g transform="translate(40 44)" opacity=".9">'
-               f'{_px(COIN_PX, {"g": S["bolt"], "l": "#FFF3C4"}, 1.6, 0, 4.8)}'
+               f'{_px(STAR_PX, {"s": S["star"]}, 1.7, 0, 5.2)}'
                f'<text class="rmono" x="11" y="4" font-size="12.5" fill="#CFEAE3">x {total}</text></g>')
 
     return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="contribution runner">
