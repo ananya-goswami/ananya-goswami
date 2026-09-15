@@ -294,180 +294,81 @@ def build_projects(index):
 '''
 
 
-RUN_LEVELS = ["#1b2c33", "#2f7f68", "#3fae86", "#5FD8A8", "#8FE9F5"]
-RUN_SKIN = {
-    "cap": "#2C3E5C",       # avatar
-    "cap_dk": "#3D5480",
-    "hair": "#241E33",
-    "skin": "#EFC09A",
-    "ink": "#0b1016",
-    "coat": "#1F4A63",
-    "zip": "#5FD8A8",
-    "pants": "#16202B",
-    "shoe": "#E8EEF2",
-    "shell": "#4CAF50",     # turtle
-    "shell_lt": "#7BD97B",
-    "shell_dk": "#2E7D32",
-    "skin_g": "#CDE58C",
-    "leaf": "#7BD97B",      # leaf
-    "leaf_dk": "#3FAE86",
-    "croc": "#4FA85F",      # croc
-    "croc_dk": "#2E7D32",
-    "croc_lt": "#9BE7C4",
-    "q_fill": "#0f2b2c",    # mystery block
-    "q_edge": "#5FD8A8",
-    "q_glyph": "#CFEAE3",
-    "star": "#5FD8A8",
-    "spark": "#9BE7C4",
-    "hill": "#0d2129",      # scenery
-    "cloud": "#16333c",
-    "grass": "#2f7f68",
-    "brick": "#0f1d23",
-    "ground": "#14242b",
-    "ground_top": "#2f7f68",
+# ---------------------------------------------------------------- reference art
+ART_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
+                        "assets", "image.png")
+ART_BOXES = {
+    "girl":   (636, 404, 786, 586),
+    "turtle": (955, 505, 1086, 586),
+    "shell":  (740, 258, 856, 332),
+    "qblock": (752, 346, 840, 430),
+    "leaf":   (1214, 316, 1332, 400),
+    "snake":  (1538, 300, 1652, 402),
+    "signL":  (108, 402, 312, 572),
+    "signR":  (1898, 402, 2088, 572),
+    "hill":   (1655, 468, 1900, 588),
+    "grass":  (1178, 530, 1264, 584),
+    "star":   (52, 116, 106, 166),
+    "tag":    (1628, 116, 2102, 162),
 }
+ART_FLAT = ("hill", "tag")          # pasted as-is, no alpha key
+ART_BG = ((7, 15, 26), (0, 10, 18), (0, 14, 21), (2, 20, 30),
+          (6, 49, 62), (7, 44, 57), (4, 35, 46))
+_ART = None
 
 
-def _px(rows, pal, px=1.0, ox=0.0, oy=0.0):
-    """Render a character-map sprite as pixel rects. Origin is the sprite's
-    bottom-centre, so a sprite sits on the ground at y=0."""
-    h = len(rows)
-    w = max(len(r) for r in rows)
-    out = []
-    for ry, row in enumerate(rows):
-        run_c, run_x0, run_n = None, 0, 0
-        def flush():
-            if run_c and run_c in pal:
-                x = ox + (run_x0 - w / 2.0) * px
-                y = oy + (ry - h) * px
-                out.append(f'<rect x="{x:.2f}" y="{y:.2f}" width="{run_n * px:.2f}" '
-                           f'height="{px:.2f}" fill="{pal[run_c]}"/>')
-        for rx in range(w + 1):
-            c = row[rx] if rx < len(row) else "."
-            if c == run_c:
-                run_n += 1
-                continue
-            flush()
-            run_c, run_x0, run_n = c, rx, 1
-    return "".join(out)
+def art():
+    """Cut the runner's cast out of the reference art, keyed to transparency.
+
+    Returns {name: (data_uri, w, h)}; empty if the art or Pillow is missing.
+    """
+    global _ART
+    if _ART is not None:
+        return _ART
+    _ART = {}
+    try:
+        import base64, io
+        import numpy as np
+        from PIL import Image
+    except Exception as exc:
+        print("art skipped (no Pillow):", exc)
+        return _ART
+    try:
+        src = Image.open(ART_PATH).convert("RGB")
+    except Exception as exc:
+        print("art skipped (no reference):", exc)
+        return _ART
+
+    bg = [np.array(c, dtype=float) for c in ART_BG]
+    for name, box in ART_BOXES.items():
+        crop = src.crop(box)
+        if name in ART_FLAT:
+            img = crop.convert("RGBA")
+        else:
+            a = np.array(crop).astype(float)
+            d = np.stack([np.linalg.norm(a - c, axis=2) for c in bg], axis=0).min(axis=0)
+            alpha = np.clip((d - 20.0) / 38.0, 0, 1) * 255
+            img = Image.fromarray(np.dstack([a, alpha]).astype(np.uint8), "RGBA")
+            bb = img.getbbox()
+            if bb:
+                img = img.crop(bb)
+        buf = io.BytesIO()
+        img.quantize(colors=64, method=Image.FASTOCTREE).save(buf, "PNG", optimize=True)
+        _ART[name] = ("data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
+                      img.width, img.height)
+    return _ART
 
 
-# the avatar: cap, dark wavy hair, navy-teal jacket
-HERO_A = [
-    "...KKKKK....",
-    "..KKtKKKKK..",
-    ".kkkkkkkkkk.",
-    ".hhFFFFFFhh.",
-    ".hhFeFFeFhh.",
-    ".hhFFFFFFhh.",
-    ".hhhFFFFhhh.",
-    "..hhhhhhhh..",
-    ".JJJJJJJJJJ.",
-    "hJJJJtJJJJJh",
-    "hJJJJtJJJJJh",
-    ".JJJJJJJJJJ.",
-    "..PPPPPPPP..",
-    "..PPP..PPP..",
-    "..PPP..PPP..",
-    "..WWW..WWW..",
-]
-HERO_B = [
-    "...KKKKK....",
-    "..KKtKKKKK..",
-    ".kkkkkkkkkk.",
-    ".hhFFFFFFhh.",
-    ".hhFeFFeFhh.",
-    ".hhFFFFFFhh.",
-    ".hhhFFFFhhh.",
-    "..hhhhhhhh..",
-    ".JJJJJJJJJJ.",
-    "hJJJJtJJJJJh",
-    "hJJJJtJJJJJh",
-    ".JJJJJJJJJJ.",
-    "..PPPPPPPP..",
-    ".PPPP..PPPP.",
-    ".PPP....PPP.",
-    "WWW......WWW",
-]
-HERO_JUMP = [
-    "...KKKKK....",
-    "..KKtKKKKK..",
-    ".kkkkkkkkkk.",
-    ".hhFFFFFFhh.",
-    ".hhFeFFeFhh.",
-    ".hhFFFFFFhh.",
-    ".hhhFFFFhhh.",
-    "J.hhhhhhhh.J",
-    "JJJJJJJJJJJJ",
-    "hJJJJtJJJJJh",
-    "hJJJJtJJJJJh",
-    ".JJJJJJJJJJ.",
-    "..PPPPPPPP..",
-    ".PPPP..PPPP.",
-    "..PPP..PPP..",
-    ".WWW....WWW.",
-]
-
-SHELL_PX = [
-    "..GGGG..",
-    ".GssssG.",
-    "GsSSSSsG",
-    "GssssssG",
-    ".GGGGGG.",
-]
-TURTLE_PX = [
-    "..GGGG.....",
-    ".GssssG.nnn",
-    "GsSSSSsGnen",
-    "GssssssGnnn",
-    ".GGGGGG....",
-    "..n..n.....",
-]
-LEAF_PX = [
-    "......LL",
-    "....LLLL",
-    "..LLLvLL",
-    ".LLLvLLL",
-    "LLLvLLL.",
-    ".LvLLL..",
-    "v.......",
-]
-CROC_PX = [
-    "...d.d.d...",
-    ".ccccccccc.",
-    "cccccccceCC",
-    ".cccccccCww",
-    "..c....c...",
-]
-STAR_PX = [
-    "...s...",
-    "..sss..",
-    "sssssss",
-    ".sssss.",
-    "..sss..",
-    ".s...s.",
-]
-QBLOCK_PX = [
-    "..qqq..",
-    ".q...q.",
-    "....qq.",
-    "...qq..",
-    "...q...",
-    ".......",
-    "...q...",
-]
-GRASS_PX = [
-    ".v.v.v.",
-    "v.vvv.v",
-    "..vvv..",
-]
-
-
-def _hero_pal():
-    S = RUN_SKIN
-    return {"K": S["cap"], "k": S["cap_dk"], "h": S["hair"], "F": S["skin"],
-            "e": S["ink"], "J": S["coat"], "t": S["zip"], "P": S["pants"],
-            "W": S["shoe"]}
+def sprite(name, x, y, anchor="bottom", scale=1.0, extra=""):
+    """Place a sprite. x is its centre, y its baseline (or top, when anchored so)."""
+    a = art().get(name)
+    if not a:
+        return ""
+    uri, w, h = a
+    w, h = w * scale, h * scale
+    top = y if anchor == "top" else y - h
+    return (f'<image xlink:href="{uri}" x="{x - w / 2:.1f}" y="{top:.1f}" '
+            f'width="{w:.1f}" height="{h:.1f}" {extra}/>')
 
 
 def _levels(weeks):
@@ -489,6 +390,15 @@ def _levels(weeks):
     return out
 
 
+# ---------------------------------------------------------------- runner panel
+VB_W, VB_H = 2172, 724                 # reference-art coordinate space
+PANEL = (33, 95, 2139, 627)
+GX0, GY0, GCELL, GPX, GPY = 85.0, 180.0, 26.0, 37.2, 36.5
+GROUND = 588.0                         # top of the ground line
+BLOCK_Y = 346.0                        # top of a mystery block
+LEVELS = ["#06313E", "#128070", "#18A088", "#20D898", "#9BEFD9"]
+
+
 def _keys(vals, times, T):
     """Clamp and monotonise keyTimes, returning the SMIL strings."""
     ks = [min(max(t / T, 0.0), 1.0) for t in times]
@@ -500,23 +410,21 @@ def _keys(vals, times, T):
 def _prize(sprites, cx, cy, t, T, path, life):
     """A prize popping out of a block at (cx, cy) and living for `life` seconds.
 
-    sprites: [(svg, from_dt, to_dt)] - each sprite visible over its own window.
+    sprites: [(svg, from_dt, to_dt)] - each sprite shows over its own window.
     path:    [(dt, x, y)] - offsets from the block, in order.
     """
-    vals = ["0,0"] + [f"{x:.1f},{y:.1f}" for _, x, y in path] + [f"{path[-1][1]:.1f},{path[-1][2]:.1f}"]
+    vals = ["0,0"] + [f"{x:.1f},{y:.1f}" for _, x, y in path] + \
+           [f"{path[-1][1]:.1f},{path[-1][2]:.1f}"]
     times = [0.0] + [t + dt for dt, _, _ in path] + [T]
     move_v, move_k = _keys(vals, times, T)
-
     op_v, op_k = _keys(["0", "0", "1", "1", "0", "0"],
                        [0.0, t, t + 0.06, t + life - 0.35, t + life, T], T)
-
     inner = ""
     for svg, a, b in sprites:
         sv, sk = _keys(["0", "0", "1", "1", "0", "0"],
                        [0.0, t + a, t + a + 0.02, t + b, t + b + 0.02, T], T)
         inner += (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s"'
                   f' repeatCount="indefinite" values="{sv}" keyTimes="{sk}"/>{svg}</g>')
-
     return (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
             f' values="{op_v}" keyTimes="{op_k}"/>'
             f'<g transform="translate({cx} {cy})">'
@@ -526,40 +434,29 @@ def _prize(sprites, cx, cy, t, T, path, life):
 
 
 def build_runner_panel(weeks, total=None):
-    """The avatar runs the contribution grid, popping mystery blocks open."""
-    CELL, PITCH, TOP = 12, 16, 26
+    """The avatar runs the contribution grid, knocking mystery blocks open."""
     grid = _levels(weeks)
-    cols = len(grid)
-    GW = cols * PITCH
-    GRID_BOT = TOP + 7 * PITCH
-    GROUND = GRID_BOT + 20           # standing surface
-    IH = GROUND + 16
-    T = 24.0                         # seconds per loop
-    S = RUN_SKIN
+    cols = min(len(grid), 53)
+    grid = grid[-cols:]
+    T = 24.0
+    X0, X1 = -120.0, VB_W + 120.0
 
-    X0, X1 = -22.0, GW + 22.0
-
-    # ---- pick the blocks worth jumping for ----
-    events, last_col = [], -99
+    # ---- one block per busy-ish column, spaced so they never collide ----
+    events, last = [], -99
     for i, col in enumerate(grid):
-        filled = [r for r, l in enumerate(col) if l > 0]
-        if not filled:
+        lv = max(col)
+        if lv <= 0 or i - last < 7:
             continue
-        r = max(filled)                       # the lowest lit cell, easiest to reach
-        cell_bottom = TOP + r * PITCH + CELL
-        apex = GROUND - (cell_bottom + 16)    # how high the feet have to go
-        if apex > 80 or i - last_col < 2:     # out of reach, or too soon after the last hop
-            continue
-        events.append({"col": i, "row": r, "lv": col[r], "apex": max(10.0, apex),
-                       "x": i * PITCH + 2 + CELL / 2.0})
-        last_col = i
-    if len(events) > 14:                      # thin them out, keep the spread
-        step = len(events) / 14.0
-        events = [events[int(k * step)] for k in range(14)]
+        events.append({"col": i, "row": col.index(lv), "lv": lv,
+                       "x": GX0 + i * GPX + GCELL / 2})
+        last = i
+    if len(events) > 5:
+        step = len(events) / 5.0
+        events = [events[int(k * step)] for k in range(5)]
 
-    # ---- pace it: dash across the quiet months, cruise through the busy ones ----
+    # ---- pacing across the panel ----
     stops = [X0] + [e["x"] for e in events] + [X1]
-    weight = [max(abs(stops[i + 1] - stops[i]), 1.0) ** 0.55 + 7.0
+    weight = [max(abs(stops[i + 1] - stops[i]), 1.0) ** 0.6 + 40.0
               for i in range(len(stops) - 1)]
     scale = T / sum(weight)
     marks, acc = [0.0], 0.0
@@ -569,200 +466,131 @@ def build_runner_panel(weeks, total=None):
     marks[-1] = T
     for k, e in enumerate(events):
         e["t"] = marks[k + 1]
-    run_x = (";".join(f"{x:.1f},{GROUND}" for x in stops),
-             ";".join(f"{m / T:.5f}" for m in marks))
+    run_v = ";".join(f"{x:.1f},{GROUND}" for x in stops)
+    run_k = ";".join(f"{m / T:.5f}" for m in marks)
 
-    # ---- avatar vertical track ----
-    JD = 0.66
+    # ---- her jump arc: head has to reach the underside of a block ----
+    JD, LIFT = 0.95, 62.0
     vals, keys = ["0,0"], [0.0]
     for e in events:
         t0, t1 = e["t"] - JD / 2, e["t"] + JD / 2
-        h = e["apex"]
-        for frac, lift in ((0.0, 0.0), (0.28, 0.72), (0.5, 1.0), (0.72, 0.72), (1.0, 0.0)):
+        for frac, lift in ((0.0, 0.0), (0.3, 0.74), (0.5, 1.0), (0.7, 0.74), (1.0, 0.0)):
             keys.append((t0 + frac * (t1 - t0)) / T)
-            vals.append(f"0,{-h * lift:.1f}")
+            vals.append(f"0,{-LIFT * lift:.1f}")
     keys.append(1.0)
     vals.append("0,0")
-    keys = [min(max(k, 0.0), 1.0) for k in keys]
-    for i in range(1, len(keys)):              # keyTimes must never step backwards
-        keys[i] = max(keys[i], keys[i - 1])
-    hero_y = (";".join(vals), ";".join(f"{k:.5f}" for k in keys))
+    for i in range(1, len(keys)):
+        keys[i] = min(max(keys[i], keys[i - 1]), 1.0)
+    jump_v, jump_k = ";".join(vals), ";".join(f"{k:.5f}" for k in keys)
 
-    # airborne flag, used to swap in the jump frame
-    fl_v, fl_k = ["0"], [0.0]
-    for e in events:
-        t0, t1 = e["t"] - JD / 2, e["t"] + JD / 2
-        for frac, o in ((0.0, 0), (0.18, 1), (0.82, 1), (1.0, 0)):
-            fl_k.append((t0 + frac * (t1 - t0)) / T)
-            fl_v.append("1" if o else "0")
-    fl_k.append(1.0)
-    fl_v.append("0")
-    fl_k = [min(max(k, 0.0), 1.0) for k in fl_k]
-    for i in range(1, len(fl_k)):
-        fl_k[i] = max(fl_k[i], fl_k[i - 1])
-
-    # ---- the grid, with the hit cells flashing and dimming ----
-    hit = {(e["col"], e["row"]): i for i, e in enumerate(events)}
+    # ---- the contribution grid ----
+    hit = {(e["col"], e["row"]): e for e in events}
     cells = []
     for i, col in enumerate(grid):
         for r, lv in enumerate(col):
-            x, y = i * PITCH + 2, TOP + r * PITCH
-            fill = RUN_LEVELS[lv]
-            k = hit.get((i, r))
-            if k is None:
-                cells.append(f'<rect class="k" x="{x}" y="{y}" width="{CELL}" height="{CELL}" fill="{fill}"/>')
+            x, y = GX0 + i * GPX, GY0 + r * GPY
+            fill = LEVELS[lv]
+            e = hit.get((i, r))
+            base = (f'<rect x="{x:.1f}" y="{y:.1f}" width="{GCELL}" height="{GCELL}" rx="7"'
+                    f' fill="{fill}"')
+            if e is None:
+                cells.append(base + "/>")
                 continue
-            t = events[k]["t"]
-            a, b, c = t / T, (t + 0.09) / T, (t + 0.26) / T
+            a, b, c = e["t"] / T, (e["t"] + 0.12) / T, (e["t"] + 0.4) / T
             cells.append(
-                f'<rect class="k" x="{x}" y="{y}" width="{CELL}" height="{CELL}" fill="{fill}">'
-                f'<animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"'
-                f' values="0,0;0,0;0,-6;0,0;0,0" keyTimes="0;{a:.5f};{b:.5f};{c:.5f};1"/>'
-                f'<animate attributeName="fill" dur="{T}s" repeatCount="indefinite"'
-                f' values="{fill};{fill};{S["spark"]};{RUN_LEVELS[1]};{RUN_LEVELS[1]}"'
-                f' keyTimes="0;{a:.5f};{b:.5f};{c:.5f};1"/>'
-                f'</rect>')
+                base + f'><animate attributeName="fill" dur="{T}s" repeatCount="indefinite"'
+                f' values="{fill};{fill};{LEVELS[4]};{fill};{fill}"'
+                f' keyTimes="0;{a:.5f};{b:.5f};{c:.5f};1"/></rect>')
 
-    # ---- the mystery blocks sitting on those cells until they are hit ----
-    qpal = {"q": S["q_glyph"]}
+    # ---- mystery blocks, one per event, hovering under the grid ----
     blocks = ""
     for e in events:
-        x, y = e["col"] * PITCH + 2, TOP + e["row"] * PITCH
-        t = e["t"]
-        qv, qk = _keys(["1", "1", "0", "0"], [0.0, t, t + 0.06, T], T)
+        qv, qk = _keys(["1", "1", "0", "0"], [0.0, e["t"], e["t"] + 0.08, T], T)
+        bump_v, bump_k = _keys(["0,0", "0,0", "0,-16", "0,0", "0,0"],
+                               [0.0, e["t"], e["t"] + 0.1, e["t"] + 0.3, T], T)
         blocks += (f'<g><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
                    f' values="{qv}" keyTimes="{qk}"/>'
-                   f'<rect x="{x + 0.6}" y="{y + 0.6}" width="{CELL - 1.2}" height="{CELL - 1.2}" rx="2.4"'
-                   f' fill="{S["q_fill"]}" stroke="{S["q_edge"]}" stroke-width="1.1"/>'
-                   f'{_px(QBLOCK_PX, qpal, 1.25, x + CELL / 2, y + CELL / 2 + 4.4)}</g>')
+                   f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
+                   f' repeatCount="indefinite" values="{bump_v}" keyTimes="{bump_k}"/>'
+                   f'{sprite("qblock", e["x"], BLOCK_Y, anchor="top")}</g></g>')
 
     # ---- what each block gives up ----
-    shell_svg = _px(SHELL_PX, {"G": S["shell_dk"], "s": S["shell"], "S": S["shell_lt"]}, 1.5, 0, 0)
-    turtle_svg = _px(TURTLE_PX, {"G": S["shell_dk"], "s": S["shell"], "S": S["shell_lt"],
-                                 "n": S["skin_g"]}, 1.5, 0, 0)
-    leaf_svg = _px(LEAF_PX, {"L": S["leaf"], "v": S["leaf_dk"]}, 1.4, 0, 0)
-    croc_svg = _px(CROC_PX, {"c": S["croc"], "d": S["croc_dk"], "e": S["ink"], "C": S["croc_lt"], "w": "#EDF5F0"}, 1.4, 0, 0)
-
     pops = []
     for e in events:
-        cx = e["col"] * PITCH + 2 + CELL / 2
-        cy = TOP + e["row"] * PITCH
-        t, dyg = e["t"], GROUND - cy
-        if e["lv"] >= 3:                       # busy day: a shell that wakes up and follows
+        cx, cy, t = e["x"], BLOCK_Y, e["t"]
+        drop = GROUND - BLOCK_Y
+        if e["lv"] >= 3:                      # a shell that wakes up and follows her
             pops.append(_prize(
-                [(shell_svg, 0.0, 1.9), (turtle_svg, 1.9, 5.2)],
+                [(sprite("shell", 0, 0), 0.0, 2.0),
+                 (sprite("turtle", 0, 0), 2.0, 6.0)],
                 cx, cy, t, T,
-                [(0.06, 0, 0), (0.42, 6, -18), (0.9, 14, dyg), (1.9, 52, dyg),
-                 (3.6, 96, dyg), (5.2, 132, dyg)], 5.4))
-        elif e["lv"] == 2:                     # steady day: a leaf drifting down
+                [(0.08, 0, 0), (0.5, 10, -70), (1.1, 26, drop), (2.0, 96, drop),
+                 (4.0, 190, drop), (6.0, 280, drop)], 6.2))
+        elif e["lv"] == 2:                    # a leaf drifting down
             pops.append(_prize(
-                [(leaf_svg, 0.0, 3.4)],
+                [(sprite("leaf", 0, 0), 0.0, 4.0)],
                 cx, cy, t, T,
-                [(0.06, 0, 0), (0.4, 4, -20), (1.0, -6, dyg * 0.45), (1.7, 6, dyg * 0.8),
-                 (2.2, 2, dyg), (3.4, 2, dyg)], 3.6))
-        else:                                  # quiet day: a little croc trots off
+                [(0.08, 0, 0), (0.5, 8, -76), (1.4, -18, drop * 0.5),
+                 (2.4, 16, drop * 0.85), (3.0, 6, drop), (4.0, 6, drop)], 4.2))
+        else:                                 # a little snake slithering off
             pops.append(_prize(
-                [(croc_svg, 0.0, 4.4)],
+                [(sprite("snake", 0, 0), 0.0, 5.0)],
                 cx, cy, t, T,
-                [(0.06, 0, 0), (0.4, 4, -16), (0.9, 10, dyg), (2.4, 58, dyg),
-                 (4.4, 124, dyg)], 4.6))
+                [(0.08, 0, 0), (0.5, 8, -64), (1.2, 22, drop), (3.0, 130, drop),
+                 (5.0, 250, drop)], 5.2))
 
-    # ---- the avatar ----
-    HP = _hero_pal()
-    PX = 1.08
-    run_a = _px(HERO_A, HP, PX)
-    run_b = _px(HERO_B, HP, PX)
-    jump_f = _px(HERO_JUMP, HP, PX)
-    air_v = ";".join(fl_v)
-    air_k = ";".join(f"{k:.5f}" for k in fl_k)
-    gnd_v = ";".join("1" if v == "0" else "0" for v in fl_v)
+    # ---- her ----
+    girl = (f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
+            f' repeatCount="indefinite" calcMode="linear" values="{run_v}" keyTimes="{run_k}"/>'
+            f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
+            f' repeatCount="indefinite" calcMode="linear" values="{jump_v}" keyTimes="{jump_k}"/>'
+            f'<ellipse cx="0" cy="-4" rx="46" ry="9" fill="#000" fill-opacity=".35"/>'
+            f'<g><animateTransform attributeName="transform" type="translate" dur="0.42s"'
+            f' repeatCount="indefinite" values="0,0;0,-7;0,0" keyTimes="0;0.5;1"/>'
+            f'{sprite("girl", 0, 6)}</g></g></g>')
 
-    hero = f'''<g>
-  <animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"
-    calcMode="linear" values="{run_x[0]}" keyTimes="{run_x[1]}"/>
-  <g>
-    <animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"
-      calcMode="linear" values="{hero_y[0]}" keyTimes="{hero_y[1]}"/>
-    <ellipse cx="0" cy="0" rx="7" ry="2" fill="#000" fill-opacity=".35"/>
-    <g opacity="1">
-      <animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"
-        values="{gnd_v}" keyTimes="{air_k}"/>
-      <g>{run_a}<animate attributeName="opacity" values="1;0" keyTimes="0;0.5"
-        dur="0.34s" calcMode="discrete" repeatCount="indefinite"/></g>
-      <g opacity="0">{run_b}<animate attributeName="opacity" values="0;1" keyTimes="0;0.5"
-        dur="0.34s" calcMode="discrete" repeatCount="indefinite"/></g>
-    </g>
-    <g opacity="0">
-      <animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"
-        values="{air_v}" keyTimes="{air_k}"/>
-      {jump_f}
-    </g>
-  </g>
-</g>'''
+    # ---- scenery ----
+    back = ""
+    for hx in range(40, VB_W, 244):
+        back += sprite("hill", hx + 120, GROUND + 2)
+    for gx in range(150, VB_W - 80, 302):
+        back += sprite("grass", gx, GROUND + 12)
+    back += sprite("signL", 215, 574) + sprite("signR", 1995, 574)
 
-    # ---- scenery: clouds, hills, grass tufts and a few sparkles ----
-    scenery = ""
-    for cx in range(40, GW, 210):
-        scenery += (f'<g fill="{S["cloud"]}" transform="translate({cx} 6)">'
-                    f'<rect x="4" y="0" width="14" height="4"/><rect x="0" y="4" width="26" height="4"/>'
-                    f'<rect x="8" y="-4" width="8" height="4"/></g>')
-    for hx in range(0, GW, 132):
-        scenery += (f'<g fill="{S["hill"]}" transform="translate({hx} {GROUND})">'
-                    f'<rect x="18" y="-4" width="48" height="4"/><rect x="26" y="-8" width="32" height="4"/>'
-                    f'<rect x="34" y="-12" width="16" height="4"/></g>')
-    for gx in range(24, GW, 76):
-        scenery += _px(GRASS_PX, {"v": S["grass"]}, 1.5, gx, GROUND)
-    for k, sx in enumerate(range(60, GW, 118)):
-        sy = 150 + (k % 3) * 8
-        scenery += (f'<rect x="{sx}" y="{GROUND - sy % 30 - 14}" width="1.6" height="1.6" fill="{S["spark"]}"'
-                    f' fill-opacity=".55"><animate attributeName="fill-opacity" values=".15;.6;.15"'
-                    f' dur="{2.2 + (k % 4) * 0.5}s" repeatCount="indefinite"/></rect>')
+    stars = ""
+    for k in range(26):
+        sx = 120 + (k * 331) % (VB_W - 240)
+        sy = 170 + (k * 137) % 380
+        stars += (f'<rect x="{sx}" y="{sy}" width="4" height="4" fill="#9BEFD9"'
+                  f' fill-opacity=".5"><animate attributeName="fill-opacity"'
+                  f' values=".12;.6;.12" dur="{2.0 + (k % 5) * 0.6}s" repeatCount="indefinite"/></rect>')
 
-    bricks = ""
-    for bx in range(0, GW, 16):
-        bricks += f'<rect x="{bx + 15}" y="{GROUND + 2}" width="1" height="{IH - GROUND - 2}" fill="{S["brick"]}"/>'
-    bricks += f'<rect x="0" y="{GROUND + 8}" width="{GW}" height="1" fill="{S["brick"]}"/>'
-
-    inner = f'''<svg x="0" y="0" width="{GW}" height="{IH}" viewBox="0 0 {GW} {IH}">
-{scenery}
-<rect x="0" y="{GROUND}" width="{GW}" height="{IH - GROUND}" fill="{S['ground']}"/>
-<rect x="0" y="{GROUND}" width="{GW}" height="1.6" fill="{S['ground_top']}" fill-opacity=".8"/>
-{bricks}
-{''.join(cells)}
-{blocks}
-{''.join(pops)}
-{hero}
-</svg>'''
-
-    W = 1000
-    inner_w = W - 64
-    k = inner_w / GW
-    inner_h = IH * k
-    H = int(inner_h + 52)
     hud = ""
     if total is not None:
-        hud = (f'<g transform="translate(40 44)" opacity=".9">'
-               f'{_px(STAR_PX, {"s": S["star"]}, 1.7, 0, 5.2)}'
-               f'<text class="rmono" x="11" y="4" font-size="12.5" fill="#CFEAE3">x {total}</text></g>')
+        hud = (sprite("star", 78, 166) +
+               f'<text class="rmono" x="104" y="160" font-size="30" fill="#CFEAE3">x {total}</text>')
+    hud += sprite("tag", 1865, 116, anchor="top")
 
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="contribution runner">
-<defs>
-  <linearGradient id="rbg" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0%" stop-color="#04070a"/><stop offset="60%" stop-color="#060e12"/><stop offset="100%" stop-color="#04090c"/>
-  </linearGradient>
-  <radialGradient id="rglow"><stop offset="0%" stop-color="#9BE7C4" stop-opacity=".12"/><stop offset="100%" stop-color="#9BE7C4" stop-opacity="0"/></radialGradient>
-  <pattern id="rscan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#7fffd4" fill-opacity=".028"/></pattern>
-  <clipPath id="rwin"><rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="14"/></clipPath>
-</defs>
-<style>.rmono {{ font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }}
-  .k {{ shape-rendering: geometricPrecision; rx: 3px; ry: 3px; }}</style>
-<rect width="{W}" height="{H}" rx="14" fill="url(#rbg)"/>
-<ellipse cx="500" cy="{H}" rx="520" ry="200" fill="url(#rglow)"/>
-<svg x="32" y="26" width="{inner_w}" height="{inner_h:.0f}" viewBox="0 0 {GW} {IH}" preserveAspectRatio="xMidYMid meet">
-{inner}
-</svg>
+    px0, py0, px1, py1 = PANEL
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+ viewBox="0 0 {VB_W} {VB_H}" width="1000" height="{VB_H * 1000 // VB_W}" role="img" aria-label="contribution runner">
+<style>.rmono {{ font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }}</style>
+<rect width="{VB_W}" height="{VB_H}" fill="#070f1a"/>
+<rect x="{px0}" y="{py0}" width="{px1 - px0}" height="{py1 - py0}" rx="30" fill="#081420"
+      stroke="#2FDDA4" stroke-opacity=".14"/>
+<clipPath id="rpanel"><rect x="{px0}" y="{py0}" width="{px1 - px0}" height="{py1 - py0}" rx="30"/></clipPath>
+<g clip-path="url(#rpanel)">
+{stars}
+{back}
+<rect x="{px0}" y="{GROUND}" width="{px1 - px0}" height="{py1 - GROUND}" fill="#0B2A33"/>
+<rect x="{px0}" y="{GROUND}" width="{px1 - px0}" height="6" fill="#3CEDA5"/>
+{''.join(f'<rect x="{x}" y="{GROUND + 6}" width="2" height="{py1 - GROUND - 6}" fill="#07202A"/>' for x in range(int(px0), int(px1), 74))}
+{''.join(cells)}
 {hud}
-<g clip-path="url(#rwin)"><rect width="{W}" height="{H}" fill="url(#rscan)"/></g>
+{blocks}
+{''.join(pops)}
+{girl}
+</g>
 </svg>
 '''
 
