@@ -1,16 +1,16 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/hero-v11.svg" width="100%" alt="Ananya Goswami, senior product associate" />
+<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/hero-v12.svg" width="100%" alt="Ananya Goswami, senior product associate" />
 
 <br/>
 
-<a href="https://g-ananya.netlify.app/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/btn-portfolio.svg" alt="Portfolio" /></a>
-<a href="https://www.linkedin.com/in/ananyagos/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/btn-linkedin.svg" alt="LinkedIn" /></a>
-<a href="mailto:goswamiananya54@gmail.com"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/btn-email.svg" alt="Email" /></a>
+<a href="https://g-ananya.netlify.app/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/btn2-portfolio.svg" alt="Portfolio" /></a>
+<a href="https://www.linkedin.com/in/ananyagos/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/btn2-linkedin.svg" alt="LinkedIn" /></a>
+<a href="mailto:goswamiananya54@gmail.com"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/btn2-email.svg" alt="Email" /></a>
 
 <br/><br/>
 
-<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=500&size=16&duration=3600&pause=1100&color=00FF9C&center=true&vCenter=true&width=820&height=40&lines=%2F%2F+classroom+idea+-%3E+prototype+-%3E+shipped+product;%2F%2F+bilingual+by+default%2C+built+for+low-end+tablets;%2F%2F+15%2B+browser+games+running+in+government+schools" alt="typing" />
+<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=500&size=16&duration=3600&pause=1100&color=9BE7C4&center=true&vCenter=true&width=820&height=40&lines=%2F%2F+classroom+idea+-%3E+prototype+-%3E+shipped+product;%2F%2F+bilingual+by+default%2C+built+for+low-end+tablets;%2F%2F+15%2B+browser+games+running+in+government+schools" alt="typing" />
 
 <br/>
 
@@ -115,6 +115,19 @@ n8n · WAHA · Railway · Claude API · Web Audio · IndexedDB · a lot of plain
 
 <br/><br/>
 
+`$ gh stats --live`
+
+<br/><br/>
+
+<img width="100%" src="https://streak-stats.demolab.com/?user=ananya-goswami&hide_border=true&background=060E12&stroke=1d3b36&ring=9BE7C4&fire=8FD4F5&currStreakLabel=9BE7C4&sideLabels=7f9c96&currStreakNum=F2FBF8&sideNums=F2FBF8&dates=4e6b66&titleColor=9BE7C4&card_width=1180" alt="contribution streak" />
+
+<br/>
+
+<img width="49%" src="https://github-readme-stats-sigma-rosy-28.vercel.app/api?username=ananya-goswami&show_icons=true&count_private=true&include_all_commits=true&hide_rank=true&hide_border=true&title_color=9BE7C4&icon_color=8FD4F5&text_color=CFEAE3&bg_color=060e12&card_width=500" alt="github stats" />
+<img width="49%" src="https://github-readme-stats-sigma-rosy-28.vercel.app/api/top-langs/?username=ananya-goswami&layout=compact&langs_count=6&hide_border=true&title_color=9BE7C4&text_color=CFEAE3&bg_color=060e12&card_width=500" alt="most used languages" />
+
+<br/><br/>
+
 <img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/highscores.svg" width="84%" alt="high scores" />
 
 <br/><br/>
@@ -131,7 +144,7 @@ n8n · WAHA · Railway · Claude API · Web Audio · IndexedDB · a lot of plain
 
 <br/>
 
-<a href="https://g-ananya.netlify.app/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/btn-portfolio.svg" alt="Portfolio" /></a>
-<a href="mailto:goswamiananya54@gmail.com"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/btn-email.svg" alt="Email" /></a>
+<a href="https://g-ananya.netlify.app/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/btn2-portfolio.svg" alt="Portfolio" /></a>
+<a href="mailto:goswamiananya54@gmail.com"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/btn2-email.svg" alt="Email" /></a>
 
 </div>
