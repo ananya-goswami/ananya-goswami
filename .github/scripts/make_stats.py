@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds an arcade-style HIGH SCORES panel (dist/stats.svg) from live GitHub data."""
+"""Builds the profile panels - stats, featured projects, and the contribution runner."""
 import json
 import os
 import urllib.request
@@ -56,7 +56,7 @@ GQL = """query($login:String!){
   user(login:$login){
     contributionsCollection{
       totalCommitContributions
-      contributionCalendar{ totalContributions weeks{ contributionDays{ date contributionCount } } }
+      contributionCalendar{ totalContributions weeks{ contributionDays{ date weekday contributionCount } } }
     }
     pullRequests{ totalCount }
     issues{ totalCount }
@@ -86,7 +86,14 @@ def graph():
             current += 1
         elif current or d is not days[-1]:
             break
+    weeks = []
+    for w in data["contributionsCollection"]["contributionCalendar"]["weeks"]:
+        col = [0] * 7
+        for d in w["contributionDays"]:
+            col[d["weekday"]] = d["contributionCount"]
+        weeks.append(col)
     return {
+        "weeks": weeks,
         "contributions": data["contributionsCollection"]["contributionCalendar"]["totalContributions"],
         "commits": data["contributionsCollection"]["totalCommitContributions"],
         "current_streak": current,
@@ -125,9 +132,13 @@ def build(d, g=None):
           transform="rotate(-90 500 112)">
     <animateTransform attributeName="transform" type="rotate" from="-90 500 112" to="270 500 112" dur="14s" repeatCount="indefinite"/>
   </circle>
-  <path d="M500 58c-4 7 2 9 0 14-3-2-9 3-4 9 3 4 10 4 12-1 2-5-4-8-4-13 0-3-2-6-4-9z" fill="#9BE7C4">
-    <animate attributeName="opacity" values="1;.45;1" dur="2.4s" repeatCount="indefinite"/>
-  </path>
+  <circle cx="500" cy="66" r="11.5" fill="#050c10"/>
+  <g transform="translate(500 66)">
+    <path d="M1-9.6C4-5.8 6.2-3 6.2 1A6.2 6.2 0 01-6.2 1C-6.2-1.6-4.6-3.8-2.4-5.4-2.6-2.8-1.4-1.6.4-1.8-1.4-4.2-1-7.2 1-9.6Z" fill="url(#ring)">
+      <animate attributeName="opacity" values="1;.5;1" dur="2.4s" repeatCount="indefinite"/>
+    </path>
+    <path transform="translate(.2 3) scale(.44)" d="M1-9.6C4-5.8 6.2-3 6.2 1A6.2 6.2 0 01-6.2 1C-6.2-1.6-4.6-3.8-2.4-5.4-2.6-2.8-1.4-1.6.4-1.8-1.4-4.2-1-7.2 1-9.6Z" fill="#F2FBF8" fill-opacity=".85"/>
+  </g>
   <text class="mono" x="500" y="122" text-anchor="middle" font-size="34" font-weight="700" fill="#F2FBF8">{g.get("current_streak", "-")}</text>
   <text class="mono" x="500" y="180" text-anchor="middle" font-size="12.5" fill="#9BE7C4">Current Streak</text>
 
@@ -283,70 +294,279 @@ def build_projects(index):
 '''
 
 
-SNAKE_PALETTE = {
-    "--cb": "#0e1a1f",      # cell border
-    "--cs": "#C4A8FF",      # the snake, violet so it reads over the grid
-    "--ce": "#0c171c",      # empty cell
-    "--c0": "#0c171c",
-    "--c1": "#1b5f4f",      # contribution ramp: teal -> mint -> cyan
-    "--c2": "#2b9a7a",
-    "--c3": "#56D6A8",
-    "--c4": "#8FE9F5",
+RUN_LEVELS = ["#1b2c33", "#2f7f68", "#3fae86", "#5FD8A8", "#8FE9F5"]
+RUN_SKIN = {
+    "shell": "#B9C7D4",     # robot chassis
+    "shade": "#7C94A6",
+    "visor": "#08161c",
+    "eye": "#5FD8A8",
+    "bolt": "#FFD54A",      # coins
+    "bolt_dk": "#E0A42B",
+    "cap": "#E1554E",       # mushroom
+    "cap_dot": "#FFF1E0",
+    "stem": "#F5E3C8",
+    "shellg": "#4CAF50",    # turtle
+    "shellg_dk": "#2E7D32",
+    "skin": "#CDE58C",
+    "ground": "#14242b",
+    "ground_top": "#2f7f68",
 }
 
 
-def build_snake_panel(src_path, out_path):
-    """Recolour the generated snake and sit it inside a matching terminal panel."""
-    import re
-    svg = open(src_path).read()
+def _levels(weeks):
+    flat = [c for w in weeks for c in w]
+    mx = max(flat) if flat else 0
+    out = []
+    for w in weeks:
+        col = []
+        for c in w:
+            if c <= 0:
+                col.append(0)
+            elif mx <= 1:
+                col.append(4)
+            else:
+                col.append(1 + min(3, int(3.0 * (c - 1) / max(1, mx - 1) + 0.5)))
+        while len(col) < 7:
+            col.append(0)
+        out.append(col)
+    return out
 
-    def repalette(m):
-        return "".join(f"{k}:{v};" for k, v in SNAKE_PALETTE.items()).rstrip(";")
-    svg = re.sub(r"(?<=:root\{)[^}]*", repalette, svg, count=1)
-    # a soft glow on the snake body and rounder cells
-    extra = (".s{filter:drop-shadow(0 0 4px #C4A8FF) drop-shadow(0 0 9px rgba(196,168,255,.45))}"
-             ".c{rx:3.5px;ry:3.5px}"
-             ".c.c3,.c.c4{filter:drop-shadow(0 0 3px rgba(143,233,245,.55))}")
-    svg = svg.replace("</style>", extra + "</style>", 1)
 
-    head = re.match(r"<svg[^>]*>", svg).group(0)
-    vw = float(re.search(r'width="([0-9.]+)"', head).group(1))
-    vh = float(re.search(r'height="([0-9.]+)"', head).group(1))
+def build_runner_panel(weeks, total=None):
+    """A little pixel robot runs the contribution grid, popping the days you showed up on."""
+    CELL, PITCH, TOP = 12, 16, 26
+    grid = _levels(weeks)
+    cols = len(grid)
+    GW = cols * PITCH
+    GRID_BOT = TOP + 7 * PITCH
+    GROUND = GRID_BOT + 20           # standing surface
+    IH = GROUND + 16
+    T = 24.0                         # seconds per loop
+
+    X0, X1 = -22.0, GW + 22.0
+
+    # ---- pick the blocks worth jumping for ----
+    events, last_col = [], -99
+    for i, col in enumerate(grid):
+        filled = [r for r, l in enumerate(col) if l > 0]
+        if not filled:
+            continue
+        r = max(filled)                       # the lowest lit cell, easiest to reach
+        cell_bottom = TOP + r * PITCH + CELL
+        apex = GROUND - (cell_bottom + 16)    # how high the feet have to go
+        if apex > 80 or i - last_col < 2:     # out of reach, or too soon after the last hop
+            continue
+        events.append({"col": i, "row": r, "apex": max(10.0, apex),
+                       "x": i * PITCH + 2 + CELL / 2.0})
+        last_col = i
+    if len(events) > 16:                      # thin them out, keep the spread
+        step = len(events) / 16.0
+        events = [events[int(k * step)] for k in range(16)]
+
+    # ---- pace it: dash across the quiet months, cruise through the busy ones ----
+    stops = [X0] + [e["x"] for e in events] + [X1]
+    weight = [max(abs(stops[i + 1] - stops[i]), 1.0) ** 0.55 + 7.0
+              for i in range(len(stops) - 1)]
+    scale = T / sum(weight)
+    marks, acc = [0.0], 0.0
+    for w in weight:
+        acc += w * scale
+        marks.append(acc)
+    marks[-1] = T
+    for k, e in enumerate(events):
+        e["t"] = marks[k + 1]
+    run_x = (";".join(f"{x:.1f},{GROUND}" for x in stops),
+             ";".join(f"{m / T:.5f}" for m in marks))
+
+    prize = {}                                # most blocks give a coin
+    if len(events) >= 4:
+        prize[len(events) // 2] = "mushroom"
+
+    # ---- robot vertical track ----
+    JD = 0.66
+    vals, keys = ["0,0"], [0.0]
+    for e in events:
+        t0, t1 = e["t"] - JD / 2, e["t"] + JD / 2
+        h = e["apex"]
+        for frac, lift in ((0.0, 0.0), (0.28, 0.72), (0.5, 1.0), (0.72, 0.72), (1.0, 0.0)):
+            keys.append((t0 + frac * (t1 - t0)) / T)
+            vals.append(f"0,{-h * lift:.1f}")
+    keys.append(1.0)
+    vals.append("0,0")
+    keys = [min(max(k, 0.0), 1.0) for k in keys]
+    for i in range(1, len(keys)):              # keyTimes must never step backwards
+        keys[i] = max(keys[i], keys[i - 1])
+    robot_y = (";".join(vals), ";".join(f"{k:.5f}" for k in keys))
+
+    # thruster fires only while airborne
+    fl_v, fl_k = ["0"], [0.0]
+    for e in events:
+        t0, t1 = e["t"] - JD / 2, e["t"] + JD / 2
+        for frac, o in ((0.0, 0.0), (0.18, 1.0), (0.82, 1.0), (1.0, 0.0)):
+            fl_k.append((t0 + frac * (t1 - t0)) / T)
+            fl_v.append(str(o))
+    fl_k.append(1.0)
+    fl_v.append("0")
+    fl_k = [min(max(k, 0.0), 1.0) for k in fl_k]
+    for i in range(1, len(fl_k)):
+        fl_k[i] = max(fl_k[i], fl_k[i - 1])
+
+    # ---- the grid, with the hit cells flashing and dimming ----
+    hit = {(e["col"], e["row"]): i for i, e in enumerate(events)}
+    cells = []
+    for i, col in enumerate(grid):
+        for r, lv in enumerate(col):
+            x, y = i * PITCH + 2, TOP + r * PITCH
+            fill = RUN_LEVELS[lv]
+            k = hit.get((i, r))
+            if k is None:
+                cells.append(f'<rect class="k" x="{x}" y="{y}" width="{CELL}" height="{CELL}" fill="{fill}"/>')
+                continue
+            t = events[k]["t"]
+            a, b, c = t / T, (t + 0.09) / T, (t + 0.26) / T
+            cells.append(
+                f'<rect class="k" x="{x}" y="{y}" width="{CELL}" height="{CELL}" fill="{fill}">'
+                f'<animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"'
+                f' values="0,0;0,0;0,-6;0,0;0,0" keyTimes="0;{a:.5f};{b:.5f};{c:.5f};1"/>'
+                f'<animate attributeName="fill" dur="{T}s" repeatCount="indefinite"'
+                f' values="{fill};{fill};#FFF3C4;{RUN_LEVELS[1]};{RUN_LEVELS[1]}"'
+                f' keyTimes="0;{a:.5f};{b:.5f};{c:.5f};1"/>'
+                f'</rect>')
+
+    # ---- what comes out of each block ----
+    pops = []
+    for k, e in enumerate(events):
+        cx = e["col"] * PITCH + 2 + CELL / 2
+        cy = TOP + e["row"] * PITCH
+        a, b, c = e["t"] / T, (e["t"] + 0.1) / T, (e["t"] + 0.75) / T
+        dyg = GROUND - cy          # how far down to the ground from this block
+        if prize.get(k) == "mushroom":
+            pops.append(
+                f'<g opacity="0"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
+                f' values="0;0;1;1;0;0" keyTimes="0;{a:.5f};{b:.5f};{(e["t"]+2.5)/T:.5f};{(e["t"]+2.8)/T:.5f};1"/>'
+                f'<g transform="translate({cx} {cy})">'
+                f'<animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"'
+                f' additive="sum" values="0,0;0,0;0,-16;0,-16;18,{dyg};94,{dyg};94,{dyg}"'
+                f' keyTimes="0;{a:.5f};{b:.5f};{(e["t"]+0.5)/T:.5f};{(e["t"]+1.1)/T:.5f};{(e["t"]+2.8)/T:.5f};1"/>'
+                f'<path d="M-5 0a5 5 0 0 1 10 0Z" fill="{RUN_SKIN["cap"]}"/>'
+                f'<circle cx="-2.2" cy="-2" r="1.2" fill="{RUN_SKIN["cap_dot"]}"/>'
+                f'<circle cx="2.2" cy="-2.4" r="1" fill="{RUN_SKIN["cap_dot"]}"/>'
+                f'<rect x="-2.4" y="0" width="4.8" height="3.4" rx="1.2" fill="{RUN_SKIN["stem"]}"/>'
+                f'</g></g>')
+        else:
+            pops.append(
+                f'<g opacity="0"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
+                f' values="0;0;1;1;0;0" keyTimes="0;{a:.5f};{b:.5f};{(e["t"]+0.5)/T:.5f};{c:.5f};1"/>'
+                f'<g transform="translate({cx} {cy})">'
+                f'<animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"'
+                f' additive="sum" values="0,0;0,0;0,-20;0,-24;0,-24"'
+                f' keyTimes="0;{a:.5f};{b:.5f};{c:.5f};1"/>'
+                f'<g><animateTransform attributeName="transform" type="scale" dur="0.62s"'
+                f' repeatCount="indefinite" values="1,1;0.15,1;1,1;0.15,1;1,1" keyTimes="0;0.25;0.5;0.75;1"/>'
+                f'<circle r="4.2" fill="{RUN_SKIN["bolt"]}"/><circle r="2.2" fill="{RUN_SKIN["bolt_dk"]}"/>'
+                f'</g></g></g>')
+
+    # ---- one turtle, timed to wander under a jump ----
+    turtle = ""
+    if events:
+        e = events[len(events) // 3]
+        vt = (GW + 44.0) / T * 0.55
+        lead = min(6.0, e["t"] - 0.2)
+        xt0 = e["x"] + vt * lead
+        ts = e["t"] - lead
+        te = ts + (xt0 + 30) / vt
+        te = min(te, T)
+        turtle = (
+            f'<g opacity="0"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
+            f' values="0;0;1;1;0;0" keyTimes="0;{ts/T:.5f};{(ts+0.25)/T:.5f};{(te-0.25)/T:.5f};{te/T:.5f};1"/>'
+            f'<g transform="translate({xt0} {GROUND})">'
+            f'<animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"'
+            f' additive="sum" values="0,0;0,0;{-vt*(te-ts):.1f},0;{-vt*(te-ts):.1f},0"'
+            f' keyTimes="0;{ts/T:.5f};{te/T:.5f};1"/>'
+            f'<g><animateTransform attributeName="transform" type="translate" dur="0.5s"'
+            f' repeatCount="indefinite" values="0,0;0,-1;0,0" keyTimes="0;0.5;1"/>'
+            f'<ellipse cx="0" cy="-4.4" rx="5.4" ry="4.2" fill="{RUN_SKIN["shellg"]}"/>'
+            f'<path d="M-5.4-4.4a5.4 4.2 0 0 1 10.8 0Z" fill="{RUN_SKIN["shellg_dk"]}" opacity=".55"/>'
+            f'<circle cx="-6.4" cy="-3.6" r="2.4" fill="{RUN_SKIN["skin"]}"/>'
+            f'<circle cx="-7.4" cy="-4.2" r="0.8" fill="#18321a"/>'
+            f'<rect x="-3.6" y="-1.2" width="2.4" height="1.6" rx="0.7" fill="{RUN_SKIN["skin"]}"/>'
+            f'<rect x="1.4" y="-1.2" width="2.4" height="1.6" rx="0.7" fill="{RUN_SKIN["skin"]}"/>'
+            f'</g></g></g>')
+
+    # ---- the robot ----
+    S = RUN_SKIN
+    robot = f'''<g>
+  <animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"
+    calcMode="linear" values="{run_x[0]}" keyTimes="{run_x[1]}"/>
+  <g>
+    <animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"
+      calcMode="linear" values="{robot_y[0]}" keyTimes="{robot_y[1]}"/>
+    <g opacity="0">
+      <animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"
+        values="{';'.join(fl_v)}" keyTimes="{';'.join(f'{k:.5f}' for k in fl_k)}"/>
+      <path d="M-3 0h6l-3 6Z" fill="#FFD54A"/>
+      <path d="M-1.6 0h3.2l-1.6 3.4Z" fill="#FFF3C4"/>
+    </g>
+    <g>
+      <animateTransform attributeName="transform" type="translate" dur="0.42s"
+        repeatCount="indefinite" values="0,0;0,-1;0,0" keyTimes="0;0.5;1"/>
+      <rect x="-3.6" y="-3" width="2.6" height="3" rx="0.8" fill="{S['shade']}"/>
+      <rect x="1" y="-3" width="2.6" height="3" rx="0.8" fill="{S['shade']}"/>
+      <rect x="-5" y="-11" width="10" height="8.4" rx="2.4" fill="{S['shell']}"/>
+      <rect x="-6.4" y="-9.6" width="1.8" height="4.4" rx="0.9" fill="{S['shade']}"/>
+      <rect x="4.6" y="-9.6" width="1.8" height="4.4" rx="0.9" fill="{S['shade']}"/>
+      <rect x="-3.6" y="-9.4" width="7.2" height="4" rx="1.6" fill="{S['visor']}"/>
+      <rect x="-2.4" y="-8.4" width="2" height="2" rx="0.6" fill="{S['eye']}"/>
+      <rect x="0.6" y="-8.4" width="2" height="2" rx="0.6" fill="{S['eye']}"/>
+      <rect x="-0.7" y="-14.6" width="1.4" height="3.8" fill="{S['shade']}"/>
+      <circle cx="0" cy="-15.4" r="1.7" fill="{S['eye']}">
+        <animate attributeName="opacity" values="1;.35;1" dur="1.6s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+  </g>
+</g>'''
+
+    inner = f'''<svg x="0" y="0" width="{GW}" height="{IH}" viewBox="0 0 {GW} {IH}">
+<rect x="0" y="{GROUND}" width="{GW}" height="{IH - GROUND}" fill="{S['ground']}"/>
+<rect x="0" y="{GROUND}" width="{GW}" height="1.6" fill="{S['ground_top']}" fill-opacity=".8"/>
+{''.join(cells)}
+{''.join(pops)}
+{turtle}
+{robot}
+</svg>'''
 
     W = 1000
     inner_w = W - 64
-    k = inner_w / vw
-    inner_h = (vh - 34) * k
+    k = inner_w / GW
+    inner_h = IH * k
     H = int(inner_h + 52)
+    hud = ""
+    if total is not None:
+        hud = (f'<g transform="translate(40 44)" opacity=".9">'
+               f'<circle r="4.6" fill="{S["bolt"]}"/><circle r="2.4" fill="{S["bolt_dk"]}"/>'
+               f'<text class="rmono" x="11" y="4" font-size="12.5" fill="#CFEAE3">x {total}</text></g>')
 
-    inner = re.sub(r"^<svg[^>]*>", "", svg, count=1)[: -len("</svg>")]
-    vb = [float(v) for v in re.search(r'viewBox="([^"]+)"', head).group(1).split()]
-    vb[3] -= 34                      # the source leaves an empty band under the grid
-    view = " ".join(f"{v:g}" for v in vb)
-
-    panel = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="contribution snake">
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="contribution runner">
 <defs>
-  <linearGradient id="sbg" x1="0" y1="0" x2="1" y2="1">
+  <linearGradient id="rbg" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0%" stop-color="#04070a"/><stop offset="60%" stop-color="#060e12"/><stop offset="100%" stop-color="#04090c"/>
   </linearGradient>
-  <radialGradient id="sglow"><stop offset="0%" stop-color="#9BE7C4" stop-opacity=".12"/><stop offset="100%" stop-color="#9BE7C4" stop-opacity="0"/></radialGradient>
-  <pattern id="sscan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#7fffd4" fill-opacity=".028"/></pattern>
-  <clipPath id="swin"><rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="14"/></clipPath>
+  <radialGradient id="rglow"><stop offset="0%" stop-color="#9BE7C4" stop-opacity=".12"/><stop offset="100%" stop-color="#9BE7C4" stop-opacity="0"/></radialGradient>
+  <pattern id="rscan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#7fffd4" fill-opacity=".028"/></pattern>
+  <clipPath id="rwin"><rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="14"/></clipPath>
 </defs>
-<style>.smono {{ font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }}
-  .spulse {{ animation: spulse 3.6s ease-in-out infinite; }}
-  @keyframes spulse {{ 0%,100% {{ opacity: .45 }} 50% {{ opacity: 1 }} }}</style>
-<rect width="{W}" height="{H}" rx="14" fill="url(#sbg)"/>
-<ellipse cx="500" cy="{H}" rx="520" ry="200" fill="url(#sglow)"/>
-<svg x="32" y="26" width="{inner_w}" height="{inner_h:.0f}" viewBox="{view}" preserveAspectRatio="xMidYMid meet">
+<style>.rmono {{ font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }}
+  .k {{ shape-rendering: geometricPrecision; rx: 3px; ry: 3px; }}</style>
+<rect width="{W}" height="{H}" rx="14" fill="url(#rbg)"/>
+<ellipse cx="500" cy="{H}" rx="520" ry="200" fill="url(#rglow)"/>
+<svg x="32" y="26" width="{inner_w}" height="{inner_h:.0f}" viewBox="0 0 {GW} {IH}" preserveAspectRatio="xMidYMid meet">
 {inner}
 </svg>
-<g clip-path="url(#swin)"><rect width="{W}" height="{H}" fill="url(#sscan)"/></g>
+{hud}
+<g clip-path="url(#rwin)"><rect width="{W}" height="{H}" fill="url(#rscan)"/></g>
 <rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="14" fill="none" stroke="#9BE7C4" stroke-opacity=".26"/>
 </svg>
 '''
-    open(out_path, "w").write(panel)
-    return W, H
 
 
 if __name__ == "__main__":
@@ -360,9 +580,10 @@ if __name__ == "__main__":
     os.makedirs(out_dir, exist_ok=True)
     open(OUT, "w").write(build(data, g))
     open(os.path.join(out_dir, "projects-v2.svg"), "w").write(build_projects(data["index"]))
-    for src, dst in (("snake-dark.svg", "snake-panel-v2.svg"),):
-        p = os.path.join(out_dir, src)
-        if os.path.exists(p):
-            build_snake_panel(p, os.path.join(out_dir, dst))
-            print("wrote", dst)
+    if g.get("weeks"):
+        open(os.path.join(out_dir, "runner-v2.svg"), "w").write(
+            build_runner_panel(g["weeks"], total=g.get("contributions")))
+        print("wrote runner-v2.svg")
+    else:
+        print("no calendar data - runner panel skipped")
     print("panels:", data["repos"], "repos,", data["deployed"], "live,", g.get("contributions"), "contributions")
