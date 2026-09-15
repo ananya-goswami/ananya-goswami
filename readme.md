@@ -119,24 +119,11 @@ n8n · WAHA · Railway · Claude API · Web Audio · IndexedDB · a lot of plain
 
 <br/><br/>
 
-<img width="100%" src="https://streak-stats.demolab.com/?user=ananya-goswami&hide_border=true&background=060E12&stroke=1d3b36&ring=9BE7C4&fire=8FD4F5&currStreakLabel=9BE7C4&sideLabels=7f9c96&currStreakNum=F2FBF8&sideNums=F2FBF8&dates=4e6b66&titleColor=9BE7C4&card_width=1180" alt="contribution streak" />
-
-<br/>
-
-<img width="49%" src="https://github-readme-stats-sigma-rosy-28.vercel.app/api?username=ananya-goswami&show_icons=true&count_private=true&include_all_commits=true&hide_rank=true&hide_border=true&title_color=9BE7C4&icon_color=8FD4F5&text_color=CFEAE3&bg_color=060e12&card_width=500" alt="github stats" />
-<img width="49%" src="https://github-readme-stats-sigma-rosy-28.vercel.app/api/top-langs/?username=ananya-goswami&layout=compact&langs_count=6&hide_border=true&title_color=9BE7C4&text_color=CFEAE3&bg_color=060e12&card_width=500" alt="most used languages" />
+<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/highscores.svg" width="92%" alt="contributions, streaks and language split" />
 
 <br/><br/>
 
-<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/highscores.svg" width="84%" alt="high scores" />
-
-<br/><br/>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/snake-dark.svg" />
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/snake.svg" />
-  <img width="96%" alt="contribution snake" src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/snake.svg" />
-</picture>
+<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/snake-panel.svg" width="92%" alt="contribution snake" />
 
 <br/><br/>
 
