@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 444" width="1000" height="444" role="img" aria-label="github stats">
+<defs>
+  <linearGradient id="bgG" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#04070a"/><stop offset="60%" stop-color="#060e12"/><stop offset="100%" stop-color="#04090c"/>
+  </linearGradient>
+  <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#9BE7C4"/><stop offset="0.5" stop-color="#8FD4F5"/><stop offset="1" stop-color="#B9A7FA"/>
+  </linearGradient>
+  <radialGradient id="glowA"><stop offset="0%" stop-color="#9BE7C4" stop-opacity=".10"/><stop offset="100%" stop-color="#9BE7C4" stop-opacity="0"/></radialGradient>
+  <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#7fffd4" fill-opacity=".025"/></pattern>
+  <clipPath id="win"><rect x="1" y="1" width="998" height="442" rx="14"/></clipPath>
+</defs>
+<style>
+  .mono { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }
+  .pulse { animation: pulse 3.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: .45 } 50% { opacity: 1 } }
+</style>
+<rect width="1000" height="444" rx="14" fill="url(#bgG)"/>
+<ellipse cx="500" cy="444" rx="540" ry="230" fill="url(#glowA)"/>
+<g transform="translate(0 -26)">
+
+  <line x1="333" y1="58" x2="333" y2="196" stroke="#1d3b36"/>
+  <line x1="667" y1="58" x2="667" y2="196" stroke="#1d3b36"/>
+
+  <text class="mono" x="167" y="112" text-anchor="middle" font-size="40" font-weight="700" fill="#F2FBF8">100</text>
+  <text class="mono" x="167" y="140" text-anchor="middle" font-size="12.5" fill="#CFEAE3">Total Contributions</text>
+  <text class="mono" x="167" y="164" text-anchor="middle" font-size="11" fill="#4e6b66">2025-09-14 to present</text>
+
+  <circle cx="500" cy="112" r="46" fill="none" stroke="#1d3b36" stroke-width="4"/>
+  <circle cx="500" cy="112" r="46" fill="none" stroke="url(#ring)" stroke-width="4" stroke-linecap="round"
+          stroke-dasharray="289" stroke-dashoffset="81"
+          transform="rotate(-90 500 112)">
+    <animateTransform attributeName="transform" type="rotate" from="-90 500 112" to="270 500 112" dur="14s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="500" cy="66" r="13.5" fill="#050c10"/>
+  <g transform="translate(500 64) scale(1.45)">
+    <path d="M1-9.6C4-5.8 6.2-3 6.2 1A6.2 6.2 0 01-6.2 1C-6.2-1.6-4.6-3.8-2.4-5.4-2.6-2.8-1.4-1.6.4-1.8-1.4-4.2-1-7.2 1-9.6Z" fill="url(#ring)">
+      <animate attributeName="opacity" values="1;.5;1" dur="2.4s" repeatCount="indefinite"/>
+    </path>
+    <path transform="translate(.2 3) scale(.44)" d="M1-9.6C4-5.8 6.2-3 6.2 1A6.2 6.2 0 01-6.2 1C-6.2-1.6-4.6-3.8-2.4-5.4-2.6-2.8-1.4-1.6.4-1.8-1.4-4.2-1-7.2 1-9.6Z" fill="#F2FBF8" fill-opacity=".85"/>
+  </g>
+  <text class="mono" x="500" y="122" text-anchor="middle" font-size="34" font-weight="700" fill="#F2FBF8">2</text>
+  <text class="mono" x="500" y="180" text-anchor="middle" font-size="12.5" fill="#9BE7C4">Current Streak</text>
+
+  <text class="mono" x="833" y="112" text-anchor="middle" font-size="40" font-weight="700" fill="#F2FBF8">2</text>
+  <text class="mono" x="833" y="140" text-anchor="middle" font-size="12.5" fill="#CFEAE3">Longest Streak</text>
+  <text class="mono" x="833" y="164" text-anchor="middle" font-size="11" fill="#4e6b66">best run so far</text>
+<line x1="34" y1="214" x2="966" y2="214" stroke="#132824"/>
+<rect x="34" y="230" width="430" height="200" rx="12" fill="#070f13" stroke="#152e2a"/>
+<text class="mono" x="52" y="262" font-size="14" font-weight="700" fill="#9BE7C4">Ananya's GitHub Stats</text>
+
+    <g transform="translate(52 291)" fill="none" stroke="#8FD4F5" stroke-width="1.5" stroke-linejoin="round">
+      <path d="M0 -7 2 -2 7 -2 3 1 4.5 6 0 3 -4.5 6 -3 1 -7 -2 -2 -2Z"/>
+    </g>
+    <text class="mono" x="74" y="296" font-size="13" fill="#CFEAE3">Total Stars Earned</text>
+    <text class="mono" x="430" y="296" font-size="13" font-weight="700" text-anchor="end" fill="#F2FBF8">0</text>
+    <g transform="translate(52 320)" fill="none" stroke="#8FD4F5" stroke-width="1.5" stroke-linejoin="round">
+      <path d="M0 -7a7 7 0 100 14 7 7 0 100-14M0 -4v4l3 2"/>
+    </g>
+    <text class="mono" x="74" y="325" font-size="13" fill="#CFEAE3">Commits This Year</text>
+    <text class="mono" x="430" y="325" font-size="13" font-weight="700" text-anchor="end" fill="#F2FBF8">66</text>
+    <g transform="translate(52 349)" fill="none" stroke="#8FD4F5" stroke-width="1.5" stroke-linejoin="round">
+      <path d="M-4 -6v12M-4 -6a2 2 0 100 .1M-4 6a2 2 0 100 .1M4 -6a2 2 0 100 .1M4 -4v2a4 4 0 01-4 4"/>
+    </g>
+    <text class="mono" x="74" y="354" font-size="13" fill="#CFEAE3">Total PRs</text>
+    <text class="mono" x="430" y="354" font-size="13" font-weight="700" text-anchor="end" fill="#F2FBF8">1</text>
+    <g transform="translate(52 378)" fill="none" stroke="#8FD4F5" stroke-width="1.5" stroke-linejoin="round">
+      <path d="M-7 -5h14v10h-14zM-7 -1h14"/>
+    </g>
+    <text class="mono" x="74" y="383" font-size="13" fill="#CFEAE3">Public Repos</text>
+    <text class="mono" x="430" y="383" font-size="13" font-weight="700" text-anchor="end" fill="#F2FBF8">31</text>
+    <g transform="translate(52 407)" fill="none" stroke="#8FD4F5" stroke-width="1.5" stroke-linejoin="round">
+      <path d="M0 -6a6 6 0 100 12 6 6 0 100-12M0 -3v3l2 2"/>
+    </g>
+    <text class="mono" x="74" y="412" font-size="13" fill="#CFEAE3">Live Builds</text>
+    <text class="mono" x="430" y="412" font-size="13" font-weight="700" text-anchor="end" fill="#F2FBF8">19</text>
+<rect x="514" y="230" width="452" height="200" rx="12" fill="#070f13" stroke="#152e2a"/>
+<text class="mono" x="530" y="262" font-size="14" font-weight="700" fill="#9BE7C4">Most Used Languages</text>
+<rect x="530" y="286" width="420" height="11" rx="5.5" fill="#101d21"/>
+<rect x="530.0" y="286" width="194.9" height="11" rx="5.5" fill="#9BE7C4"><animate attributeName="width" values="0;194.9" dur="1.1s" begin="0.30s" fill="freeze"/></rect><rect x="727.9" y="286" width="141.4" height="11" rx="5.5" fill="#8FD4F5"><animate attributeName="width" values="0;141.4" dur="1.1s" begin="0.45s" fill="freeze"/></rect><rect x="872.2" y="286" width="64.0" height="11" rx="5.5" fill="#B9A7FA"><animate attributeName="width" values="0;64.0" dur="1.1s" begin="0.60s" fill="freeze"/></rect><circle cx="535" cy="326" r="4.5" fill="#9BE7C4"/><text class="mono" x="548" y="330" font-size="12.5" fill="#CFEAE3">JavaScript 46.4%</text><circle cx="745" cy="326" r="4.5" fill="#8FD4F5"/><text class="mono" x="758" y="330" font-size="12.5" fill="#CFEAE3">CSS 33.7%</text><circle cx="535" cy="354" r="4.5" fill="#B9A7FA"/><text class="mono" x="548" y="358" font-size="12.5" fill="#CFEAE3">HTML 15.2%</text>
+</g>
+<g clip-path="url(#win)"><rect width="1000" height="444" fill="url(#scan)"/></g>
+<rect x="1" y="1" width="998" height="442" rx="14" fill="none" stroke="#9BE7C4" stroke-opacity=".26"/>
+</svg>
