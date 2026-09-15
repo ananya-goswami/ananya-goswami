@@ -10,6 +10,14 @@
 
 <br/><br/>
 
+<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/highscores.svg" width="100%" alt="contributions, streaks and language split" />
+
+<br/><br/>
+
+<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/snake-panel.svg" width="100%" alt="contribution snake" />
+
+<br/><br/>
+
 <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=500&size=16&duration=3600&pause=1100&color=9BE7C4&center=true&vCenter=true&width=820&height=40&lines=%2F%2F+classroom+idea+-%3E+prototype+-%3E+shipped+product;%2F%2F+bilingual+by+default%2C+built+for+low-end+tablets;%2F%2F+15%2B+browser+games+running+in+government+schools" alt="typing" />
 
 <br/>
@@ -112,18 +120,6 @@ Media delivery fixes, workflow tuning, and the unglamorous parts that keep a cha
 <br/>
 
 n8n · WAHA · Railway · Claude API · Web Audio · IndexedDB · a lot of plain HTML
-
-<br/><br/>
-
-`$ gh stats --live`
-
-<br/><br/>
-
-<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/highscores.svg" width="92%" alt="contributions, streaks and language split" />
-
-<br/><br/>
-
-<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/snake-panel.svg" width="92%" alt="contribution snake" />
 
 <br/><br/>
 
