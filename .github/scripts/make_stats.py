@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Builds the profile panels - stats, featured projects, and the contribution runner."""
+import datetime
 import json
 import os
 import urllib.request
@@ -115,6 +116,11 @@ def build(d, g=None):
     g = g or {}
     W, H = 1000, 444
     first = (g.get("first_day") or "")[:10]
+    last = (g.get("last_day") or "")[:10]
+    try:
+        streak_day = datetime.date.fromisoformat(last).strftime("%b %-d")
+    except Exception:
+        streak_day = last
 
     # ---- top band: three columns split by dividers ----
     ring_r = 46
@@ -126,21 +132,16 @@ def build(d, g=None):
   <text class="mono" x="167" y="140" text-anchor="middle" font-size="12.5" fill="#CFEAE3">Total Contributions</text>
   <text class="mono" x="167" y="164" text-anchor="middle" font-size="11" fill="#4e6b66">{esc(first)} to present</text>
 
-  <circle cx="500" cy="112" r="{ring_r}" fill="none" stroke="#1d3b36" stroke-width="4"/>
-  <circle cx="500" cy="112" r="{ring_r}" fill="none" stroke="url(#ring)" stroke-width="4" stroke-linecap="round"
-          stroke-dasharray="{2 * 3.14159 * ring_r:.0f}" stroke-dashoffset="{2 * 3.14159 * ring_r * 0.28:.0f}"
-          transform="rotate(-90 500 112)">
-    <animateTransform attributeName="transform" type="rotate" from="-90 500 112" to="270 500 112" dur="14s" repeatCount="indefinite"/>
-  </circle>
-  <circle cx="500" cy="66" r="11.5" fill="#050c10"/>
-  <g transform="translate(500 66)">
-    <path d="M1-9.6C4-5.8 6.2-3 6.2 1A6.2 6.2 0 01-6.2 1C-6.2-1.6-4.6-3.8-2.4-5.4-2.6-2.8-1.4-1.6.4-1.8-1.4-4.2-1-7.2 1-9.6Z" fill="url(#ring)">
-      <animate attributeName="opacity" values="1;.5;1" dur="2.4s" repeatCount="indefinite"/>
+  <circle cx="500" cy="112" r="{ring_r}" fill="none" stroke="url(#streak)" stroke-width="4.5" stroke-linecap="round"/>
+  <circle cx="500" cy="67" r="15" fill="#050c10"/>
+  <g transform="translate(500 67) scale(1.62)" fill="none" stroke="#3DE8AC" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M1-9.6C4-5.8 6.2-3 6.2 1A6.2 6.2 0 01-6.2 1C-6.2-1.6-4.6-3.8-2.4-5.4-2.6-2.8-1.4-1.6.4-1.8-1.4-4.2-1-7.2 1-9.6Z">
+      <animate attributeName="opacity" values="1;.55;1" dur="2.4s" repeatCount="indefinite"/>
     </path>
-    <path transform="translate(.2 3) scale(.44)" d="M1-9.6C4-5.8 6.2-3 6.2 1A6.2 6.2 0 01-6.2 1C-6.2-1.6-4.6-3.8-2.4-5.4-2.6-2.8-1.4-1.6.4-1.8-1.4-4.2-1-7.2 1-9.6Z" fill="#F2FBF8" fill-opacity=".85"/>
   </g>
-  <text class="mono" x="500" y="122" text-anchor="middle" font-size="34" font-weight="700" fill="#F2FBF8">{g.get("current_streak", "-")}</text>
-  <text class="mono" x="500" y="180" text-anchor="middle" font-size="12.5" fill="#9BE7C4">Current Streak</text>
+  <text class="mono" x="500" y="124" text-anchor="middle" font-size="34" font-weight="700" fill="#F2FBF8">{g.get("current_streak", "-")}</text>
+  <text class="mono" x="500" y="180" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2CD6EC">Current Streak</text>
+  <text class="mono" x="500" y="200" text-anchor="middle" font-size="11" fill="#7D8590">{esc(streak_day)}</text>
 
   <text class="mono" x="833" y="112" text-anchor="middle" font-size="40" font-weight="700" fill="#F2FBF8">{g.get("longest_streak", "-")}</text>
   <text class="mono" x="833" y="140" text-anchor="middle" font-size="12.5" fill="#CFEAE3">Longest Streak</text>
@@ -195,6 +196,9 @@ def build(d, g=None):
   </linearGradient>
   <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0" stop-color="#9BE7C4"/><stop offset="0.5" stop-color="#8FD4F5"/><stop offset="1" stop-color="#B9A7FA"/>
+  </linearGradient>
+  <linearGradient id="streak" x1="0" y1="0" x2="0.4" y2="1">
+    <stop offset="0" stop-color="#C7ACFF"/><stop offset="1" stop-color="#9B78F0"/>
   </linearGradient>
   <radialGradient id="glowA"><stop offset="0%" stop-color="#9BE7C4" stop-opacity=".10"/><stop offset="100%" stop-color="#9BE7C4" stop-opacity="0"/></radialGradient>
   <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#7fffd4" fill-opacity=".025"/></pattern>
@@ -296,10 +300,24 @@ def build_projects(index):
 
 RUN_LEVELS = ["#1b2c33", "#2f7f68", "#3fae86", "#5FD8A8", "#8FE9F5"]
 RUN_SKIN = {
-    "shell": "#B9C7D4",     # robot chassis
+    "shell": "#B9C7D4",     # robot chassis (legacy)
     "shade": "#7C94A6",
     "visor": "#08161c",
     "eye": "#5FD8A8",
+    "cap_h": "#5FD8A8",     # pixel hero: cap
+    "cap_hd": "#2f7f68",
+    "face": "#F7E3C6",
+    "ink": "#08161c",
+    "coat": "#3FAE86",
+    "coat_d": "#24725C",
+    "belt": "#FFD54A",
+    "pants": "#1F5E72",
+    "boot": "#E0A42B",
+    "hill": "#0d2129",      # scenery
+    "hill2": "#102a30",
+    "cloud": "#16333c",
+    "brick": "#0f1d23",
+    "flag": "#5FD8A8",
     "bolt": "#FFD54A",      # coins
     "bolt_dk": "#E0A42B",
     "cap": "#E1554E",       # mushroom
@@ -311,6 +329,112 @@ RUN_SKIN = {
     "ground": "#14242b",
     "ground_top": "#2f7f68",
 }
+
+
+def _px(rows, pal, px=1.0, ox=0.0, oy=0.0):
+    """Render a character-map sprite as pixel rects. Origin is the sprite's
+    bottom-centre, so a sprite sits on the ground at y=0."""
+    h = len(rows)
+    w = max(len(r) for r in rows)
+    out = []
+    for ry, row in enumerate(rows):
+        run_c, run_x0, run_n = None, 0, 0
+        def flush():
+            if run_c and run_c in pal:
+                x = ox + (run_x0 - w / 2.0) * px
+                y = oy + (ry - h) * px
+                out.append(f'<rect x="{x:.2f}" y="{y:.2f}" width="{run_n * px:.2f}" '
+                           f'height="{px:.2f}" fill="{pal[run_c]}"/>')
+        for rx in range(w + 1):
+            c = row[rx] if rx < len(row) else "."
+            if c == run_c:
+                run_n += 1
+                continue
+            flush()
+            run_c, run_x0, run_n = c, rx, 1
+    return "".join(out)
+
+
+HERO_A = [
+    "..HHHHH...",
+    ".HHHHHHHH.",
+    ".HHHHHHHH.",
+    "..dddddd..",
+    "..FFFFFF..",
+    "..FeFFeF..",
+    "..FFFFFF..",
+    ".CCCCCCCC.",
+    "cCCCBBCCCc",
+    "cCCCCCCCCc",
+    "..PPPPPP..",
+    "..PP..PP..",
+    "..PP..PP..",
+    ".SSS..SSS.",
+]
+HERO_B = [
+    "..HHHHH...",
+    ".HHHHHHHH.",
+    ".HHHHHHHH.",
+    "..dddddd..",
+    "..FFFFFF..",
+    "..FeFFeF..",
+    "..FFFFFF..",
+    ".CCCCCCCC.",
+    "cCCCBBCCCc",
+    "cCCCCCCCCc",
+    "..PPPPPP..",
+    ".PPP..PPP.",
+    ".PP....PP.",
+    "SS......SS",
+]
+HERO_JUMP = [
+    "c.HHHHH..c",
+    "ccHHHHHHcc",
+    ".cHHHHHHc.",
+    "..dddddd..",
+    "..FFFFFF..",
+    "..FeFFeF..",
+    "..FFFFFF..",
+    "..CCCCCC..",
+    "..CCBBCC..",
+    "..CCCCCC..",
+    "..PPPPPP..",
+    ".PPPPPPPP.",
+    "SSS....SSS",
+    "..........",
+]
+COIN_PX = [
+    "..gg..",
+    ".gllg.",
+    ".glgg.",
+    ".gggg.",
+    ".gggg.",
+    "..gg..",
+]
+MUSH_PX = [
+    "..mmmm..",
+    ".mwwmmm.",
+    "mmwwmmwm",
+    "mmmmmwwm",
+    "mwmmmmmm",
+    ".ssFFss.",
+    "..FFFF..",
+]
+TURT_PX = [
+    "..tttt..",
+    ".tggggt.",
+    "ktgggggt",
+    "kkggggg.",
+    ".kkkkkk.",
+    "..k..k..",
+]
+
+
+def _hero_pal():
+    S = RUN_SKIN
+    return {"H": S["cap_h"], "d": S["cap_hd"], "F": S["face"], "e": S["ink"],
+            "C": S["coat"], "c": S["coat_d"], "B": S["belt"], "P": S["pants"],
+            "S": S["boot"]}
 
 
 def _levels(weeks):
@@ -448,10 +572,7 @@ def build_runner_panel(weeks, total=None):
                 f'<animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"'
                 f' additive="sum" values="0,0;0,0;0,-16;0,-16;18,{dyg};94,{dyg};94,{dyg}"'
                 f' keyTimes="0;{a:.5f};{b:.5f};{(e["t"]+0.5)/T:.5f};{(e["t"]+1.1)/T:.5f};{(e["t"]+2.8)/T:.5f};1"/>'
-                f'<path d="M-5 0a5 5 0 0 1 10 0Z" fill="{RUN_SKIN["cap"]}"/>'
-                f'<circle cx="-2.2" cy="-2" r="1.2" fill="{RUN_SKIN["cap_dot"]}"/>'
-                f'<circle cx="2.2" cy="-2.4" r="1" fill="{RUN_SKIN["cap_dot"]}"/>'
-                f'<rect x="-2.4" y="0" width="4.8" height="3.4" rx="1.2" fill="{RUN_SKIN["stem"]}"/>'
+                f'{_px(MUSH_PX, {"m": RUN_SKIN["cap"], "w": RUN_SKIN["cap_dot"], "F": RUN_SKIN["stem"], "s": "#D8C3A2"}, 1.6, 0, 5.6)}'
                 f'</g></g>')
         else:
             pops.append(
@@ -463,7 +584,7 @@ def build_runner_panel(weeks, total=None):
                 f' keyTimes="0;{a:.5f};{b:.5f};{c:.5f};1"/>'
                 f'<g><animateTransform attributeName="transform" type="scale" dur="0.62s"'
                 f' repeatCount="indefinite" values="1,1;0.15,1;1,1;0.15,1;1,1" keyTimes="0;0.25;0.5;0.75;1"/>'
-                f'<circle r="4.2" fill="{RUN_SKIN["bolt"]}"/><circle r="2.2" fill="{RUN_SKIN["bolt_dk"]}"/>'
+                f'{_px(COIN_PX, {"g": RUN_SKIN["bolt"], "l": "#FFF3C4"}, 1.5, 0, 4.5)}'
                 f'</g></g></g>')
 
     # ---- one turtle, timed to wander under a jump ----
@@ -485,50 +606,65 @@ def build_runner_panel(weeks, total=None):
             f' keyTimes="0;{ts/T:.5f};{te/T:.5f};1"/>'
             f'<g><animateTransform attributeName="transform" type="translate" dur="0.5s"'
             f' repeatCount="indefinite" values="0,0;0,-1;0,0" keyTimes="0;0.5;1"/>'
-            f'<ellipse cx="0" cy="-4.4" rx="5.4" ry="4.2" fill="{RUN_SKIN["shellg"]}"/>'
-            f'<path d="M-5.4-4.4a5.4 4.2 0 0 1 10.8 0Z" fill="{RUN_SKIN["shellg_dk"]}" opacity=".55"/>'
-            f'<circle cx="-6.4" cy="-3.6" r="2.4" fill="{RUN_SKIN["skin"]}"/>'
-            f'<circle cx="-7.4" cy="-4.2" r="0.8" fill="#18321a"/>'
-            f'<rect x="-3.6" y="-1.2" width="2.4" height="1.6" rx="0.7" fill="{RUN_SKIN["skin"]}"/>'
-            f'<rect x="1.4" y="-1.2" width="2.4" height="1.6" rx="0.7" fill="{RUN_SKIN["skin"]}"/>'
+            f'{_px(TURT_PX, {"t": RUN_SKIN["shellg_dk"], "g": RUN_SKIN["shellg"], "k": RUN_SKIN["skin"]}, 1.7, 0, 0)}'
+            f'<rect x="-6.8" y="-6.4" width="1.6" height="1.6" fill="#18321a"/>'
             f'</g></g></g>')
 
-    # ---- the robot ----
+    # ---- the pixel hero ----
     S = RUN_SKIN
+    HP = _hero_pal()
+    PX = 1.15
+    run_a = _px(HERO_A, HP, PX)
+    run_b = _px(HERO_B, HP, PX)
+    jump_f = _px(HERO_JUMP, HP, PX)
+    air_v = ";".join(fl_v)
+    air_k = ";".join(f"{k:.5f}" for k in fl_k)
+    gnd_v = ";".join("1" if v == "0" else "0" for v in fl_v)
+
     robot = f'''<g>
   <animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"
     calcMode="linear" values="{run_x[0]}" keyTimes="{run_x[1]}"/>
   <g>
     <animateTransform attributeName="transform" type="translate" dur="{T}s" repeatCount="indefinite"
       calcMode="linear" values="{robot_y[0]}" keyTimes="{robot_y[1]}"/>
+    <ellipse cx="0" cy="0" rx="7" ry="2" fill="#000" fill-opacity=".35"/>
+    <g opacity="1">
+      <animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"
+        values="{gnd_v}" keyTimes="{air_k}"/>
+      <g>{run_a}<animate attributeName="opacity" values="1;0" keyTimes="0;0.5"
+        dur="0.34s" calcMode="discrete" repeatCount="indefinite"/></g>
+      <g opacity="0">{run_b}<animate attributeName="opacity" values="0;1" keyTimes="0;0.5"
+        dur="0.34s" calcMode="discrete" repeatCount="indefinite"/></g>
+    </g>
     <g opacity="0">
       <animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"
-        values="{';'.join(fl_v)}" keyTimes="{';'.join(f'{k:.5f}' for k in fl_k)}"/>
-      <path d="M-3 0h6l-3 6Z" fill="#FFD54A"/>
-      <path d="M-1.6 0h3.2l-1.6 3.4Z" fill="#FFF3C4"/>
-    </g>
-    <g>
-      <animateTransform attributeName="transform" type="translate" dur="0.42s"
-        repeatCount="indefinite" values="0,0;0,-1;0,0" keyTimes="0;0.5;1"/>
-      <rect x="-3.6" y="-3" width="2.6" height="3" rx="0.8" fill="{S['shade']}"/>
-      <rect x="1" y="-3" width="2.6" height="3" rx="0.8" fill="{S['shade']}"/>
-      <rect x="-5" y="-11" width="10" height="8.4" rx="2.4" fill="{S['shell']}"/>
-      <rect x="-6.4" y="-9.6" width="1.8" height="4.4" rx="0.9" fill="{S['shade']}"/>
-      <rect x="4.6" y="-9.6" width="1.8" height="4.4" rx="0.9" fill="{S['shade']}"/>
-      <rect x="-3.6" y="-9.4" width="7.2" height="4" rx="1.6" fill="{S['visor']}"/>
-      <rect x="-2.4" y="-8.4" width="2" height="2" rx="0.6" fill="{S['eye']}"/>
-      <rect x="0.6" y="-8.4" width="2" height="2" rx="0.6" fill="{S['eye']}"/>
-      <rect x="-0.7" y="-14.6" width="1.4" height="3.8" fill="{S['shade']}"/>
-      <circle cx="0" cy="-15.4" r="1.7" fill="{S['eye']}">
-        <animate attributeName="opacity" values="1;.35;1" dur="1.6s" repeatCount="indefinite"/>
-      </circle>
+        values="{air_v}" keyTimes="{air_k}"/>
+      {jump_f}
     </g>
   </g>
 </g>'''
 
+    # ---- scenery: pixel clouds up top, low hills along the ground ----
+    scenery = ""
+    for cx in range(40, GW, 210):
+        scenery += (f'<g fill="{S["cloud"]}" transform="translate({cx} 6)">'
+                    f'<rect x="4" y="0" width="14" height="4"/><rect x="0" y="4" width="26" height="4"/>'
+                    f'<rect x="8" y="-4" width="8" height="4"/></g>')
+    for hx in range(0, GW, 132):
+        scenery += (f'<g fill="{S["hill"]}" transform="translate({hx} {GROUND})">'
+                    f'<rect x="18" y="-4" width="48" height="4"/><rect x="26" y="-8" width="32" height="4"/>'
+                    f'<rect x="34" y="-12" width="16" height="4"/></g>')
+
+    bricks = ""
+    for bx in range(0, GW, 16):
+        bricks += f'<rect x="{bx + 15}" y="{GROUND + 2}" width="1" height="{IH - GROUND - 2}" fill="{S["brick"]}"/>'
+    bricks += f'<rect x="0" y="{GROUND + 8}" width="{GW}" height="1" fill="{S["brick"]}"/>'
+
     inner = f'''<svg x="0" y="0" width="{GW}" height="{IH}" viewBox="0 0 {GW} {IH}">
+{scenery}
 <rect x="0" y="{GROUND}" width="{GW}" height="{IH - GROUND}" fill="{S['ground']}"/>
 <rect x="0" y="{GROUND}" width="{GW}" height="1.6" fill="{S['ground_top']}" fill-opacity=".8"/>
+{bricks}
 {''.join(cells)}
 {''.join(pops)}
 {turtle}
@@ -543,7 +679,7 @@ def build_runner_panel(weeks, total=None):
     hud = ""
     if total is not None:
         hud = (f'<g transform="translate(40 44)" opacity=".9">'
-               f'<circle r="4.6" fill="{S["bolt"]}"/><circle r="2.4" fill="{S["bolt_dk"]}"/>'
+               f'{_px(COIN_PX, {"g": S["bolt"], "l": "#FFF3C4"}, 1.6, 0, 4.8)}'
                f'<text class="rmono" x="11" y="4" font-size="12.5" fill="#CFEAE3">x {total}</text></g>')
 
     return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="contribution runner">
@@ -564,7 +700,6 @@ def build_runner_panel(weeks, total=None):
 </svg>
 {hud}
 <g clip-path="url(#rwin)"><rect width="{W}" height="{H}" fill="url(#rscan)"/></g>
-<rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="14" fill="none" stroke="#9BE7C4" stroke-opacity=".26"/>
 </svg>
 '''
 
