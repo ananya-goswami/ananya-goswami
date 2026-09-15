@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Builds the profile panels - stats, featured projects, and the contribution runner."""
-import datetime
 import json
 import os
 import urllib.request
@@ -116,11 +115,6 @@ def build(d, g=None):
     g = g or {}
     W, H = 1000, 444
     first = (g.get("first_day") or "")[:10]
-    last = (g.get("last_day") or "")[:10]
-    try:
-        streak_day = datetime.date.fromisoformat(last).strftime("%b %-d")
-    except Exception:
-        streak_day = last
 
     # ---- top band: three columns split by dividers ----
     ring_r = 46
@@ -132,16 +126,21 @@ def build(d, g=None):
   <text class="mono" x="167" y="140" text-anchor="middle" font-size="12.5" fill="#CFEAE3">Total Contributions</text>
   <text class="mono" x="167" y="164" text-anchor="middle" font-size="11" fill="#4e6b66">{esc(first)} to present</text>
 
-  <circle cx="500" cy="112" r="{ring_r}" fill="none" stroke="url(#streak)" stroke-width="4.5" stroke-linecap="round"/>
-  <circle cx="500" cy="67" r="15" fill="#050c10"/>
-  <g transform="translate(500 67) scale(1.62)" fill="none" stroke="#3DE8AC" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round">
-    <path d="M1-9.6C4-5.8 6.2-3 6.2 1A6.2 6.2 0 01-6.2 1C-6.2-1.6-4.6-3.8-2.4-5.4-2.6-2.8-1.4-1.6.4-1.8-1.4-4.2-1-7.2 1-9.6Z">
-      <animate attributeName="opacity" values="1;.55;1" dur="2.4s" repeatCount="indefinite"/>
+  <circle cx="500" cy="112" r="{ring_r}" fill="none" stroke="#1d3b36" stroke-width="4"/>
+  <circle cx="500" cy="112" r="{ring_r}" fill="none" stroke="url(#ring)" stroke-width="4" stroke-linecap="round"
+          stroke-dasharray="{2 * 3.14159 * ring_r:.0f}" stroke-dashoffset="{2 * 3.14159 * ring_r * 0.28:.0f}"
+          transform="rotate(-90 500 112)">
+    <animateTransform attributeName="transform" type="rotate" from="-90 500 112" to="270 500 112" dur="14s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="500" cy="66" r="13.5" fill="#050c10"/>
+  <g transform="translate(500 64) scale(1.45)">
+    <path d="M1-9.6C4-5.8 6.2-3 6.2 1A6.2 6.2 0 01-6.2 1C-6.2-1.6-4.6-3.8-2.4-5.4-2.6-2.8-1.4-1.6.4-1.8-1.4-4.2-1-7.2 1-9.6Z" fill="url(#ring)">
+      <animate attributeName="opacity" values="1;.5;1" dur="2.4s" repeatCount="indefinite"/>
     </path>
+    <path transform="translate(.2 3) scale(.44)" d="M1-9.6C4-5.8 6.2-3 6.2 1A6.2 6.2 0 01-6.2 1C-6.2-1.6-4.6-3.8-2.4-5.4-2.6-2.8-1.4-1.6.4-1.8-1.4-4.2-1-7.2 1-9.6Z" fill="#F2FBF8" fill-opacity=".85"/>
   </g>
-  <text class="mono" x="500" y="124" text-anchor="middle" font-size="34" font-weight="700" fill="#F2FBF8">{g.get("current_streak", "-")}</text>
-  <text class="mono" x="500" y="180" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2CD6EC">Current Streak</text>
-  <text class="mono" x="500" y="200" text-anchor="middle" font-size="11" fill="#7D8590">{esc(streak_day)}</text>
+  <text class="mono" x="500" y="122" text-anchor="middle" font-size="34" font-weight="700" fill="#F2FBF8">{g.get("current_streak", "-")}</text>
+  <text class="mono" x="500" y="180" text-anchor="middle" font-size="12.5" fill="#9BE7C4">Current Streak</text>
 
   <text class="mono" x="833" y="112" text-anchor="middle" font-size="40" font-weight="700" fill="#F2FBF8">{g.get("longest_streak", "-")}</text>
   <text class="mono" x="833" y="140" text-anchor="middle" font-size="12.5" fill="#CFEAE3">Longest Streak</text>
@@ -196,9 +195,6 @@ def build(d, g=None):
   </linearGradient>
   <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0" stop-color="#9BE7C4"/><stop offset="0.5" stop-color="#8FD4F5"/><stop offset="1" stop-color="#B9A7FA"/>
-  </linearGradient>
-  <linearGradient id="streak" x1="0" y1="0" x2="0.4" y2="1">
-    <stop offset="0" stop-color="#C7ACFF"/><stop offset="1" stop-color="#9B78F0"/>
   </linearGradient>
   <radialGradient id="glowA"><stop offset="0%" stop-color="#9BE7C4" stop-opacity=".10"/><stop offset="100%" stop-color="#9BE7C4" stop-opacity="0"/></radialGradient>
   <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#7fffd4" fill-opacity=".025"/></pattern>
