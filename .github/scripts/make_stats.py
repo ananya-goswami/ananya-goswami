@@ -707,18 +707,18 @@ def build_runner_panel(weeks, total=None):
                (t_land2, tx0, BASE),
                (t_walk2, tx0, BASE),
                (t_eat, eat_x, BASE)]
-            pts.append((t_resume, eat_x, BASE))  # the bites are frames now
-            eating = chomp_frames(turt, t_eat, EAT)
+        pts.append((t_resume, eat_x, BASE))  # the bites are frames now
+        eating = chomp_frames(turt, t_eat, EAT)
         if e3:
             pts += [(t_hide, hide_x, BASE), (t_crawl, hide_x, BASE),
                     (T - 0.4, exit_x, BASE), (T, exit_x, BASE)]
-                frames = ([(shell, t2, t_limb), (turt, t_limb, t_eat)]
+            frames = ([(shell, t2, t_limb), (turt, t_limb, t_eat)]
                           + eating + [(turt, t_resume, t_hide),
                                       (shell, t_hide, t_emerge),
                                       (turt, t_emerge, T)])
         else:
             pts += [(T, eat_x - V_TURTLE * (T - t_resume), BASE)]
-                frames = ([(shell, t2, t_limb), (turt, t_limb, t_eat)]
+            frames = ([(shell, t2, t_limb), (turt, t_limb, t_eat)]
                           + eating + [(turt, t_resume, T)])
         pops.append(actor(frames, pts, t2, T))
 
@@ -734,7 +734,7 @@ def build_runner_panel(weeks, total=None):
             pts.append((min(st, t_gone), max(sx, -240.0), BASE - 11.0 if up else BASE))
             up = not up
         pts.append((T, max(sx, -240.0), BASE))
-            pops.append(actor([(snake_hisser(), t3, T)], pts, t3, t_gone))
+        pops.append(actor([(snake_hisser(), t3, T)], pts, t3, t_gone))
 
     # ---- her ----
     girl = (f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
