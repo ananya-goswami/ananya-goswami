@@ -397,19 +397,32 @@ def art():
     return _ART
 
 
+_USED = {}
+
+
 def sprite(name, x, y, anchor="bottom", scale=1.0, flip=False, extra=""):
-    """Place a sprite. x is its centre, y its baseline (or top, when anchored so)."""
+    """Place a sprite. x is its centre, y its baseline (or top, when anchored so).
+
+    The bitmap goes into <defs> once and every placement is a <use>, so a hill
+    repeated across the panel costs a few bytes instead of another base64 blob.
+    """
     a = art().get(name)
     if not a:
         return ""
     uri, w, h = a
-    w, h = w * scale, h * scale
-    top = y if anchor == "top" else y - h
-    tag = (f'<image xlink:href="{uri}" x="{x - w / 2:.1f}" y="{top:.1f}" '
-           f'width="{w:.1f}" height="{h:.1f}" {extra}/>')
-    if flip:                                   # face the other way
-        tag = f'<g transform="translate({2 * x:.1f} 0) scale(-1 1)">{tag}</g>'
-    return tag
+    _USED[name] = (uri, w, h)
+    sw, sh = w * scale, h * scale
+    top = y if anchor == "top" else y - sh
+    left = x - sw / 2
+    tx = left + sw if flip else left            # mirror inside the same box
+    return (f'<use xlink:href="#sp-{name}" transform="translate({tx:.1f} {top:.1f})'
+            f' scale({-scale if flip else scale:.4f} {scale:.4f})" {extra}/>')
+
+
+def sprite_defs():
+    """<image> definitions for every sprite that was actually placed."""
+    return "".join(f'<image id="sp-{n}" x="0" y="0" width="{w}" height="{h}"'
+                   f' xlink:href="{u}"/>' for n, (u, w, h) in _USED.items())
 
 
 def _levels(weeks):
@@ -710,6 +723,7 @@ def build_runner_panel(weeks, total=None):
     px0, py0, px1, py1 = PANEL
     return f'''<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      viewBox="0 0 {VB_W} {VB_H}" width="1000" height="{VB_H * 1000 // VB_W}" role="img" aria-label="contribution runner">
+     <defs>{sprite_defs()}</defs>
 <style>.rmono {{ font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }}</style>
 <rect width="{VB_W}" height="{VB_H}" fill="#070f1a"/>
 <rect x="{px0}" y="{py0}" width="{px1 - px0}" height="{py1 - py0}" rx="30" fill="#081420"
