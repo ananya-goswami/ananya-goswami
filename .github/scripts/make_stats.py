@@ -353,6 +353,41 @@ def _silhouette(d, np, cut=24.0):
                for dy in range(3) for dx in range(3)) / 9.0
     return alpha
 
+def _largest_blob(alpha, np):
+    """Keep only the biggest opaque island, dropping detached specks.
+
+    The art sets sparkle bubbles beside her shoes. Nothing links them to
+    the crop edge, so the border flood leaves them behind; each one is its
+    own island though, so keeping the largest one clears them away.
+    """
+    from collections import deque
+    h, w = alpha.shape
+    solid = alpha > 0
+    seen = np.zeros((h, w), dtype=bool)
+    best = []
+    for sy in range(h):
+        for sx in range(w):
+            if not solid[sy, sx] or seen[sy, sx]:
+                continue
+            seen[sy, sx] = True
+            q, blob = deque([(sy, sx)]), []
+            while q:
+                y, x = q.popleft()
+                blob.append((y, x))
+                for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    ny, nx = y + dy, x + dx
+                    if not (0 <= ny < h and 0 <= nx < w):
+                        continue
+                    if solid[ny, nx] and not seen[ny, nx]:
+                        seen[ny, nx] = True
+                        q.append((ny, nx))
+            if len(blob) > len(best):
+                best = blob
+    out = np.zeros((h, w), dtype=float)
+    for y, x in best:
+        out[y, x] = 255.0
+    return out
+
 
 def art():
     """Cut the runner's cast out of the reference art, keyed to transparency.
@@ -385,6 +420,8 @@ def art():
             a = np.array(crop).astype(float)
             d = np.stack([np.linalg.norm(a - c, axis=2) for c in bg], axis=0).min(axis=0)
             alpha = _silhouette(d, np)
+                if name == "girl":  # drop the bubbles beside her shoes
+                    alpha = _largest_blob(alpha, np)
             img = Image.fromarray(np.dstack([a, alpha]).astype(np.uint8), "RGBA")
             bb = img.getbbox()
             if bb:
@@ -648,14 +685,19 @@ def build_runner_panel(weeks, total=None):
                            t_eat + EAT * 0.35, t_eat + EAT * 0.7))
             frames.append((sprite("leaf", 0, 0, scale=LEAF_S * 0.28),
                            t_eat + EAT * 0.7, leaf_end))
-        pops.append(actor(frames,
-                          [(t1, e1["x"], e1["y"] + GCELL / 2),
-                           (t1 + 0.55, e1["x"] - 26.0, e1["y"] - 62.0),
-                           (t1 + 1.3, e1["x"] - 72.0, BASE - 34.0),
-                           (leaf_land, lx0, BASE),
-                           (t_eat, eat_x, BASE),
-                           (T, leaf_rest, BASE)],
-                          t1, min(T - 0.15, leaf_end + 0.1)))
+            lpts = [(t1, e1["x"], e1["y"] + GCELL / 2),
+                    (t1 + 0.55, e1["x"] - 26.0, e1["y"] - 62.0),
+                    (t1 + 1.3, e1["x"] - 72.0, BASE - 34.0),
+                    (leaf_land, lx0, BASE),
+                    (t_eat, eat_x, BASE)]
+            if e2:  # tugged about while the turtle bites into it
+                for k in range(int(EAT / CHOMP)):
+                    lpts.append((t_eat + (k + 0.45) * CHOMP, eat_x - 5.0,
+                                 BASE - 4.0))
+                    lpts.append((t_eat + (k + 1.0) * CHOMP, eat_x, BASE))
+            lpts.append((T, leaf_rest, BASE))
+            pops.append(actor(frames, lpts, t1,
+                              min(T - 0.15, leaf_end + 0.1)))
 
     if e2:
         shell = sprite("shell", 0, 0, scale=TURTLE_S, flip=True)
@@ -665,17 +707,19 @@ def build_runner_panel(weeks, total=None):
                (t_land2, tx0, BASE),
                (t_walk2, tx0, BASE),
                (t_eat, eat_x, BASE)]
-        for k in range(4):              # four bites, taken standing still
-            pts.append((t_eat + (k + 0.45) * EAT / 4, eat_x - 7.0, BASE + 3.0))
-            pts.append((t_eat + (k + 1.0) * EAT / 4, eat_x, BASE))
+            pts.append((t_resume, eat_x, BASE))  # the bites are frames now
+            eating = chomp_frames(turt, t_eat, EAT)
         if e3:
             pts += [(t_hide, hide_x, BASE), (t_crawl, hide_x, BASE),
                     (T - 0.4, exit_x, BASE), (T, exit_x, BASE)]
-            frames = [(shell, t2, t_limb), (turt, t_limb, t_hide),
-                      (shell, t_hide, t_emerge), (turt, t_emerge, T)]
+                frames = ([(shell, t2, t_limb), (turt, t_limb, t_eat)]
+                          + eating + [(turt, t_resume, t_hide),
+                                      (shell, t_hide, t_emerge),
+                                      (turt, t_emerge, T)])
         else:
             pts += [(T, eat_x - V_TURTLE * (T - t_resume), BASE)]
-            frames = [(shell, t2, t_limb), (turt, t_limb, T)]
+                frames = ([(shell, t2, t_limb), (turt, t_limb, t_eat)]
+                          + eating + [(turt, t_resume, T)])
         pops.append(actor(frames, pts, t2, T))
 
     if e3:
@@ -690,8 +734,7 @@ def build_runner_panel(weeks, total=None):
             pts.append((min(st, t_gone), max(sx, -240.0), BASE - 11.0 if up else BASE))
             up = not up
         pts.append((T, max(sx, -240.0), BASE))
-        pops.append(actor([(sprite("snake", 0, 0, scale=SNAKE_S, flip=True), t3, T)],
-                          pts, t3, t_gone))
+            pops.append(actor([(snake_hisser(), t3, T)], pts, t3, t_gone))
 
     # ---- her ----
     girl = (f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
@@ -761,7 +804,7 @@ COIN_DEFS = ('<radialGradient id="coinG" cx="0.36" cy="0.3" r="0.8">'
              '<stop offset="0" stop-color="#FFF6C4"/>'
              '<stop offset="0.55" stop-color="#FFD24A"/>'
              '<stop offset="1" stop-color="#E0941C"/></radialGradient>')
-COIN_LIFT = 8.0      # a coin perches on the top edge of its own square
+COIN_LIFT = 21.0    # a coin floats clear above its own square
 
 def coin_cells(grid, cols, skip):
     # Hovering coins only sit above a real contribution square, never an
@@ -906,6 +949,54 @@ def girl_runner(scale=GIRL_S, baseline=6.0):
             + girl_leg("g-legL", GIRL_SWING, hx, hy)
             + girl_leg("g-legR", -GIRL_SWING, hx, hy)
             + body + '</g>')
+
+
+# ---------------------------------------------------------------- the cast
+CHOMP = 0.30  # seconds per bite: head into the leaf, then back up
+def chomp_frames(turt, t0, dur):
+    """Head-down, head-up pairs, so the turtle visibly bites the leaf."""
+    out, t = [], t0
+    bite = f'<g transform="translate(-9 5)">{turt}</g>'
+    while t + CHOMP <= t0 + dur:
+        out.append((bite, t, t + CHOMP * 0.45))
+        out.append((turt, t + CHOMP * 0.45, t + CHOMP))
+        t += CHOMP
+    if t < t0 + dur:
+        out.append((turt, t, t0 + dur))
+    return out
+
+SNAKE_MOUTH = (0.03, 0.42)  # where its mouth sits across and down the sprite
+SNAKE_HISS = 1.15  # seconds for one flick of the tongue
+SNAKE_REAR = 5.0  # degrees it leans into each hiss
+def snake_hisser(scale=SNAKE_S, baseline=0.0):
+    """Left-facing snake that leans in and flicks a forked tongue.
+
+    The art already gives it a short tongue; this one shoots out past that
+    and snaps back, so the hiss still reads at README size.
+    """
+    a = art().get("snake")
+    if not a:
+        return ""
+    uri, w, h = a
+    _USED["snake"] = (uri, w, h)
+    sw, sh = w * scale, h * scale
+    mx, my = w * SNAKE_MOUTH[0], h * SNAKE_MOUTH[1]
+    piv = f"{w / 2:.1f} {h:.1f}"
+    tongue = (f'<g transform="translate({mx:.1f} {my:.1f})"><g>'
+              f'<animateTransform attributeName="transform" type="scale"'
+              f' values="0 1;1 1;0.25 1;1 1;0 1;0 1"'
+              f' keyTimes="0;0.10;0.20;0.30;0.42;1"'
+              f' dur="{SNAKE_HISS}s" repeatCount="indefinite"/>'
+              f'<path d="M0 0L-9 -1.5M-9 -1.5L-15 -5M-9 -1.5L-15 2"'
+              f' fill="none" stroke="#FF3B5C" stroke-width="2.4"'
+              f' stroke-linecap="round"/></g></g>')
+    rear = (f'<animateTransform attributeName="transform" type="rotate"'
+            f' values="0 {piv};{-SNAKE_REAR:.1f} {piv};0 {piv}"'
+            f' keyTimes="0;0.2;1" dur="{SNAKE_HISS}s"'
+            f' repeatCount="indefinite"/>')
+    return (f'<g transform="translate({-sw / 2:.1f} {baseline - sh:.1f})'
+            f' scale({scale:.4f})"><g>{rear}'
+            f'<use xlink:href="#sp-snake"/>{tongue}</g></g>')
 
 
 if __name__ == "__main__":
