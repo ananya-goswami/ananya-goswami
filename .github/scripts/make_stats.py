@@ -757,17 +757,17 @@ def build_runner_panel(weeks, total=None):
 
 # ---------------------------------------------------------------- coins
 QBLOCK_S = 1.35     # mystery block: a little bigger than a plain cell
-COIN_R = 11.0       # gold coin radius
+COIN_R = 15.0        # gold coin radius
 COIN_POP = 1.15     # seconds for one coin to arc out of a block
 COIN_RISE = 124.0   # how high that arc goes
 COIN_DEFS = ('<radialGradient id="coinG" cx="0.36" cy="0.3" r="0.8">'
              '<stop offset="0" stop-color="#FFF6C4"/>'
              '<stop offset="0.55" stop-color="#FFD24A"/>'
              '<stop offset="1" stop-color="#E0941C"/></radialGradient>')
-# Free floating coins, in the band above the contribution squares: two arcs
-# of three plus two singles, kept clear of the HUD star and the corner tag.
-FLOAT_COINS = [(300, 146), (420, 128), (540, 146), (740, 138),
-               (940, 146), (1060, 128), (1180, 146), (1400, 140)]
+# Free floating coins: a row hovering right on top of the contribution
+# squares, lined up over the columns, clear of the HUD and corner tag.
+FLOAT_COINS = [(247, 160), (396, 148), (582, 160), (768, 160),
+               (991, 148), (1177, 160), (1363, 160), (1512, 148)]
 
 
 def coin_face(r):
@@ -783,9 +783,10 @@ def coin_face(r):
 
 
 def coin_spin(dur, begin=0.0, r=COIN_R):
-    # The flat 2D coin flip: squeeze the width down and back, on a loop.
+    # Mario coin flip: face on for most of the cycle, then a quick spin.
     return (f'<g>{coin_face(r)}<animateTransform attributeName="transform"'
-            f' type="scale" values="1 1;0.18 1;1 1;0.18 1;1 1"'
+            f' type="scale" values="1 1;1 1;0.22 1;1 1;1 1"'
+            f' keyTimes="0;0.34;0.5;0.66;1"'
             f' dur="{dur:.2f}s" begin="{begin:.2f}s"'
             f' repeatCount="indefinite"/></g>')
 
@@ -804,7 +805,7 @@ def pop_coin(x, y, t, T, r=COIN_R):
             f' repeatCount="indefinite" values="{ov}" keyTimes="{ok}"/>'
             f'<g><animateTransform attributeName="transform" type="translate"'
             f' dur="{T}s" repeatCount="indefinite" calcMode="linear"'
-            f' values="{mv}" keyTimes="{mk}"/>{coin_spin(0.44, 0.0, r)}</g></g>')
+            f' values="{mv}" keyTimes="{mk}"/>{coin_spin(0.9, 0.0, r)}</g></g>')
 
 
 def float_coin(x, y, k, r=COIN_R):
@@ -815,7 +816,7 @@ def float_coin(x, y, k, r=COIN_R):
             f' keySplines="0.4 0 0.6 1;0.4 0 0.6 1"'
             f' dur="{2.1 + (k % 4) * 0.25:.2f}s" begin="{k * 0.31:.2f}s"'
             f' repeatCount="indefinite"/>'
-            f'{coin_spin(0.62 + (k % 3) * 0.08, k * 0.17, r)}</g></g>')
+            f'{coin_spin(1.5 + (k % 3) * 0.18, k * 0.17, r)}</g></g>')
 
 
 def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
