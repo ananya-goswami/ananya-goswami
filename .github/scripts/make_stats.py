@@ -547,7 +547,7 @@ def build_runner_panel(weeks, total=None):
         keys[i] = min(max(keys[i], keys[i - 1]), 1.0)
     jump_v, jump_k = ";".join(vals), ";".join(f"{k:.5f}" for k in keys)
 
-    # ---- the grid; the three real squares she hits flash and get knocked upward ----
+    # ---- the grid; the three squares she hits are mystery blocks ----
     hit = {(e["col"], e["row"]): e for e in events}
     cells = []
     for i, col in enumerate(grid):
@@ -560,15 +560,7 @@ def build_runner_panel(weeks, total=None):
             if e is None:
                 cells.append(base + "/>")
                 continue
-            fv, fk = _keys([fill, fill, LEVELS[4], LEVELS[4], fill, fill],
-                           [0.0, e["t"], e["t"] + 0.1, e["t"] + 0.3, e["t"] + 0.75, T], T)
-            bv, bk = _keys(["0,0", "0,0", "0,-13", "0,3", "0,0", "0,0"],
-                           [0.0, e["t"], e["t"] + 0.12, e["t"] + 0.34, e["t"] + 0.52, T], T)
-            cells.append(base + f'><animate attributeName="fill" dur="{T}s"'
-                         f' repeatCount="indefinite" values="{fv}" keyTimes="{fk}"/>'
-                         f'<animateTransform attributeName="transform" type="translate"'
-                         f' dur="{T}s" repeatCount="indefinite" values="{bv}"'
-                         f' keyTimes="{bk}"/></rect>')
+            cells.append(qblock(x + GCELL / 2, y + GCELL / 2, e["t"], T))
 
     def actor(frames, pts, t_in, t_out):
         """frames: [(svg, from_t, to_t)]; pts: [(t, x, y)] absolute, in order."""
@@ -734,9 +726,14 @@ def build_runner_panel(weeks, total=None):
     hud += sprite("tag", 1865, 116, anchor="top")
 
     px0, py0, px1, py1 = PANEL
+    coin_y = GCELL / 2 - GCELL * QBLOCK_S / 2 - COIN_R * 0.5
+    coins = "".join(pop_coin(e["x"], e["y"] + coin_y, e["t"], T)
+                    for e in events)
+    coins += "".join(float_coin(fx, fy, k)
+                     for k, (fx, fy) in enumerate(FLOAT_COINS))
     return f'''<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      viewBox="0 0 {VB_W} {VB_H}" width="1000" height="{VB_H * 1000 // VB_W}" role="img" aria-label="contribution runner">
-     <defs>{sprite_defs()}</defs>
+     <defs>{sprite_defs()}{COIN_DEFS}</defs>
 <style>.rmono {{ font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }}</style>
 <rect width="{VB_W}" height="{VB_H}" fill="#070f1a"/>
 <rect x="{px0}" y="{py0}" width="{px1 - px0}" height="{py1 - py0}" rx="30" fill="#081420"
@@ -750,11 +747,108 @@ def build_runner_panel(weeks, total=None):
 {''.join(f'<rect x="{x}" y="{GROUND + 6}" width="2" height="{py1 - GROUND - 6}" fill="#07202A"/>' for x in range(int(px0), int(px1), 74))}
 {''.join(cells)}
 {hud}
+{coins}
 {''.join(pops)}
 {girl}
 </g>
 </svg>
 '''
+
+
+# ---------------------------------------------------------------- coins
+QBLOCK_S = 1.35     # mystery block: a little bigger than a plain cell
+COIN_R = 11.0       # gold coin radius
+COIN_POP = 1.15     # seconds for one coin to arc out of a block
+COIN_RISE = 124.0   # how high that arc goes
+COIN_DEFS = ('<radialGradient id="coinG" cx="0.36" cy="0.3" r="0.8">'
+             '<stop offset="0" stop-color="#FFF6C4"/>'
+             '<stop offset="0.55" stop-color="#FFD24A"/>'
+             '<stop offset="1" stop-color="#E0941C"/></radialGradient>')
+# Free floating coins: two arcs of three, plus two singles, all kept clear
+# of the sign posts at x 215 and x 1995.
+FLOAT_COINS = [(470, 498), (610, 462), (750, 498), (980, 478),
+               (1230, 496), (1370, 460), (1510, 496), (1700, 484)]
+
+
+def coin_face(r):
+    # One coin, centred on the origin: body, highlight, engraved notch.
+    return (f'<circle r="{r:.1f}" fill="url(#coinG)" stroke="#8A5A12"'
+            f' stroke-width="{r * 0.17:.2f}"/>'
+            f'<ellipse cx="{-r * 0.22:.2f}" cy="{-r * 0.18:.2f}"'
+            f' rx="{r * 0.3:.2f}" ry="{r * 0.46:.2f}" fill="#FFF8DC"'
+            f' fill-opacity="0.7"/>'
+            f'<rect x="{-r * 0.11:.2f}" y="{-r * 0.5:.2f}"'
+            f' width="{r * 0.22:.2f}" height="{r:.1f}" rx="{r * 0.11:.2f}"'
+            f' fill="#B9791C" fill-opacity="0.45"/>')
+
+
+def coin_spin(dur, begin=0.0, r=COIN_R):
+    # The flat 2D coin flip: squeeze the width down and back, on a loop.
+    return (f'<g>{coin_face(r)}<animateTransform attributeName="transform"'
+            f' type="scale" values="1 1;0.18 1;1 1;0.18 1;1 1"'
+            f' dur="{dur:.2f}s" begin="{begin:.2f}s"'
+            f' repeatCount="indefinite"/></g>')
+
+
+def pop_coin(x, y, t, T, r=COIN_R):
+    # Punched out of a block: quick off the face, slow at the apex, back down.
+    arc = [(0.0, 0.0), (0.16, 0.52), (0.32, 0.85), (0.5, 1.0),
+           (0.68, 0.85), (0.84, 0.5), (1.0, -0.04)]
+    pts = [(0.0, 0.0)] + [(t + f * COIN_POP, hh) for f, hh in arc] + [(T, -0.04)]
+    mv, mk = _keys([f"0,{-hh * COIN_RISE:.1f}" for _, hh in pts],
+                   [tt for tt, _ in pts], T)
+    ov, ok = _keys(["0", "0", "1", "1", "0", "0"],
+                   [0.0, t, t + 0.02, t + COIN_POP * 0.8, t + COIN_POP, T], T)
+    return (f'<g transform="translate({x:.1f} {y:.1f})" opacity="0">'
+            f'<animate attributeName="opacity" dur="{T}s"'
+            f' repeatCount="indefinite" values="{ov}" keyTimes="{ok}"/>'
+            f'<g><animateTransform attributeName="transform" type="translate"'
+            f' dur="{T}s" repeatCount="indefinite" calcMode="linear"'
+            f' values="{mv}" keyTimes="{mk}"/>{coin_spin(0.44, 0.0, r)}</g></g>')
+
+
+def float_coin(x, y, k, r=COIN_R):
+    # Hovering coin: eased bob, staggered so a row does not move in lockstep.
+    return (f'<g transform="translate({x:.1f} {y:.1f})">'
+            f'<g><animateTransform attributeName="transform" type="translate"'
+            f' values="0,0;0,-8;0,0" keyTimes="0;0.5;1" calcMode="spline"'
+            f' keySplines="0.4 0 0.6 1;0.4 0 0.6 1"'
+            f' dur="{2.1 + (k % 4) * 0.25:.2f}s" begin="{k * 0.31:.2f}s"'
+            f' repeatCount="indefinite"/>'
+            f'{coin_spin(0.62 + (k % 3) * 0.08, k * 0.17, r)}</g></g>')
+
+
+def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
+    # A commit square she can headbutt: amber mystery block with a question
+    # mark, bumps up on impact, then reads as spent.
+    h = size / 2
+    bv, bk = _keys(["0,0", "0,0", "0,-15", "0,4", "0,0", "0,0"],
+                   [0.0, t, t + 0.12, t + 0.34, t + 0.52, T], T)
+    fv, fk = _keys(["#E9A63C", "#E9A63C", "#FFF0B8", "#C98A2C", "#8A5E22",
+                    "#8A5E22"],
+                   [0.0, t, t + 0.08, t + 0.3, t + 0.62, T], T)
+    qv, qk = _keys(["1", "1", "0", "0"], [0.0, t, t + 0.16, T], T)
+    rivets = "".join(
+        f'<rect x="{dx * h * 0.62 - 2.2:.1f}" y="{dy * h * 0.62 - 2.2:.1f}"'
+        f' width="4.4" height="4.4" rx="1.2" fill="#7A4E16"'
+        f' fill-opacity="0.75"/>'
+        for dx in (-1, 1) for dy in (-1, 1))
+    return (f'<g transform="translate({cx:.1f} {cy:.1f})"><g>'
+            f'<animateTransform attributeName="transform" type="translate"'
+            f' dur="{T}s" repeatCount="indefinite" values="{bv}"'
+            f' keyTimes="{bk}"/>'
+            f'<rect x="{-h:.1f}" y="{-h:.1f}" width="{size:.1f}"'
+            f' height="{size:.1f}" rx="5" fill="#E9A63C" stroke="#7A4E16"'
+            f' stroke-width="2.2"><animate attributeName="fill" dur="{T}s"'
+            f' repeatCount="indefinite" values="{fv}" keyTimes="{fk}"/></rect>'
+            f'<rect x="{-h + 3.4:.1f}" y="{-h + 3.4:.1f}"'
+            f' width="{size - 6.8:.1f}" height="{size - 6.8:.1f}" rx="3"'
+            f' fill="none" stroke="#FFE9A8" stroke-opacity="0.45"/>{rivets}'
+            f'<text class="rmono" x="0" y="{size * 0.23:.1f}"'
+            f' text-anchor="middle" font-size="{size * 0.66:.1f}"'
+            f' font-weight="700" fill="#FFF8DC"><animate'
+            f' attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
+            f' values="{qv}" keyTimes="{qk}"/>?</text></g></g>')
 
 
 if __name__ == "__main__":
