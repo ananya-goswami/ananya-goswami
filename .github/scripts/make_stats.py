@@ -317,6 +317,42 @@ ART_BG = ((7, 15, 26), (0, 10, 18), (0, 14, 21), (2, 20, 30),
 _ART = None
 
 
+def _silhouette(d, np, cut=24.0):
+    """Solid alpha: only background reachable from the crop edge is cut away.
+
+    Dark pixels inside a sprite (navy jacket, hair) sit close to the panel
+    colours, so a plain distance key makes the sprite see-through. Flooding in
+    from the border instead keeps every enclosed pixel fully opaque.
+    """
+    from collections import deque
+    h, w = d.shape
+    bgish = d < cut
+    outside = np.zeros((h, w), dtype=bool)
+    q = deque()
+    for x in range(w):
+        for y in (0, h - 1):
+            if bgish[y, x] and not outside[y, x]:
+                outside[y, x] = True
+                q.append((y, x))
+    for y in range(h):
+        for x in (0, w - 1):
+            if bgish[y, x] and not outside[y, x]:
+                outside[y, x] = True
+                q.append((y, x))
+    while q:
+        y, x = q.popleft()
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < h and 0 <= nx < w and bgish[ny, nx] and not outside[ny, nx]:
+                outside[ny, nx] = True
+                q.append((ny, nx))
+    alpha = np.where(outside, 0.0, 255.0)
+    pad = np.pad(alpha, 1, mode="edge")               # one soft pass on the rim
+    blur = sum(pad[dy:dy + alpha.shape[0], dx:dx + alpha.shape[1]]
+               for dy in range(3) for dx in range(3)) / 9.0
+    return np.maximum(alpha * 0.55, blur)
+
+
 def art():
     """Cut the runner's cast out of the reference art, keyed to transparency.
 
@@ -347,7 +383,7 @@ def art():
         else:
             a = np.array(crop).astype(float)
             d = np.stack([np.linalg.norm(a - c, axis=2) for c in bg], axis=0).min(axis=0)
-            alpha = np.clip((d - 20.0) / 38.0, 0, 1) * 255
+            alpha = _silhouette(d, np)
             img = Image.fromarray(np.dstack([a, alpha]).astype(np.uint8), "RGBA")
             bb = img.getbbox()
             if bb:
@@ -359,7 +395,7 @@ def art():
     return _ART
 
 
-def sprite(name, x, y, anchor="bottom", scale=1.0, extra=""):
+def sprite(name, x, y, anchor="bottom", scale=1.0, flip=False, extra=""):
     """Place a sprite. x is its centre, y its baseline (or top, when anchored so)."""
     a = art().get(name)
     if not a:
@@ -367,8 +403,11 @@ def sprite(name, x, y, anchor="bottom", scale=1.0, extra=""):
     uri, w, h = a
     w, h = w * scale, h * scale
     top = y if anchor == "top" else y - h
-    return (f'<image xlink:href="{uri}" x="{x - w / 2:.1f}" y="{top:.1f}" '
-            f'width="{w:.1f}" height="{h:.1f}" {extra}/>')
+    tag = (f'<image xlink:href="{uri}" x="{x - w / 2:.1f}" y="{top:.1f}" '
+           f'width="{w:.1f}" height="{h:.1f}" {extra}/>')
+    if flip:                                   # face the other way
+        tag = f'<g transform="translate({2 * x:.1f} 0) scale(-1 1)">{tag}</g>'
+    return tag
 
 
 def _levels(weeks):
@@ -450,9 +489,9 @@ def build_runner_panel(weeks, total=None):
         events.append({"col": i, "row": col.index(lv), "lv": lv,
                        "x": GX0 + i * GPX + GCELL / 2})
         last = i
-    if len(events) > 5:
-        step = len(events) / 5.0
-        events = [events[int(k * step)] for k in range(5)]
+    if len(events) > 3:
+        step = len(events) / 3.0
+        events = [events[int(k * step)] for k in range(3)]
 
     # ---- pacing across the panel ----
     stops = [X0] + [e["x"] for e in events] + [X1]
@@ -470,7 +509,7 @@ def build_runner_panel(weeks, total=None):
     run_k = ";".join(f"{m / T:.5f}" for m in marks)
 
     # ---- her jump arc: head has to reach the underside of a block ----
-    JD, LIFT = 0.95, 62.0
+    JD, LIFT = 0.95, 46.0
     vals, keys = ["0,0"], [0.0]
     for e in events:
         t0, t1 = e["t"] - JD / 2, e["t"] + JD / 2
@@ -514,40 +553,96 @@ def build_runner_panel(weeks, total=None):
                    f' repeatCount="indefinite" values="{bump_v}" keyTimes="{bump_k}"/>'
                    f'{sprite("qblock", e["x"], BLOCK_Y, anchor="top")}</g></g>')
 
-    # ---- what each block gives up ----
+    # ---- the little story: leaf, then turtle, then snake, all heading left ----
+    GIRL_S, PROP_S = 0.70, 0.78
+    BASE = GROUND + 4
+
+    def actor(frames, pts, t_in, t_out):
+        """frames: [(svg, from_t, to_t)]; pts: [(t, x, y)] absolute."""
+        vals = [f"{pts[0][1]:.1f},{pts[0][2]:.1f}"] + \
+               [f"{x:.1f},{y:.1f}" for _, x, y in pts] + [f"{pts[-1][1]:.1f},{pts[-1][2]:.1f}"]
+        times = [0.0] + [t for t, _, _ in pts] + [T]
+        mv, mk = _keys(vals, times, T)
+        ov, ok = _keys(["0", "0", "1", "1", "0", "0"],
+                       [0.0, t_in, t_in + 0.06, t_out - 0.3, t_out, T], T)
+        inner = ""
+        for svg, a, b in frames:
+            sv, sk = _keys(["0", "0", "1", "1", "0", "0"],
+                           [0.0, a, a + 0.02, b, b + 0.02, T], T)
+            inner += (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s"'
+                      f' repeatCount="indefinite" values="{sv}" keyTimes="{sk}"/>{svg}</g>')
+        return (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
+                f' values="{ov}" keyTimes="{ok}"/>'
+                f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
+                f' repeatCount="indefinite" calcMode="linear" values="{mv}" keyTimes="{mk}"/>'
+                f'{inner}</g></g>')
+
     pops = []
-    for e in events:
-        cx, cy, t = e["x"], BLOCK_Y, e["t"]
-        drop = GROUND - BLOCK_Y
-        if e["lv"] >= 3:                      # a shell that wakes up and follows her
-            pops.append(_prize(
-                [(sprite("shell", 0, 0), 0.0, 2.0),
-                 (sprite("turtle", 0, 0), 2.0, 6.0)],
-                cx, cy, t, T,
-                [(0.08, 0, 0), (0.5, 10, -70), (1.1, 26, drop), (2.0, 96, drop),
-                 (4.0, 190, drop), (6.0, 280, drop)], 6.2))
-        elif e["lv"] == 2:                    # a leaf drifting down
-            pops.append(_prize(
-                [(sprite("leaf", 0, 0), 0.0, 4.0)],
-                cx, cy, t, T,
-                [(0.08, 0, 0), (0.5, 8, -76), (1.4, -18, drop * 0.5),
-                 (2.4, 16, drop * 0.85), (3.0, 6, drop), (4.0, 6, drop)], 4.2))
-        else:                                 # a little snake slithering off
-            pops.append(_prize(
-                [(sprite("snake", 0, 0), 0.0, 5.0)],
-                cx, cy, t, T,
-                [(0.08, 0, 0), (0.5, 8, -64), (1.2, 22, drop), (3.0, 130, drop),
-                 (5.0, 250, drop)], 5.2))
+    if events:
+        e1 = events[0]
+        leaf_x = max(110.0, e1["x"] - 170)
+        t1 = e1["t"]
+        t_eat = T - 2.0                      # filled in below when a turtle exists
+        if len(events) >= 2:
+            e2 = events[1]
+            t2 = e2["t"]
+            wake = t2 + 1.9
+            start_x = e2["x"] - 90
+            v_t = 105.0
+            span = max(1.2, (T - 6.0) - wake)
+            v_t = max(v_t, (start_x - leaf_x) / span)
+            t_eat = wake + max(0.4, (start_x - leaf_x) / v_t)
+            t_done = t_eat + 1.4
+            hide_x = max(-40.0, leaf_x - 150)
+            t_hide = t_done + (leaf_x - hide_x) / v_t
+        # --- the leaf ---
+        leaf = sprite("leaf", 0, 0, scale=PROP_S)
+        pops.append(actor(
+            [(leaf, t1, T)],
+            [(t1, e1["x"], BLOCK_Y), (t1 + 0.5, e1["x"] - 30, BLOCK_Y - 70),
+             (t1 + 1.2, e1["x"] - 105, BASE - 40), (t1 + 1.9, leaf_x, BASE),
+             (T, leaf_x, BASE)],
+            t1, min(T - 0.2, t_eat + 0.9)))
+
+    if len(events) >= 2:
+        shell = sprite("shell", 0, 0, scale=PROP_S, flip=True)
+        turtle = sprite("turtle", 0, 0, scale=PROP_S, flip=True)
+        t_out = min(T - 0.2, t_hide + 4.0)
+        pops.append(actor(
+            [(shell, t2, wake), (turtle, wake, t_hide), (shell, t_hide, T)],
+            [(t2, e2["x"], BLOCK_Y), (t2 + 0.5, e2["x"] - 12, BLOCK_Y - 76),
+             (t2 + 1.1, e2["x"] - 40, BASE), (wake, start_x, BASE),
+             (t_eat, leaf_x, BASE), (t_eat + 1.4, leaf_x, BASE),
+             (t_hide, hide_x, BASE), (T, hide_x, BASE)],
+            t2, t_out))
+
+    if len(events) >= 3:
+        e3 = events[2]
+        t3 = e3["t"]
+        snake = sprite("snake", 0, 0, scale=PROP_S, flip=True)
+        land = t3 + 1.1
+        v_s = max(200.0, (e3["x"] + 200) / max(1.0, (T - 0.6) - land))
+        t_pass = land + (e3["x"] - 40 - hide_x) / v_s
+        if t_pass < t_hide + 0.7:                  # never overtake before she hides
+            v_s = (e3["x"] - 40 - hide_x) / max(0.6, (t_hide + 0.9) - land)
+            t_pass = t_hide + 0.9
+        t_gone = min(T - 0.2, land + (e3["x"] - 40 + 180) / v_s)
+        pops.append(actor(
+            [(snake, t3, T)],
+            [(t3, e3["x"], BLOCK_Y), (t3 + 0.5, e3["x"] - 10, BLOCK_Y - 66),
+             (land, e3["x"] - 40, BASE), (t_pass, hide_x, BASE),
+             (t_gone, -180, BASE), (T, -180, BASE)],
+            t3, t_gone))
 
     # ---- her ----
     girl = (f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
             f' repeatCount="indefinite" calcMode="linear" values="{run_v}" keyTimes="{run_k}"/>'
             f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
             f' repeatCount="indefinite" calcMode="linear" values="{jump_v}" keyTimes="{jump_k}"/>'
-            f'<ellipse cx="0" cy="-4" rx="46" ry="9" fill="#000" fill-opacity=".35"/>'
+            f'<ellipse cx="0" cy="-4" rx="34" ry="7" fill="#000" fill-opacity=".35"/>'
             f'<g><animateTransform attributeName="transform" type="translate" dur="0.42s"'
             f' repeatCount="indefinite" values="0,0;0,-7;0,0" keyTimes="0;0.5;1"/>'
-            f'{sprite("girl", 0, 6)}</g></g></g>')
+            f'{sprite("girl", 0, 6, scale=GIRL_S)}</g></g></g>')
 
     # ---- scenery ----
     back = ""
