@@ -730,7 +730,7 @@ def build_runner_panel(weeks, total=None):
     coins = "".join(pop_coin(e["x"], e["y"] + coin_y, e["t"], T)
                     for e in events)
     coins += "".join(float_coin(fx, fy, k)
-                     for k, (fx, fy) in enumerate(FLOAT_COINS))
+                     for k, (fx, fy) in enumerate(coin_cells(grid, cols, hit)))
     return f'''<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      viewBox="0 0 {VB_W} {VB_H}" width="1000" height="{VB_H * 1000 // VB_W}" role="img" aria-label="contribution runner">
      <defs>{sprite_defs()}{COIN_DEFS}</defs>
@@ -757,17 +757,33 @@ def build_runner_panel(weeks, total=None):
 
 # ---------------------------------------------------------------- coins
 QBLOCK_S = 1.35     # mystery block: a little bigger than a plain cell
-COIN_R = 15.0        # gold coin radius
+COIN_R = 13.0        # gold coin radius
 COIN_POP = 1.15     # seconds for one coin to arc out of a block
 COIN_RISE = 124.0   # how high that arc goes
 COIN_DEFS = ('<radialGradient id="coinG" cx="0.36" cy="0.3" r="0.8">'
              '<stop offset="0" stop-color="#FFF6C4"/>'
              '<stop offset="0.55" stop-color="#FFD24A"/>'
              '<stop offset="1" stop-color="#E0941C"/></radialGradient>')
-# Free floating coins: a row hovering right on top of the contribution
-# squares, lined up over the columns, clear of the HUD and corner tag.
-FLOAT_COINS = [(247, 160), (396, 148), (582, 160), (768, 160),
-               (991, 148), (1177, 160), (1363, 160), (1512, 148)]
+COIN_LIFT = 15.0     # how far a hovering coin sits above its own square
+
+def coin_cells(grid, cols, skip):
+    # Hovering coins only sit above a real contribution square, never an
+    # empty one, and each takes a different row so they do not line up.
+    out, k = [], 0
+    step = max(3, cols // 10)
+    for i in range(1, cols, step):
+        opts = []
+        for j in range(i, min(cols, i + step)):
+            opts = [(j, r) for r in range(1, 7)
+                    if grid[j][r] > 0 and (j, r) not in skip]
+            if opts:
+                break
+        if not opts:
+            continue
+        c, r = opts[k % len(opts)]
+        out.append((GX0 + c * GPX + GCELL / 2, GY0 + r * GPY - COIN_LIFT))
+        k += 1
+    return out
 
 
 def coin_face(r):
@@ -812,7 +828,7 @@ def float_coin(x, y, k, r=COIN_R):
     # Hovering coin: eased bob, staggered so a row does not move in lockstep.
     return (f'<g transform="translate({x:.1f} {y:.1f})">'
             f'<g><animateTransform attributeName="transform" type="translate"'
-            f' values="0,0;0,-8;0,0" keyTimes="0;0.5;1" calcMode="spline"'
+            f' values="0,0;0,-6;0,0" keyTimes="0;0.5;1" calcMode="spline"'
             f' keySplines="0.4 0 0.6 1;0.4 0 0.6 1"'
             f' dur="{2.1 + (k % 4) * 0.25:.2f}s" begin="{k * 0.31:.2f}s"'
             f' repeatCount="indefinite"/>'
