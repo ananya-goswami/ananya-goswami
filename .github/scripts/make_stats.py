@@ -350,7 +350,7 @@ def _silhouette(d, np, cut=24.0):
     pad = np.pad(alpha, 1, mode="edge")               # one soft pass on the rim
     blur = sum(pad[dy:dy + alpha.shape[0], dx:dx + alpha.shape[1]]
                for dy in range(3) for dx in range(3)) / 9.0
-    return np.maximum(alpha * 0.55, blur)
+    return alpha
 
 
 def art():
@@ -389,7 +389,9 @@ def art():
             if bb:
                 img = img.crop(bb)
         buf = io.BytesIO()
-        img.quantize(colors=64, method=Image.FASTOCTREE).save(buf, "PNG", optimize=True)
+        flat = img.convert("RGB").quantize(colors=64, method=Image.FASTOCTREE).convert("RGBA")
+        flat.putalpha(img.getchannel("A").point(lambda v: 255 if v >= 128 else 0))
+        flat.save(buf, "PNG", optimize=True)
         _ART[name] = ("data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
                       img.width, img.height)
     return _ART
@@ -430,12 +432,14 @@ def _levels(weeks):
 
 
 # ---------------------------------------------------------------- runner panel
-VB_W, VB_H = 2172, 724                 # reference-art coordinate space
+VB_W, VB_H = 2172, 724                  # reference-art coordinate space
 PANEL = (33, 95, 2139, 627)
 GX0, GY0, GCELL, GPX, GPY = 85.0, 180.0, 26.0, 37.2, 36.5
-GROUND = 588.0                         # top of the ground line
-BLOCK_Y = 346.0                        # top of a mystery block
+GROUND = 588.0                          # top of the ground line
 LEVELS = ["#06313E", "#128070", "#18A088", "#20D898", "#9BEFD9"]
+GIRL_S, LEAF_S, TURTLE_S, SNAKE_S = 0.70, 0.44, 0.66, 1.10
+V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 52.0, 22.0
+EAT = 2.6                               # seconds the turtle spends on the leaf
 
 
 def _keys(vals, times, T):
@@ -446,193 +450,230 @@ def _keys(vals, times, T):
     return ";".join(vals), ";".join(f"{k:.5f}" for k in ks)
 
 
-def _prize(sprites, cx, cy, t, T, path, life):
-    """A prize popping out of a block at (cx, cy) and living for `life` seconds.
+def _pick_cells(grid, cols):
+    """Three real contribution cells, each on its own row, for the cast to pop out of.
 
-    sprites: [(svg, from_dt, to_dt)] - each sprite shows over its own window.
-    path:    [(dt, x, y)] - offsets from the block, in order.
+    No mystery blocks: whatever she hits is an actual commit square. They sit in
+    the right half so everyone has room to travel left, and the third is set well
+    back so the snake turns up after the meal rather than during it.
     """
-    vals = ["0,0"] + [f"{x:.1f},{y:.1f}" for _, x, y in path] + \
-           [f"{path[-1][1]:.1f},{path[-1][2]:.1f}"]
-    times = [0.0] + [t + dt for dt, _, _ in path] + [T]
-    move_v, move_k = _keys(vals, times, T)
-    op_v, op_k = _keys(["0", "0", "1", "1", "0", "0"],
-                       [0.0, t, t + 0.06, t + life - 0.35, t + life, T], T)
-    inner = ""
-    for svg, a, b in sprites:
-        sv, sk = _keys(["0", "0", "1", "1", "0", "0"],
-                       [0.0, t + a, t + a + 0.02, t + b, t + b + 0.02, T], T)
-        inner += (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s"'
-                  f' repeatCount="indefinite" values="{sv}" keyTimes="{sk}"/>{svg}</g>')
-    return (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
-            f' values="{op_v}" keyTimes="{op_k}"/>'
-            f'<g transform="translate({cx} {cy})">'
-            f'<animateTransform attributeName="transform" type="translate" dur="{T}s"'
-            f' repeatCount="indefinite" additive="sum" calcMode="linear"'
-            f' values="{move_v}" keyTimes="{move_k}"/>{inner}</g></g>')
+    start = int(cols * 0.52)
+    picked, used = [], set()
+    for want in (start, start + 5, start + 19):
+        found = None
+        for off in range(cols):
+            for i in (want + off, want - off):
+                if not 0 <= i < cols or any(abs(i - p["col"]) < 3 for p in picked):
+                    continue
+                for r in (6, 5, 4, 3, 2, 1, 0):
+                    if r not in used and grid[i][r] > 0:
+                        found = {"col": i, "row": r, "lv": grid[i][r]}
+                        break
+                if found:
+                    break
+            if found:
+                break
+        if not found:
+            continue
+        found["x"] = GX0 + found["col"] * GPX + GCELL / 2
+        found["y"] = GY0 + found["row"] * GPY
+        picked.append(found)
+        used.add(found["row"])
+    picked.sort(key=lambda p: p["col"])
+    return picked
 
 
 def build_runner_panel(weeks, total=None):
-    """The avatar runs the contribution grid, knocking mystery blocks open."""
+    """She runs the grid and knocks three real commit squares open.
+
+    Out of them, in order: a leaf that settles onto the ground and drifts along it,
+    a turtle that catches the leaf up and stops to eat, and a snake that comes
+    through zig-zagging, which is her cue to pull into her shell.
+    """
     grid = _levels(weeks)
     cols = min(len(grid), 53)
     grid = grid[-cols:]
-    T = 24.0
+    T = 56.0
     X0, X1 = -120.0, VB_W + 120.0
+    BASE = GROUND + 4
+    RUN = 18.0
 
-    # ---- one block per busy-ish column, spaced so they never collide ----
-    events, last = [], -99
-    for i, col in enumerate(grid):
-        lv = max(col)
-        if lv <= 0 or i - last < 7:
-            continue
-        events.append({"col": i, "row": col.index(lv), "lv": lv,
-                       "x": GX0 + i * GPX + GCELL / 2})
-        last = i
-    if len(events) > 3:
-        step = len(events) / 3.0
-        events = [events[int(k * step)] for k in range(3)]
+    events = _pick_cells(grid, cols)
+    speed = (X1 - X0) / RUN
+    for e in events:
+        e["t"] = (e["x"] - X0) / speed
+    run_v = f"{X0:.1f},{GROUND};{X1:.1f},{GROUND};{X1:.1f},{GROUND}"
+    run_k = f"0;{RUN / T:.5f};1"
 
-    # ---- pacing across the panel ----
-    stops = [X0] + [e["x"] for e in events] + [X1]
-    weight = [max(abs(stops[i + 1] - stops[i]), 1.0) ** 0.6 + 40.0
-              for i in range(len(stops) - 1)]
-    scale = T / sum(weight)
-    marks, acc = [0.0], 0.0
-    for w in weight:
-        acc += w * scale
-        marks.append(acc)
-    marks[-1] = T
-    for k, e in enumerate(events):
-        e["t"] = marks[k + 1]
-    run_v = ";".join(f"{x:.1f},{GROUND}" for x in stops)
-    run_k = ";".join(f"{m / T:.5f}" for m in marks)
-
-    # ---- her jump arc: head has to reach the underside of a block ----
-    JD, LIFT = 0.95, 46.0
+    # ---- her jump: her head has to reach the underside of the square she hits ----
+    HEAD = GROUND - 115.0
+    JD = 0.95
     vals, keys = ["0,0"], [0.0]
     for e in events:
+        lift = min(190.0, max(34.0, HEAD + 8.0 - (e["y"] + GCELL)))
         t0, t1 = e["t"] - JD / 2, e["t"] + JD / 2
-        for frac, lift in ((0.0, 0.0), (0.3, 0.74), (0.5, 1.0), (0.7, 0.74), (1.0, 0.0)):
+        for frac, part in ((0.0, 0.0), (0.3, 0.74), (0.5, 1.0), (0.7, 0.74), (1.0, 0.0)):
             keys.append((t0 + frac * (t1 - t0)) / T)
-            vals.append(f"0,{-LIFT * lift:.1f}")
+            vals.append(f"0,{-lift * part:.1f}")
     keys.append(1.0)
     vals.append("0,0")
     for i in range(1, len(keys)):
         keys[i] = min(max(keys[i], keys[i - 1]), 1.0)
     jump_v, jump_k = ";".join(vals), ";".join(f"{k:.5f}" for k in keys)
 
-    # ---- the contribution grid ----
+    # ---- the grid; the three real squares she hits flash and get knocked upward ----
     hit = {(e["col"], e["row"]): e for e in events}
     cells = []
     for i, col in enumerate(grid):
         for r, lv in enumerate(col):
             x, y = GX0 + i * GPX, GY0 + r * GPY
             fill = LEVELS[lv]
-            e = hit.get((i, r))
             base = (f'<rect x="{x:.1f}" y="{y:.1f}" width="{GCELL}" height="{GCELL}" rx="7"'
                     f' fill="{fill}"')
+            e = hit.get((i, r))
             if e is None:
                 cells.append(base + "/>")
                 continue
-            a, b, c = e["t"] / T, (e["t"] + 0.12) / T, (e["t"] + 0.4) / T
-            cells.append(
-                base + f'><animate attributeName="fill" dur="{T}s" repeatCount="indefinite"'
-                f' values="{fill};{fill};{LEVELS[4]};{fill};{fill}"'
-                f' keyTimes="0;{a:.5f};{b:.5f};{c:.5f};1"/></rect>')
-
-    # ---- mystery blocks, one per event, hovering under the grid ----
-    blocks = ""
-    for e in events:
-        qv, qk = _keys(["1", "1", "0", "0"], [0.0, e["t"], e["t"] + 0.08, T], T)
-        bump_v, bump_k = _keys(["0,0", "0,0", "0,-16", "0,0", "0,0"],
-                               [0.0, e["t"], e["t"] + 0.1, e["t"] + 0.3, T], T)
-        blocks += (f'<g><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
-                   f' values="{qv}" keyTimes="{qk}"/>'
-                   f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
-                   f' repeatCount="indefinite" values="{bump_v}" keyTimes="{bump_k}"/>'
-                   f'{sprite("qblock", e["x"], BLOCK_Y, anchor="top")}</g></g>')
-
-    # ---- the little story: leaf, then turtle, then snake, all heading left ----
-    GIRL_S, PROP_S = 0.70, 0.78
-    BASE = GROUND + 4
+            fv, fk = _keys([fill, fill, LEVELS[4], LEVELS[4], fill, fill],
+                           [0.0, e["t"], e["t"] + 0.1, e["t"] + 0.3, e["t"] + 0.75, T], T)
+            bv, bk = _keys(["0,0", "0,0", "0,-13", "0,3", "0,0", "0,0"],
+                           [0.0, e["t"], e["t"] + 0.12, e["t"] + 0.34, e["t"] + 0.52, T], T)
+            cells.append(base + f'><animate attributeName="fill" dur="{T}s"'
+                         f' repeatCount="indefinite" values="{fv}" keyTimes="{fk}"/>'
+                         f'<animateTransform attributeName="transform" type="translate"'
+                         f' dur="{T}s" repeatCount="indefinite" values="{bv}"'
+                         f' keyTimes="{bk}"/></rect>')
 
     def actor(frames, pts, t_in, t_out):
-        """frames: [(svg, from_t, to_t)]; pts: [(t, x, y)] absolute."""
+        """frames: [(svg, from_t, to_t)]; pts: [(t, x, y)] absolute, in order."""
         vals = [f"{pts[0][1]:.1f},{pts[0][2]:.1f}"] + \
-               [f"{x:.1f},{y:.1f}" for _, x, y in pts] + [f"{pts[-1][1]:.1f},{pts[-1][2]:.1f}"]
+               [f"{x:.1f},{y:.1f}" for _, x, y in pts] + \
+               [f"{pts[-1][1]:.1f},{pts[-1][2]:.1f}"]
         times = [0.0] + [t for t, _, _ in pts] + [T]
         mv, mk = _keys(vals, times, T)
         ov, ok = _keys(["0", "0", "1", "1", "0", "0"],
-                       [0.0, t_in, t_in + 0.06, t_out - 0.3, t_out, T], T)
+                       [0.0, t_in, t_in + 0.06, t_out - 0.45, t_out, T], T)
         inner = ""
         for svg, a, b in frames:
             sv, sk = _keys(["0", "0", "1", "1", "0", "0"],
                            [0.0, a, a + 0.02, b, b + 0.02, T], T)
             inner += (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s"'
                       f' repeatCount="indefinite" values="{sv}" keyTimes="{sk}"/>{svg}</g>')
-        return (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
-                f' values="{ov}" keyTimes="{ok}"/>'
+        return (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s"'
+                f' repeatCount="indefinite" values="{ov}" keyTimes="{ok}"/>'
                 f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
                 f' repeatCount="indefinite" calcMode="linear" values="{mv}" keyTimes="{mk}"/>'
                 f'{inner}</g></g>')
 
+    # ---- the story: leaf, then turtle, then snake, all heading left ----
+    e1 = events[0] if events else None
+    e2 = events[1] if len(events) > 1 else None
+    e3 = events[2] if len(events) > 2 else None
     pops = []
-    if events:
-        e1 = events[0]
-        leaf_x = max(110.0, e1["x"] - 170)
+
+    if e1:
         t1 = e1["t"]
-        t_eat = T - 2.0                      # filled in below when a turtle exists
-        if len(events) >= 2:
-            e2 = events[1]
-            t2 = e2["t"]
-            wake = t2 + 1.9
-            start_x = e2["x"] - 90
-            v_t = 105.0
-            span = max(1.2, (T - 6.0) - wake)
-            v_t = max(v_t, (start_x - leaf_x) / span)
-            t_eat = wake + max(0.4, (start_x - leaf_x) / v_t)
-            t_done = t_eat + 1.4
-            hide_x = max(-40.0, leaf_x - 150)
-            t_hide = t_done + (leaf_x - hide_x) / v_t
-        # --- the leaf ---
-        leaf = sprite("leaf", 0, 0, scale=PROP_S)
-        pops.append(actor(
-            [(leaf, t1, T)],
-            [(t1, e1["x"], BLOCK_Y), (t1 + 0.5, e1["x"] - 30, BLOCK_Y - 70),
-             (t1 + 1.2, e1["x"] - 105, BASE - 40), (t1 + 1.9, leaf_x, BASE),
-             (T, leaf_x, BASE)],
-            t1, min(T - 0.2, t_eat + 0.9)))
+        lx0 = e1["x"] - 60.0
+        leaf_land = t1 + 2.0
+        t_eat = min(T - 22.0, leaf_land + 6.0)
+        eat_x = lx0 - V_LEAF * (t_eat - leaf_land)
 
-    if len(events) >= 2:
-        shell = sprite("shell", 0, 0, scale=PROP_S, flip=True)
-        turtle = sprite("turtle", 0, 0, scale=PROP_S, flip=True)
-        t_out = min(T - 0.2, t_hide + 4.0)
-        pops.append(actor(
-            [(shell, t2, wake), (turtle, wake, t_hide), (shell, t_hide, T)],
-            [(t2, e2["x"], BLOCK_Y), (t2 + 0.5, e2["x"] - 12, BLOCK_Y - 76),
-             (t2 + 1.1, e2["x"] - 40, BASE), (wake, start_x, BASE),
-             (t_eat, leaf_x, BASE), (t_eat + 1.4, leaf_x, BASE),
-             (t_hide, hide_x, BASE), (T, hide_x, BASE)],
-            t2, t_out))
+    if e2:
+        t2 = e2["t"]
+        tx0 = e2["x"] - 34.0
+        t_land2 = t2 + 1.6
+        t_limb = t_land2 - 0.3          # head and legs are out before it moves off
+        t_walk2 = t_land2 + 0.9
+        t_eat = (tx0 + V_TURTLE * t_walk2 - lx0 - V_LEAF * leaf_land) / (V_TURTLE - V_LEAF)
+        t_eat = min(max(t_eat, t_walk2 + 1.5), T - 22.0)
+        eat_x = tx0 - V_TURTLE * (t_eat - t_walk2)
+        t_resume = t_eat + EAT
 
-    if len(events) >= 3:
-        e3 = events[2]
+        def turtle_at(t):
+            if t <= t_walk2:
+                return tx0
+            if t <= t_eat:
+                return tx0 - V_TURTLE * (t - t_walk2)
+            if t <= t_resume:
+                return eat_x
+            return eat_x - V_TURTLE * (t - t_resume)
+
+    if e3:
         t3 = e3["t"]
-        snake = sprite("snake", 0, 0, scale=PROP_S, flip=True)
-        land = t3 + 1.1
-        v_s = max(200.0, (e3["x"] + 200) / max(1.0, (T - 0.6) - land))
-        t_pass = land + (e3["x"] - 40 - hide_x) / v_s
-        if t_pass < t_hide + 0.7:                  # never overtake before she hides
-            v_s = (e3["x"] - 40 - hide_x) / max(0.6, (t_hide + 0.9) - land)
-            t_pass = t_hide + 0.9
-        t_gone = min(T - 0.2, land + (e3["x"] - 40 + 180) / v_s)
-        pops.append(actor(
-            [(snake, t3, T)],
-            [(t3, e3["x"], BLOCK_Y), (t3 + 0.5, e3["x"] - 10, BLOCK_Y - 66),
-             (land, e3["x"] - 40, BASE), (t_pass, hide_x, BASE),
-             (t_gone, -180, BASE), (T, -180, BASE)],
-            t3, t_gone))
+        sx0 = e3["x"] - 30.0
+        t_land3 = t3 + 1.5
+        t_slith = t_land3 + 0.5
+        t_gone = min(T - 0.5, t_slith + (sx0 + 240.0) / V_SNAKE)
+
+        def snake_at(t):
+            return sx0 - V_SNAKE * max(0.0, t - t_slith)
+
+        t_hide, probe = T - 7.0, t_slith
+        while probe < T - 7.0:
+            if snake_at(probe) - turtle_at(probe) <= 115.0:
+                t_hide = probe
+                break
+            probe += 0.05
+        hide_x = turtle_at(t_hide)
+        t_pass = min(T - 3.0, t_hide + (snake_at(t_hide) - hide_x + 175.0) / V_SNAKE)
+        t_emerge = t_pass + 0.6
+        t_crawl = t_emerge + 0.7
+        exit_x = hide_x - V_LIMP * max(0.0, T - 0.4 - t_crawl)
+
+    if e1:
+        leaf_end = t_eat + EAT if e2 else T
+        leaf_rest = eat_x if e2 else lx0 - V_LEAF * (T - leaf_land)
+        frames = [(sprite("leaf", 0, 0, scale=LEAF_S), t1,
+                   t_eat + EAT * 0.35 if e2 else T)]
+        if e2:                          # nibbled down to nothing while it is eaten
+            frames.append((sprite("leaf", 0, 0, scale=LEAF_S * 0.6),
+                           t_eat + EAT * 0.35, t_eat + EAT * 0.7))
+            frames.append((sprite("leaf", 0, 0, scale=LEAF_S * 0.28),
+                           t_eat + EAT * 0.7, leaf_end))
+        pops.append(actor(frames,
+                          [(t1, e1["x"], e1["y"] + GCELL / 2),
+                           (t1 + 0.55, e1["x"] - 26.0, e1["y"] - 62.0),
+                           (t1 + 1.3, e1["x"] - 72.0, BASE - 34.0),
+                           (leaf_land, lx0, BASE),
+                           (t_eat, eat_x, BASE),
+                           (T, leaf_rest, BASE)],
+                          t1, min(T - 0.15, leaf_end + 0.1)))
+
+    if e2:
+        shell = sprite("shell", 0, 0, scale=TURTLE_S, flip=True)
+        turt = sprite("turtle", 0, 0, scale=TURTLE_S, flip=True)
+        pts = [(t2, e2["x"], e2["y"] + GCELL / 2),
+               (t2 + 0.55, e2["x"] - 14.0, e2["y"] - 66.0),
+               (t_land2, tx0, BASE),
+               (t_walk2, tx0, BASE),
+               (t_eat, eat_x, BASE)]
+        for k in range(4):              # four bites, taken standing still
+            pts.append((t_eat + (k + 0.45) * EAT / 4, eat_x - 7.0, BASE + 3.0))
+            pts.append((t_eat + (k + 1.0) * EAT / 4, eat_x, BASE))
+        if e3:
+            pts += [(t_hide, hide_x, BASE), (t_crawl, hide_x, BASE),
+                    (T - 0.4, exit_x, BASE), (T, exit_x, BASE)]
+            frames = [(shell, t2, t_limb), (turt, t_limb, t_hide),
+                      (shell, t_hide, t_emerge), (turt, t_emerge, T)]
+        else:
+            pts += [(T, eat_x - V_TURTLE * (T - t_resume), BASE)]
+            frames = [(shell, t2, t_limb), (turt, t_limb, T)]
+        pops.append(actor(frames, pts, t2, T))
+
+    if e3:
+        pts = [(t3, e3["x"], e3["y"] + GCELL / 2),
+               (t3 + 0.55, e3["x"] - 12.0, e3["y"] - 60.0),
+               (t_land3, sx0, BASE),
+               (t_slith, sx0, BASE)]
+        sx, st, up = sx0, t_slith, True     # a slither reads as a zig-zag from the side
+        while st < t_gone:
+            sx -= 44.0
+            st += 44.0 / V_SNAKE
+            pts.append((min(st, t_gone), max(sx, -240.0), BASE - 11.0 if up else BASE))
+            up = not up
+        pts.append((T, max(sx, -240.0), BASE))
+        pops.append(actor([(sprite("snake", 0, 0, scale=SNAKE_S, flip=True), t3, T)],
+                          pts, t3, t_gone))
 
     # ---- her ----
     girl = (f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
@@ -668,7 +709,7 @@ def build_runner_panel(weeks, total=None):
 
     px0, py0, px1, py1 = PANEL
     return f'''<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
- viewBox="0 0 {VB_W} {VB_H}" width="1000" height="{VB_H * 1000 // VB_W}" role="img" aria-label="contribution runner">
+     viewBox="0 0 {VB_W} {VB_H}" width="1000" height="{VB_H * 1000 // VB_W}" role="img" aria-label="contribution runner">
 <style>.rmono {{ font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }}</style>
 <rect width="{VB_W}" height="{VB_H}" fill="#070f1a"/>
 <rect x="{px0}" y="{py0}" width="{px1 - px0}" height="{py1 - py0}" rx="30" fill="#081420"
@@ -682,7 +723,6 @@ def build_runner_panel(weeks, total=None):
 {''.join(f'<rect x="{x}" y="{GROUND + 6}" width="2" height="{py1 - GROUND - 6}" fill="#07202A"/>' for x in range(int(px0), int(px1), 74))}
 {''.join(cells)}
 {hud}
-{blocks}
 {''.join(pops)}
 {girl}
 </g>
