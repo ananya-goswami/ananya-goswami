@@ -420,8 +420,8 @@ def art():
             a = np.array(crop).astype(float)
             d = np.stack([np.linalg.norm(a - c, axis=2) for c in bg], axis=0).min(axis=0)
             alpha = _silhouette(d, np)
-                if name == "girl":  # drop the bubbles beside her shoes
-                    alpha = _largest_blob(alpha, np)
+            if name == "girl":  # drop the bubbles beside her shoes
+                alpha = _largest_blob(alpha, np)
             img = Image.fromarray(np.dstack([a, alpha]).astype(np.uint8), "RGBA")
             bb = img.getbbox()
             if bb:
@@ -803,7 +803,11 @@ COIN_RISE = 124.0   # how high that arc goes
 COIN_DEFS = ('<radialGradient id="coinG" cx="0.36" cy="0.3" r="0.8">'
              '<stop offset="0" stop-color="#FFF6C4"/>'
              '<stop offset="0.55" stop-color="#FFD24A"/>'
-             '<stop offset="1" stop-color="#E0941C"/></radialGradient>')
+             '<stop offset="1" stop-color="#E0941C"/></radialGradient>'
+             '<radialGradient id="coinHalo" cx="0.5" cy="0.5" r="0.5">'
+             '<stop offset="0.5" stop-color="#050A14" stop-opacity="0.95"/>'
+             '<stop offset="1" stop-color="#050A14" stop-opacity="0"/>'
+             '</radialGradient>')
 COIN_LIFT = 21.0    # a coin floats clear above its own square
 
 def coin_cells(grid, cols, skip):
@@ -828,7 +832,8 @@ def coin_cells(grid, cols, skip):
 
 def coin_face(r):
     # One coin, centred on the origin: body, highlight, engraved notch.
-    return (f'<circle r="{r:.1f}" fill="url(#coinG)" stroke="#8A5A12"'
+    return (f'<circle r="{r * 1.8:.1f}" fill="url(#coinHalo)"/>'
+            f'<circle r="{r:.1f}" fill="url(#coinG)" stroke="#8A5A12"'
             f' stroke-width="{r * 0.17:.2f}"/>'
             f'<ellipse cx="{-r * 0.22:.2f}" cy="{-r * 0.18:.2f}"'
             f' rx="{r * 0.3:.2f}" ry="{r * 0.46:.2f}" fill="#FFF8DC"'
@@ -956,7 +961,7 @@ CHOMP = 0.30  # seconds per bite: head into the leaf, then back up
 def chomp_frames(turt, t0, dur):
     """Head-down, head-up pairs, so the turtle visibly bites the leaf."""
     out, t = [], t0
-    bite = f'<g transform="translate(-9 5)">{turt}</g>'
+    bite = f'<g transform="translate(-13 8)">{turt}</g>'
     while t + CHOMP <= t0 + dur:
         out.append((bite, t, t + CHOMP * 0.45))
         out.append((turt, t + CHOMP * 0.45, t + CHOMP))
@@ -967,7 +972,7 @@ def chomp_frames(turt, t0, dur):
 
 SNAKE_MOUTH = (0.03, 0.42)  # where its mouth sits across and down the sprite
 SNAKE_HISS = 1.15  # seconds for one flick of the tongue
-SNAKE_REAR = 5.0  # degrees it leans into each hiss
+SNAKE_REAR = 11.0  # degrees it rears back into each hiss
 def snake_hisser(scale=SNAKE_S, baseline=0.0):
     """Left-facing snake that leans in and flicks a forked tongue.
 
@@ -987,8 +992,8 @@ def snake_hisser(scale=SNAKE_S, baseline=0.0):
               f' values="0 1;1 1;0.25 1;1 1;0 1;0 1"'
               f' keyTimes="0;0.10;0.20;0.30;0.42;1"'
               f' dur="{SNAKE_HISS}s" repeatCount="indefinite"/>'
-              f'<path d="M0 0L-9 -1.5M-9 -1.5L-15 -5M-9 -1.5L-15 2"'
-              f' fill="none" stroke="#FF3B5C" stroke-width="2.4"'
+              f'<path d="M0 0L-14 -2M-14 -2L-24 -8M-14 -2L-24 4"'
+              f' fill="none" stroke="#FF3B5C" stroke-width="3.4"'
               f' stroke-linecap="round"/></g></g>')
     rear = (f'<animateTransform attributeName="transform" type="rotate"'
             f' values="0 {piv};{-SNAKE_REAR:.1f} {piv};0 {piv}"'
