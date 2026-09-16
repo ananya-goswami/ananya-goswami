@@ -701,7 +701,7 @@ def build_runner_panel(weeks, total=None):
             f'<ellipse cx="0" cy="-4" rx="34" ry="7" fill="#000" fill-opacity=".35"/>'
             f'<g><animateTransform attributeName="transform" type="translate" dur="0.42s"'
             f' repeatCount="indefinite" values="0,0;0,-7;0,0" keyTimes="0;0.5;1"/>'
-            f'{sprite("girl", 0, 6, scale=GIRL_S)}</g></g></g>')
+            f'{girl_runner()}</g></g></g>')
 
     # ---- scenery ----
     back = ""
@@ -709,7 +709,6 @@ def build_runner_panel(weeks, total=None):
         back += sprite("hill", hx + 120, GROUND + 2)
     for gx in range(150, VB_W - 80, 302):
         back += sprite("grass", gx, GROUND + 12)
-    back += sprite("signL", 215, 574) + sprite("signR", 1995, 574)
 
     stars = ""
     for k in range(26):
@@ -732,13 +731,11 @@ def build_runner_panel(weeks, total=None):
     coins += "".join(float_coin(fx, fy, k)
                      for k, (fx, fy) in enumerate(coin_cells(grid, cols, hit)))
     return f'''<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
-     viewBox="0 0 {VB_W} {VB_H}" width="1000" height="{VB_H * 1000 // VB_W}" role="img" aria-label="contribution runner">
+    viewBox="{px0} {py0} {px1 - px0} {py1 - py0}" width="1000" height="{(py1 - py0) * 1000 // (px1 - px0)}" role="img" aria-label="contribution runner">
      <defs>{sprite_defs()}{COIN_DEFS}</defs>
 <style>.rmono {{ font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }}</style>
-<rect width="{VB_W}" height="{VB_H}" fill="#070f1a"/>
-<rect x="{px0}" y="{py0}" width="{px1 - px0}" height="{py1 - py0}" rx="30" fill="#081420"
-      stroke="#2FDDA4" stroke-opacity=".14"/>
-<clipPath id="rpanel"><rect x="{px0}" y="{py0}" width="{px1 - px0}" height="{py1 - py0}" rx="30"/></clipPath>
+<rect x="{px0}" y="{py0}" width="{px1 - px0}" height="{py1 - py0}" fill="#081420"/>
+<clipPath id="rpanel"><rect x="{px0}" y="{py0}" width="{px1 - px0}" height="{py1 - py0}"/></clipPath>
 <g clip-path="url(#rpanel)">
 {stars}
 {back}
@@ -866,6 +863,49 @@ def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
             f' font-weight="700" fill="#FFF8DC"><animate'
             f' attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
             f' values="{qv}" keyTimes="{qk}"/>?</text></g></g>')
+
+
+# ---------------------------------------------------------------- her run
+GIRL_HIP = 0.78       # fraction down her sprite where the legs start
+GIRL_SEAM = 0.80      # the torso is drawn this far down, hiding the joint
+GIRL_HIPX = 0.55      # where her hips sit across the sprite
+GIRL_SWING = 26.0     # degrees each leg swings from the hip
+GIRL_STEP = 0.42      # seconds for one full stride
+
+
+def girl_leg(cid, ang, hx, hy):
+    # One leg, clipped out of her bitmap and swung from the hip.
+    a = f"{ang:.1f} {hx:.1f} {hy:.1f}"
+    b = f"{-ang:.1f} {hx:.1f} {hy:.1f}"
+    return (f'<g><animateTransform attributeName="transform" type="rotate"'
+            f' values="{a};{b};{a}" keyTimes="0;0.5;1" dur="{GIRL_STEP}s"'
+            f' repeatCount="indefinite"/>'
+            f'<g clip-path="url(#{cid})"><use xlink:href="#sp-girl"/></g></g>')
+
+
+def girl_runner(scale=GIRL_S, baseline=6.0):
+    # Her legs are two clipped pieces of the same bitmap, swung from the
+    # hip in opposite phase, so she strides instead of sliding along.
+    a = art().get("girl")
+    if not a:
+        return ""
+    uri, w, h = a
+    _USED["girl"] = (uri, w, h)
+    sw, sh = w * scale, h * scale
+    hx, hy = w * GIRL_HIPX, h * GIRL_HIP
+    seam = h * GIRL_SEAM
+    clips = (f'<clipPath id="g-top"><rect x="-6" y="-6"'
+             f' width="{w + 12:.1f}" height="{seam + 6:.1f}"/></clipPath>'
+             f'<clipPath id="g-legL"><rect x="-6" y="{hy:.1f}"'
+             f' width="{hx + 6:.1f}" height="{h - hy + 12:.1f}"/></clipPath>'
+             f'<clipPath id="g-legR"><rect x="{hx:.1f}" y="{hy:.1f}"'
+             f' width="{w - hx + 6:.1f}" height="{h - hy + 12:.1f}"/></clipPath>')
+    body = '<g clip-path="url(#g-top)"><use xlink:href="#sp-girl"/></g>'
+    return (clips + f'<g transform="translate({-sw / 2:.1f}'
+            f' {baseline - sh:.1f}) scale({scale:.4f})">'
+            + girl_leg("g-legL", GIRL_SWING, hx, hy)
+            + girl_leg("g-legR", -GIRL_SWING, hx, hy)
+            + body + '</g>')
 
 
 if __name__ == "__main__":
