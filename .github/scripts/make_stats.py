@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Builds the profile panels - stats, featured projects, and the contribution runner."""
 import json
+import math
 import os
 import urllib.request
 
@@ -308,7 +309,7 @@ ART_BOXES = {
     "signR":  (1898, 402, 2088, 572),
     "hill":   (1655, 468, 1900, 588),
     "grass":  (1178, 530, 1264, 584),
-    "star":  (70, 126, 120, 176),
+    # star: drawn as geometry now, see STAR_HUD
     "tag":    (1628, 116, 2102, 162),
 }
 ART_FLAT = ("hill", "tag")          # pasted as-is, no alpha key
@@ -453,6 +454,18 @@ LEVELS = ["#06313E", "#128070", "#18A088", "#20D898", "#9BEFD9"]
 GIRL_S, LEAF_S, TURTLE_S, SNAKE_S = 0.70, 0.44, 0.66, 1.10
 V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 52.0, 22.0
 EAT = 2.6                               # seconds the turtle spends on the leaf
+
+# HUD star. The old one was a crop from the reference art, so it came out
+# tilted a few degrees and sat low beside the x N label. This is generated
+# geometry instead: a regular five-pointed star, first tip straight up, inner
+# radius cos(72)/cos(36) of the outer so every arm matches, centred on the
+# mid-height of the text next to it.
+STAR_R, STAR_CX, STAR_CY = 15.0, 82.0, 149.5
+STAR_RIN = STAR_R * math.cos(math.radians(72)) / math.cos(math.radians(36))
+STAR_ARMS = [(STAR_R if k % 2 == 0 else STAR_RIN, math.radians(36 * k)) for k in range(10)]
+STAR_XY = [(STAR_CX + r * math.sin(a), STAR_CY - r * math.cos(a)) for r, a in STAR_ARMS]
+STAR_D = "M" + " ".join(f"{x:.2f} {y:.2f}" for x, y in STAR_XY) + "Z"
+STAR_HUD = f'<path fill="#3CEDA5" d="{STAR_D}"/>'
 
 
 def _keys(vals, times, T):
@@ -716,7 +729,7 @@ def build_runner_panel(weeks, total=None):
 
     hud = ""
     if total is not None:
-        hud = (sprite("star", 78, 166) +
+        hud = (STAR_HUD +
                f'<text class="rmono" x="104" y="160" font-size="30" fill="#CFEAE3">x {total}</text>')
     hud += sprite("tag", 1865, 116, anchor="top")
 
