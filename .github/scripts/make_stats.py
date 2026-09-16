@@ -764,10 +764,10 @@ COIN_DEFS = ('<radialGradient id="coinG" cx="0.36" cy="0.3" r="0.8">'
              '<stop offset="0" stop-color="#FFF6C4"/>'
              '<stop offset="0.55" stop-color="#FFD24A"/>'
              '<stop offset="1" stop-color="#E0941C"/></radialGradient>')
-# Free floating coins: two arcs of three, plus two singles, all kept clear
-# of the sign posts at x 215 and x 1995.
-FLOAT_COINS = [(470, 498), (610, 462), (750, 498), (980, 478),
-               (1230, 496), (1370, 460), (1510, 496), (1700, 484)]
+# Free floating coins, in the band above the contribution squares: two arcs
+# of three plus two singles, kept clear of the HUD star and the corner tag.
+FLOAT_COINS = [(300, 146), (420, 128), (540, 146), (740, 138),
+               (940, 146), (1060, 128), (1180, 146), (1400, 140)]
 
 
 def coin_face(r):
