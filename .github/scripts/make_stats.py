@@ -764,7 +764,7 @@ COIN_DEFS = ('<radialGradient id="coinG" cx="0.36" cy="0.3" r="0.8">'
              '<stop offset="0" stop-color="#FFF6C4"/>'
              '<stop offset="0.55" stop-color="#FFD24A"/>'
              '<stop offset="1" stop-color="#E0941C"/></radialGradient>')
-COIN_LIFT = 15.0     # how far a hovering coin sits above its own square
+COIN_LIFT = 8.0      # a coin perches on the top edge of its own square
 
 def coin_cells(grid, cols, skip):
     # Hovering coins only sit above a real contribution square, never an
@@ -828,7 +828,7 @@ def float_coin(x, y, k, r=COIN_R):
     # Hovering coin: eased bob, staggered so a row does not move in lockstep.
     return (f'<g transform="translate({x:.1f} {y:.1f})">'
             f'<g><animateTransform attributeName="transform" type="translate"'
-            f' values="0,0;0,-6;0,0" keyTimes="0;0.5;1" calcMode="spline"'
+            f' values="0,0;0,-4;0,0" keyTimes="0;0.5;1" calcMode="spline"'
             f' keySplines="0.4 0 0.6 1;0.4 0 0.6 1"'
             f' dur="{2.1 + (k % 4) * 0.25:.2f}s" begin="{k * 0.31:.2f}s"'
             f' repeatCount="indefinite"/>'
