@@ -316,6 +316,7 @@ ART_FLAT = ("hill", "tag")          # pasted as-is, no alpha key
 ART_BG = ((7, 15, 26), (0, 10, 18), (0, 14, 21), (2, 20, 30),
           (6, 49, 62), (7, 44, 57), (4, 35, 46))
 _ART = None
+_MOUTH = {}  # sprite name -> keyed-out mouth, as fractions of the sprite
 
 
 def _silhouette(d, np, cut=24.0):
@@ -327,7 +328,16 @@ def _silhouette(d, np, cut=24.0):
     """
     from collections import deque
     h, w = d.shape
-    bgish = d < cut
+    raw = d < cut
+    bgish = raw.copy()                  # erode: a 1px seam is not background
+    bgish[1:, :] &= raw[:-1, :]
+    bgish[:-1, :] &= raw[1:, :]
+    bgish[:, 1:] &= raw[:, :-1]
+    bgish[:, :-1] &= raw[:, 1:]
+    bgish[0, :] = raw[0, :]             # the rim still has to seed the flood
+    bgish[-1, :] = raw[-1, :]
+    bgish[:, 0] = raw[:, 0]
+    bgish[:, -1] = raw[:, -1]
     outside = np.zeros((h, w), dtype=bool)
     q = deque()
     for x in range(w):
@@ -347,24 +357,28 @@ def _silhouette(d, np, cut=24.0):
             if 0 <= ny < h and 0 <= nx < w and bgish[ny, nx] and not outside[ny, nx]:
                 outside[ny, nx] = True
                 q.append((ny, nx))
-    alpha = np.where(outside, 0.0, 255.0)
-    pad = np.pad(alpha, 1, mode="edge")               # one soft pass on the rim
-    blur = sum(pad[dy:dy + alpha.shape[0], dx:dx + alpha.shape[1]]
-               for dy in range(3) for dx in range(3)) / 9.0
-    return alpha
+    grown = outside.copy()              # dilate back onto the true background
+    grown[1:, :] |= outside[:-1, :]
+    grown[:-1, :] |= outside[1:, :]
+    grown[:, 1:] |= outside[:, :-1]
+    grown[:, :-1] |= outside[:, 1:]
+    return np.where(grown & raw, 0.0, 255.0)
 
-def _largest_blob(alpha, np):
-    """Keep only the biggest opaque island, dropping detached specks.
+def _keep_blobs(alpha, np, frac=0.06):
+    """Drop detached specks, but keep every real piece of the sprite.
 
     The art sets sparkle bubbles beside her shoes. Nothing links them to
-    the crop edge, so the border flood leaves them behind; each one is its
-    own island though, so keeping the largest one clears them away.
+    the crop edge, so the border flood leaves them behind. Keeping only the
+    single largest island cleared them away, but it also threw out her whole
+    body whenever the key nicked her collar, which is why she ran across the
+    grid as a floating head. Every island at least frac of the biggest one
+    now survives, so the bubbles still go and she keeps her legs.
     """
     from collections import deque
     h, w = alpha.shape
     solid = alpha > 0
     seen = np.zeros((h, w), dtype=bool)
-    best = []
+    blobs = []
     for sy in range(h):
         for sx in range(w):
             if not solid[sy, sx] or seen[sy, sx]:
@@ -381,11 +395,16 @@ def _largest_blob(alpha, np):
                     if solid[ny, nx] and not seen[ny, nx]:
                         seen[ny, nx] = True
                         q.append((ny, nx))
-            if len(blob) > len(best):
-                best = blob
+            blobs.append(blob)
+    if not blobs:
+        return alpha
+    floor = max(len(b) for b in blobs) * frac
     out = np.zeros((h, w), dtype=float)
-    for y, x in best:
-        out[y, x] = 255.0
+    for blob in blobs:
+        if len(blob) < floor:
+            continue
+        for y, x in blob:
+            out[y, x] = 255.0
     return out
 
 
@@ -414,6 +433,7 @@ def art():
     bg = [np.array(c, dtype=float) for c in ART_BG]
     for name, box in ART_BOXES.items():
         crop = src.crop(box)
+        tongue = None
         if name in ART_FLAT:
             img = crop.convert("RGBA")
         else:
@@ -421,11 +441,29 @@ def art():
             d = np.stack([np.linalg.norm(a - c, axis=2) for c in bg], axis=0).min(axis=0)
             alpha = _silhouette(d, np)
             if name == "girl":  # drop the bubbles beside her shoes
-                alpha = _largest_blob(alpha, np)
+                alpha = _keep_blobs(alpha, np)
+            if name == "snake":
+                # The art paints a stubby red tongue onto the snake. Left in
+                # place it just sits there while the animated tongue flicks
+                # past it, so the snake reads as having two. Key the red out
+                # and remember where it was: that patch is the mouth, and the
+                # flick gets anchored to it.
+                red = ((a[:, :, 0] - np.maximum(a[:, :, 1], a[:, :, 2]) > 42)
+                       & (a[:, :, 0] > 96))
+                if red.any():
+                    ys, xs = np.nonzero(red)
+                    tongue = (float(xs.max()),
+                              float(ys.min() + ys.max()) / 2.0)
+                    alpha = np.where(red, 0.0, alpha)
             img = Image.fromarray(np.dstack([a, alpha]).astype(np.uint8), "RGBA")
             bb = img.getbbox()
             if bb:
                 img = img.crop(bb)
+                if tongue:
+                    tongue = (max(0.0, tongue[0] - bb[0]),
+                              tongue[1] - bb[1])
+        if tongue and img.width and img.height:
+            _MOUTH[name] = (tongue[0] / img.width, tongue[1] / img.height)
         buf = io.BytesIO()
         flat = img.convert("RGB").quantize(colors=64, method=Image.FASTOCTREE).convert("RGBA")
         flat.putalpha(img.getchannel("A").point(lambda v: 255 if v >= 128 else 0))
@@ -488,9 +526,11 @@ PANEL = (33, 95, 2139, 627)
 GX0, GY0, GCELL, GPX, GPY = 85.0, 180.0, 26.0, 37.2, 36.5
 GROUND = 588.0                          # top of the ground line
 LEVELS = ["#06313E", "#128070", "#18A088", "#20D898", "#9BEFD9"]
-GIRL_S, LEAF_S, TURTLE_S, SNAKE_S = 0.70, 0.44, 0.66, 1.10
+GIRL_S, LEAF_S, TURTLE_S, SNAKE_S = 0.70, 0.62, 0.66, 1.10
 V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 52.0, 22.0
-EAT = 2.6                               # seconds the turtle spends on the leaf
+EAT = 2.6                            # seconds the turtle spends on the leaf
+LEAF_GAP = 44.0                      # it halts this far short, mouth on the leaf
+SNAKE_WAVE, SNAKE_WAVE_LEN = 6.0, 104.0   # slither: lift and wavelength
 
 # HUD star. The old one was a crop from the reference art, so it came out
 # tilted a few degrees and sat low beside the x N label. This is generated
@@ -610,10 +650,13 @@ def build_runner_panel(weeks, total=None):
                        [0.0, t_in, t_in + 0.06, t_out - 0.45, t_out, T], T)
         inner = ""
         for svg, a, b in frames:
-            sv, sk = _keys(["0", "0", "1", "1", "0", "0"],
-                           [0.0, a, a + 0.02, b, b + 0.02, T], T)
+            # discrete: a frame is either on or off. Crossfading two of them
+            # left both half transparent for a moment, and with a bite every
+            # 0.3s that is what made the turtle look see-through all meal.
+            sv, sk = _keys(["0", "1", "0", "0"], [0.0, a, b, T], T)
             inner += (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s"'
-                      f' repeatCount="indefinite" values="{sv}" keyTimes="{sk}"/>{svg}</g>')
+                      f' repeatCount="indefinite" calcMode="discrete"'
+                      f' values="{sv}" keyTimes="{sk}"/>{svg}</g>')
         return (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s"'
                 f' repeatCount="indefinite" values="{ov}" keyTimes="{ok}"/>'
                 f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
@@ -639,7 +682,9 @@ def build_runner_panel(weeks, total=None):
         t_land2 = t2 + 1.6
         t_limb = t_land2 - 0.3          # head and legs are out before it moves off
         t_walk2 = t_land2 + 0.9
-        t_eat = (tx0 + V_TURTLE * t_walk2 - lx0 - V_LEAF * leaf_land) / (V_TURTLE - V_LEAF)
+        # solve for the moment its mouth, not its middle, reaches the leaf
+        t_eat = ((tx0 + V_TURTLE * t_walk2 - lx0 - V_LEAF * leaf_land
+                  - LEAF_GAP) / (V_TURTLE - V_LEAF))
         t_eat = min(max(t_eat, t_walk2 + 1.5), T - 22.0)
         eat_x = tx0 - V_TURTLE * (t_eat - t_walk2)
         t_resume = t_eat + EAT
@@ -676,28 +721,29 @@ def build_runner_panel(weeks, total=None):
         exit_x = hide_x - V_LIMP * max(0.0, T - 0.4 - t_crawl)
 
     if e1:
+        # it drifts along the ground until the turtle catches it up, then it
+        # sits still and loses a piece to every bite until there is none
+        leaf_x = eat_x - LEAF_GAP if e2 else lx0 - V_LEAF * (T - leaf_land)
         leaf_end = t_eat + EAT if e2 else T
-        leaf_rest = eat_x if e2 else lx0 - V_LEAF * (T - leaf_land)
+        bites = max(1, int(EAT / CHOMP)) if e2 else 0
         frames = [(sprite("leaf", 0, 0, scale=LEAF_S), t1,
-                   t_eat + EAT * 0.35 if e2 else T)]
-        if e2:                          # nibbled down to nothing while it is eaten
-            frames.append((sprite("leaf", 0, 0, scale=LEAF_S * 0.6),
-                           t_eat + EAT * 0.35, t_eat + EAT * 0.7))
-            frames.append((sprite("leaf", 0, 0, scale=LEAF_S * 0.28),
-                           t_eat + EAT * 0.7, leaf_end))
-            lpts = [(t1, e1["x"], e1["y"] + GCELL / 2),
-                    (t1 + 0.55, e1["x"] - 26.0, e1["y"] - 62.0),
-                    (t1 + 1.3, e1["x"] - 72.0, BASE - 34.0),
-                    (leaf_land, lx0, BASE),
-                    (t_eat, eat_x, BASE)]
-            if e2:  # tugged about while the turtle bites into it
-                for k in range(int(EAT / CHOMP)):
-                    lpts.append((t_eat + (k + 0.45) * CHOMP, eat_x - 5.0,
-                                 BASE - 4.0))
-                    lpts.append((t_eat + (k + 1.0) * CHOMP, eat_x, BASE))
-            lpts.append((T, leaf_rest, BASE))
-            pops.append(actor(frames, lpts, t1,
-                              min(T - 0.15, leaf_end + 0.1)))
+                   t_eat + CHOMP if e2 else T)]
+        for k in range(bites):
+            left = 1.0 - (k + 1.0) / bites
+            if left <= 0.02:
+                break
+            frames.append((sprite("leaf", 0, 0, scale=LEAF_S * left),
+                           t_eat + (k + 1.0) * CHOMP,
+                           min(leaf_end, t_eat + (k + 2.0) * CHOMP)))
+        lpts = [(t1, e1["x"], e1["y"] + GCELL / 2),
+                (t1 + 0.55, e1["x"] - 26.0, e1["y"] - 62.0),
+                (t1 + 1.3, e1["x"] - 72.0, BASE - 34.0),
+                (leaf_land, lx0, BASE)]
+        if e2:  # it settles exactly where the turtle's mouth will reach it
+            lpts.append((t_eat, leaf_x, BASE))
+            lpts.append((leaf_end, leaf_x, BASE))
+        lpts.append((T, leaf_x, BASE))
+        pops.append(actor(frames, lpts, t1, leaf_end))
 
     if e2:
         shell = sprite("shell", 0, 0, scale=TURTLE_S, flip=True)
@@ -727,12 +773,17 @@ def build_runner_panel(weeks, total=None):
                (t3 + 0.55, e3["x"] - 12.0, e3["y"] - 60.0),
                (t_land3, sx0, BASE),
                (t_slith, sx0, BASE)]
-        sx, st, up = sx0, t_slith, True     # a slither reads as a zig-zag from the side
-        while st < t_gone:
-            sx -= 44.0
-            st += 44.0 / V_SNAKE
-            pts.append((min(st, t_gone), max(sx, -240.0), BASE - 11.0 if up else BASE))
-            up = not up
+        # A slither is a smooth wave, not a pogo hop. Sample the path eight
+        # times per wavelength and lift the body on a cosine, so the belly
+        # keeps touching the ground and the path never shows a hard corner.
+        step = SNAKE_WAVE_LEN / 8.0
+        sx, st, k = sx0, t_slith, 0
+        while st < t_gone and sx > -240.0:
+            k += 1
+            sx -= step
+            st += step / V_SNAKE
+            lift = SNAKE_WAVE * 0.5 * (1.0 - math.cos(k * math.pi / 4.0))
+            pts.append((min(st, t_gone), max(sx, -240.0), BASE - lift))
         pts.append((T, max(sx, -240.0), BASE))
         pops.append(actor([(snake_hisser(), t3, T)], pts, t3, t_gone))
 
@@ -961,7 +1012,7 @@ CHOMP = 0.30  # seconds per bite: head into the leaf, then back up
 def chomp_frames(turt, t0, dur):
     """Head-down, head-up pairs, so the turtle visibly bites the leaf."""
     out, t = [], t0
-    bite = f'<g transform="translate(-13 8)">{turt}</g>'
+    bite = f'<g transform="translate(-18 10)">{turt}</g>'
     while t + CHOMP <= t0 + dur:
         out.append((bite, t, t + CHOMP * 0.45))
         out.append((turt, t + CHOMP * 0.45, t + CHOMP))
@@ -976,8 +1027,9 @@ SNAKE_REAR = 11.0  # degrees it rears back into each hiss
 def snake_hisser(scale=SNAKE_S, baseline=0.0):
     """Left-facing snake that leans in and flicks a forked tongue.
 
-    The art already gives it a short tongue; this one shoots out past that
-    and snaps back, so the hiss still reads at README size.
+    The tongue painted into the art is keyed out in art(), so this animated
+    one is the only tongue on screen. It starts from the spot the painted one
+    used to occupy and snaps back, so the hiss still reads at README size.
     """
     a = art().get("snake")
     if not a:
@@ -985,7 +1037,8 @@ def snake_hisser(scale=SNAKE_S, baseline=0.0):
     uri, w, h = a
     _USED["snake"] = (uri, w, h)
     sw, sh = w * scale, h * scale
-    mx, my = w * SNAKE_MOUTH[0], h * SNAKE_MOUTH[1]
+    mouth = _MOUTH.get("snake", SNAKE_MOUTH)  # where the painted tongue sat
+    mx, my = w * mouth[0], h * mouth[1]
     piv = f"{w / 2:.1f} {h:.1f}"
     tongue = (f'<g transform="translate({mx:.1f} {my:.1f})"><g>'
               f'<animateTransform attributeName="transform" type="scale"'
@@ -999,9 +1052,13 @@ def snake_hisser(scale=SNAKE_S, baseline=0.0):
             f' values="0 {piv};{-SNAKE_REAR:.1f} {piv};0 {piv}"'
             f' keyTimes="0;0.2;1" dur="{SNAKE_HISS}s"'
             f' repeatCount="indefinite"/>')
+    sway = (f'<animateTransform attributeName="transform" type="rotate"'
+            f' values="-2.6 {piv};2.6 {piv};-2.6 {piv}" keyTimes="0;0.5;1"'
+            f' dur="0.9s" calcMode="spline" repeatCount="indefinite"'
+            f' keySplines="0.4 0 0.6 1;0.4 0 0.6 1"/>')
     return (f'<g transform="translate({-sw / 2:.1f} {baseline - sh:.1f})'
-            f' scale({scale:.4f})"><g>{rear}'
-            f'<use xlink:href="#sp-snake"/>{tongue}</g></g>')
+            f' scale({scale:.4f})"><g>{sway}<g>{rear}'
+            f'<use xlink:href="#sp-snake"/>{tongue}</g></g></g>')
 
 
 if __name__ == "__main__":
