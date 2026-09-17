@@ -92,7 +92,6 @@ Media delivery fixes, workflow tuning, and the unglamorous parts that keep a cha
 
 - [Factor Forge](https://github.com/ananya-goswami/factor-forge) : LCM and HCF by prime factorisation
 - [Exponent Game](https://exponent-game.vercel.app/) : powers, made visual
-- [BODMAS Game](https://ananya-bodmas.vercel.app/) : order of operations
 - [Factorial Tiles](https://github.com/ananya-goswami/Factorial-Tiles) : polynomial factoring
 
 </td><td valign="top" width="33%">
