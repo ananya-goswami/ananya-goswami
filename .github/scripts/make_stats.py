@@ -319,6 +319,20 @@ _ART = None
 _MOUTH = {}  # sprite name -> keyed-out mouth, as fractions of the sprite
 
 
+def _feather(mask, radius=0.6):
+        """Soften a hard 0/255 cut into an anti-aliased edge.
+        
+            A flood-filled silhouette is a perfect binary mask, which reads as a
+                jagged, stair-stepped cutout once it is scaled down into the README.
+                    A touch of blur on just the alpha channel gives every sprite the same
+                        clean, anti-aliased edge as the rest of the reference art.
+                            """
+        import numpy as np
+        from PIL import Image, ImageFilter
+        soft = Image.fromarray(mask.astype("uint8"), "L").filter(ImageFilter.GaussianBlur(radius))
+        return np.asarray(soft, dtype=float)
+    
+
 def _silhouette(d, np, cut=24.0):
     """Solid alpha: only background reachable from the crop edge is cut away.
 
@@ -362,7 +376,7 @@ def _silhouette(d, np, cut=24.0):
     grown[:-1, :] |= outside[1:, :]
     grown[:, 1:] |= outside[:, :-1]
     grown[:, :-1] |= outside[:, 1:]
-    return np.where(grown & raw, 0.0, 255.0)
+    return _feather(np.where(grown & raw, 0.0, 255.0))
 
 def _keep_blobs(alpha, np, frac=0.06):
     """Drop detached specks, but keep every real piece of the sprite.
@@ -465,8 +479,8 @@ def art():
         if tongue and img.width and img.height:
             _MOUTH[name] = (tongue[0] / img.width, tongue[1] / img.height)
         buf = io.BytesIO()
-        flat = img.convert("RGB").quantize(colors=64, method=Image.FASTOCTREE).convert("RGBA")
-        flat.putalpha(img.getchannel("A").point(lambda v: 255 if v >= 128 else 0))
+        flat = img.convert("RGB").quantize(colors=96, method=Image.FASTOCTREE).convert("RGBA")
+        flat.putalpha(img.getchannel("A"))
         flat.save(buf, "PNG", optimize=True)
         _ART[name] = ("data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
                       img.width, img.height)
@@ -733,7 +747,7 @@ def build_runner_panel(weeks, total=None):
         leaf_end = t_eat + EAT if e2 else T
         bites = max(1, int(EAT / CHOMP)) if e2 else 0
         frames = [(sprite("leaf", 0, 0, scale=LEAF_S), t1,
-                   t_eat + CHOMP if e2 else T)]
+                   t_eat if e2 else T)]
         leaf_art = art().get("leaf")
         leaf_full_w = leaf_art[1] * LEAF_S if leaf_art else 0.0
         for k in range(bites):
@@ -744,8 +758,8 @@ def build_runner_panel(weeks, total=None):
             # eaten away. Scaling around the centre made the leaf retreat.
             mouth_anchor = leaf_full_w * (1.0 - left) / 2.0
             frames.append((sprite("leaf", mouth_anchor, 0, scale=LEAF_S * left),
-                           t_eat + (k + 1.0) * CHOMP,
-                           min(leaf_end, t_eat + (k + 2.0) * CHOMP)))
+                           t_eat + k * CHOMP,
+                           min(leaf_end, t_eat + (k + 1.0) * CHOMP)))
         lpts = [(t1, e1["x"], e1["y"] + GCELL / 2),
                 (t1 + 0.55, e1["x"] - 26.0, e1["y"] - 62.0),
                 (t1 + 1.3, e1["x"] - 72.0, BASE - 34.0),
@@ -795,7 +809,7 @@ def build_runner_panel(weeks, total=None):
             lift = SNAKE_WAVE * 0.5 * (1.0 - math.cos(k * math.pi / 6.0))
             pts.append((min(st, t_gone), max(sx, -240.0), BASE - lift))
         pts.append((T, max(sx, -240.0), BASE))
-        pops.append(actor([(snake_hisser(), t3, T)], pts, t3, t_gone))
+        pops.append(actor([(snake_hisser(begin=t_slith), t3, T)], pts, t3, t_gone))
 
     # ---- her ----
     girl = (f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
@@ -973,9 +987,9 @@ def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
 
 
 # ---------------------------------------------------------------- her run
-GIRL_HIP = 0.78       # fraction down her sprite where the legs start
-GIRL_SEAM = 0.80      # the torso is drawn this far down, hiding the joint
-GIRL_HIPX = 0.55      # where her hips sit across the sprite
+GIRL_HIP = 0.57       # fraction down her sprite where the legs start
+GIRL_SEAM = 0.60      # the torso is drawn this far down, hiding the joint
+GIRL_HIPX = 0.42      # where her hips sit across the sprite
 GIRL_SWING = 26.0     # degrees each leg swings from the hip
 GIRL_STEP = 0.42      # seconds for one full stride
 
@@ -1034,7 +1048,7 @@ def chomp_frames(turt, t0, dur):
 SNAKE_MOUTH = (0.03, 0.42)  # where its mouth sits across and down the sprite
 SNAKE_HISS = 1.8   # mostly quiet, followed by one quick tongue flick
 SNAKE_REAR = 7.0   # a small head-led recoil, not a full-body snap
-def snake_hisser(scale=SNAKE_S, baseline=0.0):
+def snake_hisser(scale=SNAKE_S, baseline=0.0, begin=0.0):
     """Left-facing snake that leans in and flicks a forked tongue.
 
     The tongue painted into the art is keyed out in art(), so this animated
@@ -1054,17 +1068,17 @@ def snake_hisser(scale=SNAKE_S, baseline=0.0):
               f'<animateTransform attributeName="transform" type="scale"'
               f' values="0 1;0 1;1 1;1 1;0 1;0 1"'
               f' keyTimes="0;0.67;0.75;0.82;0.90;1"'
-              f' dur="{SNAKE_HISS}s" repeatCount="indefinite"/>'
+              f' dur="{SNAKE_HISS}s" begin="{begin:.2f}s" repeatCount="indefinite"/>'
               f'<path d="M0 0L-14 -2M-14 -2L-24 -8M-14 -2L-24 4"'
               f' fill="none" stroke="#FF3B5C" stroke-width="3.4"'
               f' stroke-linecap="round"/></g></g>')
     rear = (f'<animateTransform attributeName="transform" type="rotate"'
             f' values="0 {piv};0 {piv};{-SNAKE_REAR:.1f} {piv};0 {piv};0 {piv}"'
-            f' keyTimes="0;0.66;0.76;0.91;1" dur="{SNAKE_HISS}s"'
+            f' keyTimes="0;0.66;0.76;0.91;1" dur="{SNAKE_HISS}s" begin="{begin:.2f}s"'
             f' repeatCount="indefinite"/>')
     sway = (f'<animateTransform attributeName="transform" type="rotate"'
             f' values="-3.8 {piv};3.8 {piv};-3.8 {piv}" keyTimes="0;0.5;1"'
-            f' dur="0.72s" calcMode="spline" repeatCount="indefinite"'
+            f' dur="{SNAKE_WAVE_LEN / V_SNAKE:.3f}s" begin="{begin:.2f}s" calcMode="spline" repeatCount="indefinite"'
             f' keySplines="0.4 0 0.6 1;0.4 0 0.6 1"/>')
     return (f'<g transform="translate({-sw / 2:.1f} {baseline - sh:.1f})'
             f' scale({scale:.4f})"><g>{sway}<g>{rear}'
