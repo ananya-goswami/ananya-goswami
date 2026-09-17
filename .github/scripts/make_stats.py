@@ -528,9 +528,9 @@ GROUND = 588.0                          # top of the ground line
 LEVELS = ["#06313E", "#128070", "#18A088", "#20D898", "#9BEFD9"]
 GIRL_S, LEAF_S, TURTLE_S, SNAKE_S = 0.70, 0.62, 0.66, 1.10
 V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 52.0, 22.0
-EAT = 2.6                            # seconds the turtle spends on the leaf
+EAT = 3.0                            # a readable set of bites, not a rapid flicker
 LEAF_GAP = 44.0                      # it halts this far short, mouth on the leaf
-SNAKE_WAVE, SNAKE_WAVE_LEN = 6.0, 104.0   # slither: lift and wavelength
+SNAKE_WAVE, SNAKE_WAVE_LEN = 8.0, 92.0    # low, quick travelling slither
 
 # HUD star. The old one was a crop from the reference art, so it came out
 # tilted a few degrees and sat low beside the x N label. This is generated
@@ -608,16 +608,22 @@ def build_runner_panel(weeks, total=None):
     run_v = f"{X0:.1f},{GROUND};{X1:.1f},{GROUND};{X1:.1f},{GROUND}"
     run_k = f"0;{RUN / T:.5f};1"
 
-    # ---- her jump: her head has to reach the underside of the square she hits ----
-    HEAD = GROUND - 115.0
-    JD = 0.95
+    # ---- Mario-style jump: crouch, fast take-off, hang, then a firm landing ----
+    # Use the displayed sprite height instead of a magic head position.  The
+    # peak is timed exactly when her horizontal centre passes under the block.
+    nominal_h = (ART_BOXES["girl"][3] - ART_BOXES["girl"][1]) * GIRL_S
+    HEAD = GROUND - nominal_h
+    JD = 1.08
     vals, keys = ["0,0"], [0.0]
     for e in events:
-        lift = min(190.0, max(34.0, HEAD + 8.0 - (e["y"] + GCELL)))
-        t0, t1 = e["t"] - JD / 2, e["t"] + JD / 2
-        for frac, part in ((0.0, 0.0), (0.3, 0.74), (0.5, 1.0), (0.7, 0.74), (1.0, 0.0)):
+        lift = min(184.0, max(38.0, HEAD - (e["y"] + GCELL)))
+        t0, t1 = e["t"] - JD * 0.54, e["t"] + JD * 0.46
+        jump = ((0.00, 0.0), (0.08, -5.0), (0.30, lift * 0.62),
+                (0.54, lift), (0.66, lift * 0.94), (0.84, lift * 0.48),
+                (0.96, -3.0), (1.00, 0.0))
+        for frac, part in jump:
             keys.append((t0 + frac * (t1 - t0)) / T)
-            vals.append(f"0,{-lift * part:.1f}")
+            vals.append(f"0,{-part:.1f}")
     keys.append(1.0)
     vals.append("0,0")
     for i in range(1, len(keys)):
@@ -728,11 +734,16 @@ def build_runner_panel(weeks, total=None):
         bites = max(1, int(EAT / CHOMP)) if e2 else 0
         frames = [(sprite("leaf", 0, 0, scale=LEAF_S), t1,
                    t_eat + CHOMP if e2 else T)]
+        leaf_art = art().get("leaf")
+        leaf_full_w = leaf_art[1] * LEAF_S if leaf_art else 0.0
         for k in range(bites):
             left = 1.0 - (k + 1.0) / bites
             if left <= 0.02:
                 break
-            frames.append((sprite("leaf", 0, 0, scale=LEAF_S * left),
+            # Keep the edge at the turtle's mouth fixed as the far side is
+            # eaten away. Scaling around the centre made the leaf retreat.
+            mouth_anchor = leaf_full_w * (1.0 - left) / 2.0
+            frames.append((sprite("leaf", mouth_anchor, 0, scale=LEAF_S * left),
                            t_eat + (k + 1.0) * CHOMP,
                            min(leaf_end, t_eat + (k + 2.0) * CHOMP)))
         lpts = [(t1, e1["x"], e1["y"] + GCELL / 2),
@@ -773,16 +784,15 @@ def build_runner_panel(weeks, total=None):
                (t3 + 0.55, e3["x"] - 12.0, e3["y"] - 60.0),
                (t_land3, sx0, BASE),
                (t_slith, sx0, BASE)]
-        # A slither is a smooth wave, not a pogo hop. Sample the path eight
-        # times per wavelength and lift the body on a cosine, so the belly
-        # keeps touching the ground and the path never shows a hard corner.
-        step = SNAKE_WAVE_LEN / 8.0
+        # Sample a travelling ground wave densely enough that the snake glides
+        # through a visible zig-zag instead of hopping between hard corners.
+        step = SNAKE_WAVE_LEN / 12.0
         sx, st, k = sx0, t_slith, 0
         while st < t_gone and sx > -240.0:
             k += 1
             sx -= step
             st += step / V_SNAKE
-            lift = SNAKE_WAVE * 0.5 * (1.0 - math.cos(k * math.pi / 4.0))
+            lift = SNAKE_WAVE * 0.5 * (1.0 - math.cos(k * math.pi / 6.0))
             pts.append((min(st, t_gone), max(sx, -240.0), BASE - lift))
         pts.append((T, max(sx, -240.0), BASE))
         pops.append(actor([(snake_hisser(), t3, T)], pts, t3, t_gone))
@@ -793,9 +803,7 @@ def build_runner_panel(weeks, total=None):
             f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
             f' repeatCount="indefinite" calcMode="linear" values="{jump_v}" keyTimes="{jump_k}"/>'
             f'<ellipse cx="0" cy="-4" rx="34" ry="7" fill="#000" fill-opacity=".35"/>'
-            f'<g><animateTransform attributeName="transform" type="translate" dur="0.42s"'
-            f' repeatCount="indefinite" values="0,0;0,-7;0,0" keyTimes="0;0.5;1"/>'
-            f'{girl_runner()}</g></g></g>')
+            f'{girl_runner()}</g></g>')
 
     # ---- scenery ----
     back = ""
@@ -1008,22 +1016,24 @@ def girl_runner(scale=GIRL_S, baseline=6.0):
 
 
 # ---------------------------------------------------------------- the cast
-CHOMP = 0.30  # seconds per bite: head into the leaf, then back up
+CHOMP = 0.50  # seconds per complete bite: reach, close, recover
 def chomp_frames(turt, t0, dur):
-    """Head-down, head-up pairs, so the turtle visibly bites the leaf."""
+    """Three readable poses per bite, without teleporting the whole turtle."""
     out, t = [], t0
-    bite = f'<g transform="translate(-18 10)">{turt}</g>'
+    reach = f'<g transform="translate(-4 2) rotate(-2 0 0)">{turt}</g>'
+    bite = f'<g transform="translate(-7 4) rotate(-4 0 0)">{turt}</g>'
     while t + CHOMP <= t0 + dur:
-        out.append((bite, t, t + CHOMP * 0.45))
-        out.append((turt, t + CHOMP * 0.45, t + CHOMP))
+        out.append((reach, t, t + CHOMP * 0.24))
+        out.append((bite, t + CHOMP * 0.24, t + CHOMP * 0.58))
+        out.append((turt, t + CHOMP * 0.58, t + CHOMP))
         t += CHOMP
     if t < t0 + dur:
         out.append((turt, t, t0 + dur))
     return out
 
 SNAKE_MOUTH = (0.03, 0.42)  # where its mouth sits across and down the sprite
-SNAKE_HISS = 1.15  # seconds for one flick of the tongue
-SNAKE_REAR = 11.0  # degrees it rears back into each hiss
+SNAKE_HISS = 1.8   # mostly quiet, followed by one quick tongue flick
+SNAKE_REAR = 7.0   # a small head-led recoil, not a full-body snap
 def snake_hisser(scale=SNAKE_S, baseline=0.0):
     """Left-facing snake that leans in and flicks a forked tongue.
 
@@ -1042,19 +1052,19 @@ def snake_hisser(scale=SNAKE_S, baseline=0.0):
     piv = f"{w / 2:.1f} {h:.1f}"
     tongue = (f'<g transform="translate({mx:.1f} {my:.1f})"><g>'
               f'<animateTransform attributeName="transform" type="scale"'
-              f' values="0 1;1 1;0.25 1;1 1;0 1;0 1"'
-              f' keyTimes="0;0.10;0.20;0.30;0.42;1"'
+              f' values="0 1;0 1;1 1;1 1;0 1;0 1"'
+              f' keyTimes="0;0.67;0.75;0.82;0.90;1"'
               f' dur="{SNAKE_HISS}s" repeatCount="indefinite"/>'
               f'<path d="M0 0L-14 -2M-14 -2L-24 -8M-14 -2L-24 4"'
               f' fill="none" stroke="#FF3B5C" stroke-width="3.4"'
               f' stroke-linecap="round"/></g></g>')
     rear = (f'<animateTransform attributeName="transform" type="rotate"'
-            f' values="0 {piv};{-SNAKE_REAR:.1f} {piv};0 {piv}"'
-            f' keyTimes="0;0.2;1" dur="{SNAKE_HISS}s"'
+            f' values="0 {piv};0 {piv};{-SNAKE_REAR:.1f} {piv};0 {piv};0 {piv}"'
+            f' keyTimes="0;0.66;0.76;0.91;1" dur="{SNAKE_HISS}s"'
             f' repeatCount="indefinite"/>')
     sway = (f'<animateTransform attributeName="transform" type="rotate"'
-            f' values="-2.6 {piv};2.6 {piv};-2.6 {piv}" keyTimes="0;0.5;1"'
-            f' dur="0.9s" calcMode="spline" repeatCount="indefinite"'
+            f' values="-3.8 {piv};3.8 {piv};-3.8 {piv}" keyTimes="0;0.5;1"'
+            f' dur="0.72s" calcMode="spline" repeatCount="indefinite"'
             f' keySplines="0.4 0 0.6 1;0.4 0 0.6 1"/>')
     return (f'<g transform="translate({-sw / 2:.1f} {baseline - sh:.1f})'
             f' scale({scale:.4f})"><g>{sway}<g>{rear}'
