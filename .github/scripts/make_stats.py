@@ -799,11 +799,9 @@ def build_runner_panel(weeks, total=None):
             f'{girl_runner(jump_windows, T)}</g></g>')
 
     # ---- scenery ----
+    # Bare skyline on purpose: the tiled sign boards and the grass tufts crowded
+    # the strip and pulled the eye away from her run, so only the stars stay.
     back = ""
-    for hx in range(40, VB_W, 244):
-        back += sprite("hill", hx + 120, GROUND + 2)
-    for gx in range(150, VB_W - 80, 302):
-        back += sprite("grass", gx, GROUND + 12)
 
     stars = ""
     for k in range(26):
