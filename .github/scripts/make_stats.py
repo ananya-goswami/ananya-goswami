@@ -299,13 +299,11 @@ def build_projects(index):
 ART_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
                         "assets", "image.png")
 ART_BOXES = {
-    "girl":   (636, 404, 786, 586),
     "turtle": (955, 505, 1086, 586),
     "shell":  (740, 258, 856, 332),
     "qblock": (752, 346, 840, 430),
     "leaf":   (1214, 316, 1332, 400),
-    "snake":  (1538, 300, 1652, 402),
-    "signL":  (108, 402, 312, 572),
+    "signL": (108, 402, 312, 572),
     "signR":  (1898, 402, 2088, 572),
     "hill":   (1655, 468, 1900, 588),
     "grass":  (1178, 530, 1264, 584),
@@ -454,30 +452,10 @@ def art():
             a = np.array(crop).astype(float)
             d = np.stack([np.linalg.norm(a - c, axis=2) for c in bg], axis=0).min(axis=0)
             alpha = _silhouette(d, np)
-            if name == "girl":  # drop the bubbles beside her shoes
-                alpha = _keep_blobs(alpha, np)
-            if name == "snake":
-                # The art paints a stubby red tongue onto the snake. Left in
-                # place it just sits there while the animated tongue flicks
-                # past it, so the snake reads as having two. Key the red out
-                # and remember where it was: that patch is the mouth, and the
-                # flick gets anchored to it.
-                red = ((a[:, :, 0] - np.maximum(a[:, :, 1], a[:, :, 2]) > 42)
-                       & (a[:, :, 0] > 96))
-                if red.any():
-                    ys, xs = np.nonzero(red)
-                    tongue = (float(xs.max()),
-                              float(ys.min() + ys.max()) / 2.0)
-                    alpha = np.where(red, 0.0, alpha)
-            img = Image.fromarray(np.dstack([a, alpha]).astype(np.uint8), "RGBA")
-            bb = img.getbbox()
-            if bb:
-                img = img.crop(bb)
-                if tongue:
-                    tongue = (max(0.0, tongue[0] - bb[0]),
-                              tongue[1] - bb[1])
-        if tongue and img.width and img.height:
-            _MOUTH[name] = (tongue[0] / img.width, tongue[1] / img.height)
+        img = Image.fromarray(np.dstack([a, alpha]).astype(np.uint8), "RGBA")
+        bb = img.getbbox()
+        if bb:
+            img = img.crop(bb)
         buf = io.BytesIO()
         flat = img.convert("RGB").quantize(colors=96, method=Image.FASTOCTREE).convert("RGBA")
         flat.putalpha(img.getchannel("A"))
@@ -540,7 +518,7 @@ PANEL = (33, 95, 2139, 627)
 GX0, GY0, GCELL, GPX, GPY = 85.0, 180.0, 26.0, 37.2, 36.5
 GROUND = 588.0                          # top of the ground line
 LEVELS = ["#06313E", "#128070", "#18A088", "#20D898", "#9BEFD9"]
-GIRL_S, LEAF_S, TURTLE_S, SNAKE_S = 0.70, 0.62, 0.66, 1.10
+LEAF_S, TURTLE_S, SNAKE_S = 0.62, 0.66, 1.10
 V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 52.0, 22.0
 EAT = 3.0                            # a readable set of bites, not a rapid flicker
 LEAF_GAP = 44.0                      # it halts this far short, mouth on the leaf
@@ -625,13 +603,14 @@ def build_runner_panel(weeks, total=None):
     # ---- Mario-style jump: crouch, fast take-off, hang, then a firm landing ----
     # Use the displayed sprite height instead of a magic head position.  The
     # peak is timed exactly when her horizontal centre passes under the block.
-    nominal_h = (ART_BOXES["girl"][3] - ART_BOXES["girl"][1]) * GIRL_S
-    HEAD = GROUND - nominal_h
+    HEAD = GROUND - GIRL_TARGET_H
     JD = 1.08
     vals, keys = ["0,0"], [0.0]
+    jump_windows = []
     for e in events:
         lift = min(184.0, max(38.0, HEAD - (e["y"] + GCELL)))
         t0, t1 = e["t"] - JD * 0.54, e["t"] + JD * 0.46
+        jump_windows.append((t0, t1))
         jump = ((0.00, 0.0), (0.08, -5.0), (0.30, lift * 0.62),
                 (0.54, lift), (0.66, lift * 0.94), (0.84, lift * 0.48),
                 (0.96, -3.0), (1.00, 0.0))
@@ -809,7 +788,7 @@ def build_runner_panel(weeks, total=None):
             lift = SNAKE_WAVE * 0.5 * (1.0 - math.cos(k * math.pi / 6.0))
             pts.append((min(st, t_gone), max(sx, -240.0), BASE - lift))
         pts.append((T, max(sx, -240.0), BASE))
-        pops.append(actor([(snake_hisser(begin=t_slith), t3, T)], pts, t3, t_gone))
+        pops.append(actor([("", t3, T)], pts, t3, t_gone))
 
     # ---- her ----
     girl = (f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
@@ -817,7 +796,7 @@ def build_runner_panel(weeks, total=None):
             f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
             f' repeatCount="indefinite" calcMode="linear" values="{jump_v}" keyTimes="{jump_k}"/>'
             f'<ellipse cx="0" cy="-4" rx="34" ry="7" fill="#000" fill-opacity=".35"/>'
-            f'{girl_runner()}</g></g>')
+            f'{girl_runner(jump_windows, T)}</g></g>')
 
     # ---- scenery ----
     back = ""
@@ -987,48 +966,107 @@ def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
 
 
 # ---------------------------------------------------------------- her run
-GIRL_HIP = 0.57       # fraction down her sprite where the legs start
-GIRL_SEAM = GIRL_HIP      # the torso is drawn this far down, hiding the joint
-GIRL_HIPX = 0.42      # where her hips sit across the sprite
-GIRL_SWING = 26.0     # degrees each leg swings from the hip
-GIRL_STEP = 0.42      # seconds for one full stride
+FRAME_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "assets")
+FRAME_BG = ((255, 255, 255),)
+GIRL_RUN_SEQ = ["girl_run_1.png", "girl_run_2.png", "girl_run_3.png",
+                "girl_run_4.png", "girl_run_5.png"]
+GIRL_JUMP_IMG = "girl_jump.png"
+GIRL_CROUCH_IMG = "girl_crouch_1.png"
+GIRL_TARGET_H = 128.0  # every frame is scaled to this displayed height
+GIRL_CYCLE = 0.60  # seconds for one full running-flipbook loop
+CROUCH_T = 0.14  # anticipation / landing squat either side of a jump
+_FRAMES = {}
 
+def _load_frame(fname):
+    """Cut one avatar frame out of its own white-background image,
+    keyed to transparency the same way the reference art is."""
+    if fname in _FRAMES:
+        return _FRAMES[fname]
+    try:
+        import base64, io
+        import numpy as np
+        from PIL import Image
+        img = Image.open(os.path.join(FRAME_DIR, fname)).convert("RGB")
+    except Exception as exc:
+        print("frame skipped", fname, exc)
+        return None
+    a = np.array(img).astype(float)
+    d = np.stack([np.linalg.norm(a - np.array(c, dtype=float), axis=2)
+                   for c in FRAME_BG], axis=0).min(axis=0)
+    alpha = _keep_blobs(_silhouette(d, np, cut=36.0), np, frac=0.02)
+    out = Image.fromarray(np.dstack([a, alpha]).astype(np.uint8), "RGBA")
+    bb = out.getbbox()
+    if bb:
+        out = out.crop(bb)
+    buf = io.BytesIO()
+    flat = out.convert("RGB").quantize(colors=96, method=Image.FASTOCTREE).convert("RGBA")
+    flat.putalpha(out.getchannel("A"))
+    flat.save(buf, "PNG", optimize=True)
+    uri = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    _FRAMES[fname] = (uri, out.width, out.height)
+    return _FRAMES[fname]
 
-def girl_leg(cid, ang, hx, hy):
-    # One leg, clipped out of her bitmap and swung from the hip.
-    a = f"{ang:.1f} {hx:.1f} {hy:.1f}"
-    b = f"{-ang:.1f} {hx:.1f} {hy:.1f}"
-    return (f'<g><animateTransform attributeName="transform" type="rotate"'
-            f' values="{a};{b};{a}" keyTimes="0;0.5;1" dur="{GIRL_STEP}s"'
-            f' repeatCount="indefinite"/>'
-            f'<g clip-path="url(#{cid})"><use xlink:href="#sp-girl"/></g></g>')
+def frame_use(fname):
+    """<use> for one girl sprite frame; registers it in <defs>."""
+    got = _load_frame(fname)
+    if not got:
+        return None
+    uri, w, h = got
+    fid = "gf_" + fname.replace(".", "_")
+    _USED[fid] = (uri, w, h)
+    return f'<use xlink:href="#sp-{fid}"/>', w, h
 
-
-def girl_runner(scale=GIRL_S, baseline=6.0):
-    # Her legs are two clipped pieces of the same bitmap, swung from the
-    # hip in opposite phase, so she strides instead of sliding along.
-    a = art().get("girl")
-    if not a:
-        return ""
-    uri, w, h = a
-    _USED["girl"] = (uri, w, h)
+def _pose_group(frame, values, keys, baseline, T):
+    use, w, h = frame
+    scale = GIRL_TARGET_H / h
     sw, sh = w * scale, h * scale
-    hx, hy = w * GIRL_HIPX, h * GIRL_HIP
-    seam = h * GIRL_SEAM
-    clips = (f'<clipPath id="g-top"><rect x="-6" y="-6"'
-             f' width="{w + 12:.1f}" height="{seam + 6:.1f}"/></clipPath>'
-             f'<clipPath id="g-legL"><rect x="-6" y="{hy:.1f}"'
-             f' width="{hx + 6:.1f}" height="{h - hy + 12:.1f}"/></clipPath>'
-             f'<clipPath id="g-legR"><rect x="{hx:.1f}" y="{hy:.1f}"'
-             f' width="{w - hx + 6:.1f}" height="{h - hy + 12:.1f}"/></clipPath>')
-    body = '<g clip-path="url(#g-top)"><use xlink:href="#sp-girl"/></g>'
-    return (clips + f'<g transform="translate({-sw / 2:.1f}'
-            f' {baseline - sh:.1f}) scale({scale:.4f})">'
-            + body + girl_leg("g-legL", GIRL_SWING, hx, hy)
-            + girl_leg("g-legR", -GIRL_SWING, hx, hy)
-            + '</g>')
+    return (f'<g transform="translate({-sw / 2:.1f} {baseline - sh:.1f}) scale({scale:.4f})" opacity="0">'
+            f'<animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
+            f' calcMode="discrete" values="{values}" keyTimes="{keys}"/>{use}</g>')
 
-
+def girl_runner(jump_windows, T, baseline=6.0):
+    """Flip through her real running frames, with a crouch/jump pose
+    swapped in on top whenever she is airborne - no more slicing and
+    rotating pieces of one static image."""
+    n = len(GIRL_RUN_SEQ)
+    seg = GIRL_CYCLE / n
+    run_svg = ""
+    for i, fname in enumerate(GIRL_RUN_SEQ):
+        frame = frame_use(fname)
+        if not frame:
+            continue
+        u, w, h = frame
+        scale = GIRL_TARGET_H / h
+        a0, b0 = i * seg, (i + 1) * seg
+        sv, sk = _keys(["0", "1", "0", "0"], [0.0, a0, b0, GIRL_CYCLE], GIRL_CYCLE)
+        sw, sh = w * scale, h * scale
+        run_svg += (f'<g transform="translate({-sw / 2:.1f} {baseline - sh:.1f}) scale({scale:.4f})" opacity="0">'
+                    f'<animate attributeName="opacity" dur="{GIRL_CYCLE:.3f}s"'
+                    f' repeatCount="indefinite" calcMode="discrete"'
+                    f' values="{sv}" keyTimes="{sk}"/>{u}</g>')
+    overlay = ""
+    if jump_windows:
+        jump = frame_use(GIRL_JUMP_IMG)
+        crouch = frame_use(GIRL_CROUCH_IMG)
+        if jump:
+            times, vj, vc = [0.0], ["0"], ["0"]
+            for t0, t1 in jump_windows:
+                c1 = min(t0 + CROUCH_T, t1)
+                c2 = max(t1 - CROUCH_T, c1)
+                times += [t0, c1, c2, t1]
+                vj += ["0", "1", "1", "0"]
+                vc += ["1", "0", "0", "1"]
+            times.append(T)
+            vj.append("0")
+            vc.append("0")
+            jv, jk = _keys(vj, times, T)
+            cv, ck = _keys(vc, times, T)
+            overlay = _pose_group(jump, jv, jk, baseline, T)
+            if crouch:
+                overlay += _pose_group(crouch, cv, ck, baseline, T)
+    return run_svg + overlay
+    
+                 
 # ---------------------------------------------------------------- the cast
 CHOMP = 0.90  # seconds per complete bite: reach, close, recover
 def chomp_frames(turt, t0, dur):
@@ -1044,45 +1082,6 @@ def chomp_frames(turt, t0, dur):
     if t < t0 + dur:
         out.append((turt, t, t0 + dur))
     return out
-
-SNAKE_MOUTH = (0.03, 0.42)  # where its mouth sits across and down the sprite
-SNAKE_HISS = 1.8   # mostly quiet, followed by one quick tongue flick
-SNAKE_REAR = 7.0   # a small head-led recoil, not a full-body snap
-def snake_hisser(scale=SNAKE_S, baseline=0.0, begin=0.0):
-    """Left-facing snake that leans in and flicks a forked tongue.
-
-    The tongue painted into the art is keyed out in art(), so this animated
-    one is the only tongue on screen. It starts from the spot the painted one
-    used to occupy and snaps back, so the hiss still reads at README size.
-    """
-    a = art().get("snake")
-    if not a:
-        return ""
-    uri, w, h = a
-    _USED["snake"] = (uri, w, h)
-    sw, sh = w * scale, h * scale
-    mouth = _MOUTH.get("snake", SNAKE_MOUTH)  # where the painted tongue sat
-    mx, my = w * mouth[0], h * mouth[1]
-    piv = f"{w / 2:.1f} {h:.1f}"
-    tongue = (f'<g transform="translate({mx:.1f} {my:.1f})"><g>'
-              f'<animateTransform attributeName="transform" type="scale"'
-              f' values="0 1;0 1;1 1;1 1;0 1;0 1"'
-              f' keyTimes="0;0.67;0.75;0.82;0.90;1"'
-              f' dur="{SNAKE_HISS}s" begin="{begin:.2f}s" repeatCount="indefinite"/>'
-              f'<path d="M0 0L-20 -3M-20 -3L-34 -11M-20 -3L-34 6"'
-              f' fill="none" stroke="#FF3B5C" stroke-width="4.6"'
-              f' stroke-linecap="round"/></g></g>')
-    rear = (f'<animateTransform attributeName="transform" type="rotate"'
-            f' values="0 {piv};0 {piv};{-SNAKE_REAR:.1f} {piv};0 {piv};0 {piv}"'
-            f' keyTimes="0;0.66;0.76;0.91;1" dur="{SNAKE_HISS}s" begin="{begin:.2f}s"'
-            f' repeatCount="indefinite"/>')
-    sway = (f'<animateTransform attributeName="transform" type="rotate"'
-            f' values="-3.8 {piv};3.8 {piv};-3.8 {piv}" keyTimes="0;0.5;1"'
-            f' dur="{SNAKE_WAVE_LEN / V_SNAKE:.3f}s" begin="{begin:.2f}s" calcMode="spline" repeatCount="indefinite"'
-            f' keySplines="0.4 0 0.6 1;0.4 0 0.6 1"/>')
-    return (f'<g transform="translate({-sw / 2:.1f} {baseline - sh:.1f})'
-            f' scale({scale:.4f})"><g>{sway}<g>{rear}'
-            f'<use xlink:href="#sp-snake"/>{tongue}</g></g></g>')
 
 
 if __name__ == "__main__":
