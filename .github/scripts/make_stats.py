@@ -319,7 +319,7 @@ _ART = None
 _MOUTH = {}  # sprite name -> keyed-out mouth, as fractions of the sprite
 
 
-def _feather(mask, radius=0.6):
+def _feather(mask, radius=0.9):
         """Soften a hard 0/255 cut into an anti-aliased edge.
         
             A flood-filled silhouette is a perfect binary mask, which reads as a
@@ -378,7 +378,7 @@ def _silhouette(d, np, cut=24.0):
     grown[:, :-1] |= outside[:, 1:]
     return _feather(np.where(grown & raw, 0.0, 255.0))
 
-def _keep_blobs(alpha, np, frac=0.06):
+def _keep_blobs(alpha, np, frac=0.015):
     """Drop detached specks, but keep every real piece of the sprite.
 
     The art sets sparkle bubbles beside her shoes. Nothing links them to
@@ -1024,9 +1024,9 @@ def girl_runner(scale=GIRL_S, baseline=6.0):
     body = '<g clip-path="url(#g-top)"><use xlink:href="#sp-girl"/></g>'
     return (clips + f'<g transform="translate({-sw / 2:.1f}'
             f' {baseline - sh:.1f}) scale({scale:.4f})">'
-            + girl_leg("g-legL", GIRL_SWING, hx, hy)
+            + body + girl_leg("g-legL", GIRL_SWING, hx, hy)
             + girl_leg("g-legR", -GIRL_SWING, hx, hy)
-            + body + '</g>')
+            + '</g>')
 
 
 # ---------------------------------------------------------------- the cast
@@ -1034,8 +1034,8 @@ CHOMP = 0.50  # seconds per complete bite: reach, close, recover
 def chomp_frames(turt, t0, dur):
     """Three readable poses per bite, without teleporting the whole turtle."""
     out, t = [], t0
-    reach = f'<g transform="translate(-4 2) rotate(-2 0 0)">{turt}</g>'
-    bite = f'<g transform="translate(-7 4) rotate(-4 0 0)">{turt}</g>'
+    reach = f'<g transform="translate(-9 5) rotate(-5 0 0)">{turt}</g>'
+    bite = f'<g transform="translate(-17 9) rotate(-9 0 0)">{turt}</g>'
     while t + CHOMP <= t0 + dur:
         out.append((reach, t, t + CHOMP * 0.24))
         out.append((bite, t + CHOMP * 0.24, t + CHOMP * 0.58))
@@ -1069,8 +1069,8 @@ def snake_hisser(scale=SNAKE_S, baseline=0.0, begin=0.0):
               f' values="0 1;0 1;1 1;1 1;0 1;0 1"'
               f' keyTimes="0;0.67;0.75;0.82;0.90;1"'
               f' dur="{SNAKE_HISS}s" begin="{begin:.2f}s" repeatCount="indefinite"/>'
-              f'<path d="M0 0L-14 -2M-14 -2L-24 -8M-14 -2L-24 4"'
-              f' fill="none" stroke="#FF3B5C" stroke-width="3.4"'
+              f'<path d="M0 0L-20 -3M-20 -3L-34 -11M-20 -3L-34 6"'
+              f' fill="none" stroke="#FF3B5C" stroke-width="4.6"'
               f' stroke-linecap="round"/></g></g>')
     rear = (f'<animateTransform attributeName="transform" type="rotate"'
             f' values="0 {piv};0 {piv};{-SNAKE_REAR:.1f} {piv};0 {piv};0 {piv}"'
