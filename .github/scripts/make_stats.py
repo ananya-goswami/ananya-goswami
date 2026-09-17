@@ -988,7 +988,7 @@ def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
 
 # ---------------------------------------------------------------- her run
 GIRL_HIP = 0.57       # fraction down her sprite where the legs start
-GIRL_SEAM = 0.60      # the torso is drawn this far down, hiding the joint
+GIRL_SEAM = GIRL_HIP      # the torso is drawn this far down, hiding the joint
 GIRL_HIPX = 0.42      # where her hips sit across the sprite
 GIRL_SWING = 26.0     # degrees each leg swings from the hip
 GIRL_STEP = 0.42      # seconds for one full stride
@@ -1030,7 +1030,7 @@ def girl_runner(scale=GIRL_S, baseline=6.0):
 
 
 # ---------------------------------------------------------------- the cast
-CHOMP = 0.50  # seconds per complete bite: reach, close, recover
+CHOMP = 0.90  # seconds per complete bite: reach, close, recover
 def chomp_frames(turt, t0, dur):
     """Three readable poses per bite, without teleporting the whole turtle."""
     out, t = [], t0
