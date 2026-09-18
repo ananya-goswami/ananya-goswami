@@ -365,42 +365,30 @@ def sprite_defs():
 
 
 # ---------------------------------------------------------------- sprite sheet
-# The generated transparent atlas holds complete, isolated frames. Its turtle
-# sequence is deliberately split into shell fall, emergence, four-legged walk,
-# eating, and hide/re-emerge states so the story never relies on one ambiguous
-# pose doing two jobs.
+# The reference atlas holds complete flipbooks for the avatar, turtle, leaf,
+# and snake. Timing code below gives each pose one logical job.
 SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
                           "assets", "sprite-sheet.png")
-SHEET_PAD = 0          # transparent atlas cells must never bleed into neighbours
+SHEET_BG = (0, 26, 28)
+SHEET_PAD = 3
 # The ground line each panel of the sheet is drawn on. Frames keep their own
 # distance from it, so a jump frame really does sit higher than a run frame.
-SHEET_BASE = {"avatar": 284.0, "turtle": 484.0, "lettuce": 678.0, "snake": 879.0}
-
-
-def _atlas_frames(centres, y0, y1, half):
-    """Uniform transparent cells around the generated atlas' sprite centres."""
-    return [(c - half, y0, c + half, y1, c) for c in centres]
-
-
+SHEET_BASE = {"avatar": 221.0, "turtle": 454.0, "lettuce": 665.0, "snake": 884.0}
 # row: (panel, [(x0, y0, x1, y1, centre line of the body), ...])
 SHEET_ROWS = {
-    "run": ("avatar", _atlas_frames([102, 210, 310, 404, 502, 604, 706, 810], 80, 285, 51)),
-    "jump": ("avatar", _atlas_frames([912, 1017, 1133, 1229], 80, 285, 51)),
-    "hit": ("avatar", _atlas_frames([1017, 1133, 1229], 80, 285, 51)),
-    "land": ("avatar", _atlas_frames([1364, 1476, 1581], 80, 285, 51)),
-    "tshell": ("turtle", _atlas_frames([47, 115, 183], 405, 485, 34)),
-    "temerge": ("turtle", _atlas_frames([254, 325, 394, 466], 405, 485, 32)),
-    # These two atlas poses are the clean, non-overlapping diagonal leg pairs.
-    # Alternating them gives a readable four-leg gait without neighbour bleed.
-    "twalk": ("turtle", _atlas_frames([466, 538], 405, 485, 32)),
-    "teat": ("turtle", _atlas_frames([1096, 1172, 1242, 1313, 1384, 1384], 405, 485, 32)),
-    "thide": ("turtle", _atlas_frames([1465, 1536, 1619], 405, 485, 34)),
-    "lpop": ("lettuce", _atlas_frames([624, 728], 580, 679, 42)),
-    "lfall": ("lettuce", _atlas_frames([728, 836, 945], 580, 679, 42)),
-    "lslide": ("lettuce", _atlas_frames([1047], 580, 679, 42)),
-    "sslith": ("snake", _atlas_frames([104, 271, 433, 594, 756, 918, 1087], 770, 880, 80)),
-    "stongue": ("snake", _atlas_frames([1260], 770, 880, 80)),
-    "scont": ("snake", _atlas_frames([1087, 918], 770, 880, 80)),
+    "run": ("avatar", [(22, 113, 98, 217, 60), (100, 114, 175, 215, 137), (177, 113, 250, 217, 213), (251, 113, 326, 207, 288), (326, 109, 401, 216, 363), (405, 110, 480, 214, 442), (484, 109, 559, 213, 521), (564, 111, 637, 209, 600)]),
+    "jump": ("avatar", [(748, 134, 819, 217, 783), (830, 100, 902, 217, 866), (914, 106, 986, 217, 950), (995, 127, 1066, 216, 1030)]),
+    "hit": ("avatar", [(1106, 120, 1179, 218, 1142), (1190, 111, 1261, 217, 1225), (1274, 122, 1351, 216, 1312)]),
+    "land": ("avatar", [(1397, 134, 1469, 217, 1433), (1488, 136, 1560, 217, 1524), (1571, 115, 1646, 217, 1608)]),
+    "twalk": ("turtle", [(33, 393, 103, 446, 68), (125, 399, 193, 447, 159), (208, 393, 279, 446, 243), (296, 398, 364, 446, 330), (382, 393, 451, 446, 416), (466, 396, 532, 446, 499)]),
+    "teat": ("turtle", [(566, 407, 607, 451, 586), (620, 401, 690, 449, 655), (740, 402, 811, 450, 775), (833, 406, 904, 450, 868), (925, 417, 957, 449, 941), (1028, 380, 1102, 449, 1065)]),
+    "thide": ("turtle", [(1143, 393, 1215, 447, 1179), (1231, 399, 1295, 448, 1263), (1317, 401, 1372, 449, 1344), (1402, 409, 1461, 448, 1431), (1488, 407, 1548, 449, 1518), (1578, 398, 1641, 448, 1609)]),
+    "lpop": ("lettuce", [(467, 609, 500, 649, 483), (555, 591, 600, 656, 577)]),
+    "lfall": ("lettuce", [(685, 612, 723, 652, 704), (777, 607, 814, 648, 795), (872, 606, 910, 648, 891)]),
+    "lslide": ("lettuce", [(1286, 621, 1330, 659, 1308)]),
+    "sslith": ("snake", [(27, 812, 135, 878, 81), (155, 815, 252, 880, 203), (264, 816, 363, 880, 313), (377, 815, 473, 879, 425), (488, 811, 593, 877, 540), (610, 811, 715, 877, 662), (731, 814, 837, 877, 784), (851, 810, 958, 878, 904)]),
+    "stongue": ("snake", [(1006, 814, 1121, 878, 1063), (1145, 806, 1261, 879, 1203)]),
+    "scont": ("snake", [(1349, 812, 1446, 879, 1397), (1465, 814, 1561, 878, 1513)]),
 }
 _SHEET = None
 
@@ -421,18 +409,19 @@ def sheet():
         import base64, io
         import numpy as np
         from PIL import Image
-        src = Image.open(SHEET_PATH).convert("RGBA")
+        src = Image.open(SHEET_PATH).convert("RGB")
     except Exception as exc:
         print("sheet skipped:", exc)
         return _SHEET
+    bg = np.array(SHEET_BG, dtype=float)
     for row, (panel, frames) in SHEET_ROWS.items():
         base_y = SHEET_BASE[panel]
         for i, (x0, y0, x1, y1, ax) in enumerate(frames):
             cx0, cy0 = x0 - SHEET_PAD, y0 - SHEET_PAD
             crop = src.crop((cx0, cy0, x1 + SHEET_PAD, y1 + SHEET_PAD))
-            a = np.array(crop)
-            # The regenerated atlas has real transparency; preserve it exactly.
-            img = Image.fromarray(a.astype(np.uint8), "RGBA")
+            a = np.array(crop).astype(float)
+            alpha = _silhouette(np.linalg.norm(a - bg, axis=2), np, cut=10.0)
+            img = Image.fromarray(np.dstack([a, alpha]).astype(np.uint8), "RGBA")
             buf = io.BytesIO()
             flat = img.convert("RGB").quantize(colors=96, method=Image.FASTOCTREE).convert("RGBA")
             flat.putalpha(img.getchannel("A"))
@@ -550,8 +539,8 @@ LEVELS = ["#06313E", "#128070", "#18A088", "#20D898", "#9BEFD9"]
 # Every sprite comes off the sheet at its drawn size, so one scale per
 # character is all that is needed to land it at the size the panel used before.
 GIRL_TARGET_H = 128.0                # her displayed height, unchanged
-GIRL_S = GIRL_TARGET_H / 205.0       # regenerated avatar cells are 205px tall
-TURTLE_S, LEAF_S, SNAKE_S = 0.95, 0.62, 0.70
+GIRL_S = GIRL_TARGET_H / 104.0
+TURTLE_S, LEAF_S, SNAKE_S = 1.00, 0.82, 0.92
 V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 48.0, 22.0
 EAT = 3.0                            # a readable set of bites, not a rapid flicker
 LEAF_GAP = 39.0                      # smaller leaf halts with its edge at the mouth
@@ -683,7 +672,7 @@ def build_runner_panel(weeks, total=None):
                 continue
             cells.append(qblock(x + GCELL / 2, y + GCELL / 2, e["t"], T))
 
-    def moving(inner, pts, t_in, t_out):
+    def moving(inner, pts, t_in, t_out, fade=0.45):
         """Carry one already-animated character along pts: [(t, x, y)], in order.
 
         Its frames run on their own clocks inside `inner`, so this only has to
@@ -693,7 +682,7 @@ def build_runner_panel(weeks, total=None):
         times = [0.0] + [t for t, _, _ in pts] + [T]
         mv, mk = _keys(vals, times, T)
         ov, ok = _keys(["0", "0", "1", "1", "0", "0"],
-                       [0.0, t_in, t_in + 0.06, t_out - 0.45, t_out, T], T)
+                       [0.0, t_in, t_in + 0.06, t_out - fade, t_out, T], T)
         return (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s"'
                 f' repeatCount="indefinite" values="{ov}" keyTimes="{ok}"/>'
                 f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
@@ -739,7 +728,9 @@ def build_runner_panel(weeks, total=None):
 
     if e3:
         t3 = e3["t"]
-        sx0 = e3["x"] - 30.0
+        # Land far enough left that the faster snake catches the turtle while
+        # both are still clearly visible, not at the edge of the panel.
+        sx0 = e3["x"] - 150.0
         t_land3 = t3 + 1.5
         t_slith = t_land3 + 0.5
         t_gone = min(T - 0.5, t_slith + (sx0 + 240.0) / V_SNAKE)
@@ -761,29 +752,24 @@ def build_runner_panel(weeks, total=None):
         exit_x = hide_x - V_LIMP * max(0.0, T - 0.4 - t_crawl)
 
     # A bite is the turtle lowering its head and closing on the leaf. The leaf
-    # stays put during the meal, becomes smaller after each bite, then vanishes.
+    # stays put through the approach, then the authored bite frames take over.
     APPROACH, LOWER, BITE, HAPPY = 0.50, 0.45, 0.45, 0.70
-    bite1 = t_eat + APPROACH + LOWER + BITE if e2 else 0.0
-    bite2 = bite1 + LOWER + BITE if e2 else 0.0
+    MEAL_WEIGHTS = [APPROACH, LOWER, BITE, BITE, HAPPY]
+    leaf_handoff = (t_eat + EAT * APPROACH / sum(MEAL_WEIGHTS)) if e2 else T
+    crumb_start = (t_eat + EAT * (APPROACH + LOWER) / sum(MEAL_WEIGHTS)) if e2 else T
+    happy_start = (t_eat + EAT * sum(MEAL_WEIGHTS[:-1]) / sum(MEAL_WEIGHTS)) if e2 else T
     if e1:
         # it drifts along the ground until the turtle catches it up, then it
         # sits still and loses a piece to every bite until there is none
         leaf_x = eat_x - LEAF_GAP if e2 else lx0 - V_LEAF * (T - leaf_land)
-        leaf_end = bite2 + 0.16 if e2 else T
+        leaf_end = leaf_handoff + 0.06 if e2 else T
         leaf = (sequence(sheet_row("lpop", LEAF_S), t1, t1 + 0.55, T)
                 + sequence(sheet_row("lfall", LEAF_S), t1 + 0.55, leaf_land, T))
         # Once it touches the ground, keep one fixed side facing the viewer.
         # Position animation carries this frame left; no flipping or rotation.
         grounded_leaf = sheet_use("lslide", 0, LEAF_S)
         if e2:
-            full_w = (SHEET_ROWS["lslide"][1][0][2] - SHEET_ROWS["lslide"][1][0][0])
-            half_s, crumb_s = LEAF_S * 0.58, LEAF_S * 0.24
-            half_dx = full_w * (LEAF_S - half_s) / 2.0
-            crumb_dx = full_w * (LEAF_S - crumb_s) / 2.0
-            leaf += sequence([grounded_leaf], leaf_land, bite1, T)
-            leaf += sequence([sheet_use("lslide", 0, half_s, dx=half_dx)], bite1, bite2, T)
-            leaf += sequence([sheet_use("lslide", 0, crumb_s, dx=crumb_dx)],
-                             bite2, leaf_end, T)
+            leaf += sequence([grounded_leaf], leaf_land, leaf_handoff, T)
         else:
             leaf += sequence([grounded_leaf], leaf_land, T, T)
         lpts = [(t1, e1["x"], e1["y"] + GCELL / 2),
@@ -794,7 +780,7 @@ def build_runner_panel(weeks, total=None):
             lpts.append((t_eat, leaf_x, BASE))
             lpts.append((leaf_end, leaf_x, BASE))
         lpts.append((T, leaf_x, BASE))
-        pops.append(moving(leaf, lpts, t1, leaf_end))
+        pops.append(moving(leaf, lpts, t1, leaf_end, fade=0.06))
 
     if e2:
         walk = flipbook(sheet_row("twalk", TURTLE_S), WALK_CYCLE)
@@ -806,23 +792,28 @@ def build_runner_panel(weeks, total=None):
                (t_resume, eat_x, BASE)]
         # It falls as a closed shell, lands, extends its head and all four legs,
         # then walks. The walking loop is gated off during every other state.
-        states = sequence(sheet_row("tshell", TURTLE_S), turtle_in, t_land2, T)
-        states += sequence(sheet_row("temerge", TURTLE_S), t_land2, t_walk2, T)
-        # approach, mouth open, first bite, chew, second bite, satisfied finish
-        states += sequence(sheet_row("teat", TURTLE_S),
+        states = sequence(sheet_row("thide", TURTLE_S, only=(4, 3, 4)),
+                          turtle_in, t_land2, T)
+        states += sequence(sheet_row("thide", TURTLE_S, only=(3, 2, 1, 0)),
+                           t_land2, t_walk2, T)
+        # Approach, mouth open, two bite poses, then the happy-heart pose. Frame
+        # 4 is leaf-only, so it is layered separately instead of replacing him.
+        states += sequence(sheet_row("teat", TURTLE_S, only=(1, 2, 3, 3, 5)),
                         t_eat, t_resume, T,
-                        weights=[APPROACH, LOWER, BITE, LOWER, BITE, HAPPY])
+                        weights=MEAL_WEIGHTS)
+        states += sequence([sheet_use("teat", 4, TURTLE_S, dx=-LEAF_GAP + 2.0)],
+                           crumb_start, happy_start, T)
         quiet = [(turtle_in, t_walk2), (t_eat, t_resume)]
         if e3:
             pts += [(t_hide, hide_x, BASE), (t_crawl, hide_x, BASE),
                     (T - 0.4, exit_x, BASE), (T, exit_x, BASE)]
             # head and all four legs go in fast, the closed shell sits out the
             # snake, then everything comes back out and it plods on
-            shut = t_hide + 0.26
-            states += sequence(sheet_row("thide", TURTLE_S, only=(0, 1)),
+            shut = t_hide + 0.34
+            states += sequence(sheet_row("thide", TURTLE_S, only=(0, 1, 2, 3)),
                                t_hide, shut, T)
-            states += sequence([sheet_use("thide", 1, TURTLE_S)], shut, t_pass, T)
-            states += sequence(sheet_row("thide", TURTLE_S, only=(0, 2)),
+            states += sequence([sheet_use("thide", 4, TURTLE_S)], shut, t_pass, T)
+            states += sequence(sheet_row("thide", TURTLE_S, only=(3, 2, 1, 5)),
                                t_pass, t_emerge, T)
             quiet.append((t_hide, t_emerge))
         else:
@@ -854,7 +845,7 @@ def build_runner_panel(weeks, total=None):
         tongue = sheet_row("stongue", SNAKE_S)
         snake = flipbook(slither + tongue + tongue[::-1] + sheet_row("scont", SNAKE_S),
                          SLITHER_CYCLE,
-                         weights=[1.0] * 7 + [2.8, 2.8, 1.0, 1.0])
+                         weights=[1.0] * 8 + [2.0, 2.8, 2.8, 2.0, 1.0, 1.0])
         pops.append(moving(snake, pts, t3, t_gone))
 
     # ---- her ----
