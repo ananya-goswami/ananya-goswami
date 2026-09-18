@@ -46,6 +46,7 @@ HEAD = """<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="706" view
   <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse"><path d="M34 0H0V34" fill="none" stroke="#00FF9C" stroke-opacity=".04"/></pattern>
   <rect id="d" width="1.25" height="1.25" fill="#CFF3FF"/>
   <rect id="e" width="1.9" height="1.9" fill="#9BE7C4"/>
+  <clipPath id="pan"><rect x="39" y="89" width="440" height="580" rx="8"/></clipPath>
 </defs>
 <style>.rv { opacity: 1 }</style>
 
@@ -206,9 +207,9 @@ def mask_points(im):
 def sym_code():
     """</> - the games and tools are all hand-written browser code."""
     im, d = raster()
-    stroke(d, [(38, 24), (11, 50), (38, 76)], 6.5)
-    stroke(d, [(60, 17), (40, 83)], 6.5)
-    stroke(d, [(62, 24), (89, 50), (62, 76)], 6.5)
+    stroke(d, [(36, 25), (13, 50), (36, 75)], 6.4)
+    stroke(d, [(57, 16), (43, 84)], 6.4)
+    stroke(d, [(64, 25), (87, 50), (64, 75)], 6.4)
     return im
 
 
@@ -238,14 +239,20 @@ def sym_cap():
 def sym_flow():
     """The automation side: one hub, three things hanging off it."""
     im, d = raster()
-    hub = (50, 50)
+    hub, hub_r, node_r = (50, 50), 13.0, 10.0
     nodes = [(16, 26), (84, 26), (50, 84)]
+    # Run each link between the two rings rather than centre to centre, so no
+    # stray dots end up floating inside a node.
     for n in nodes:
-        stroke(d, [hub, n], 2.6)
-    ring(d, hub[0], hub[1], 12.5, 3.4)
+        ux, uy = n[0] - hub[0], n[1] - hub[1]
+        L = math.hypot(ux, uy)
+        ux, uy = ux / L, uy / L
+        stroke(d, [(hub[0] + ux * hub_r, hub[1] + uy * hub_r),
+                   (n[0] - ux * node_r, n[1] - uy * node_r)], 3.8)
+    ring(d, hub[0], hub[1], hub_r, 3.6)
     for n in nodes:
-        ring(d, n[0], n[1], 9.5, 3.2)
-    disc(d, hub[0], hub[1], 4.0)
+        ring(d, n[0], n[1], node_r, 3.4)
+    disc(d, hub[0], hub[1], 4.2)
     return im
 
 
@@ -364,9 +371,9 @@ def tiles_svg(pts, cx, cy):
         my = sum(p[1] for p in cell) / len(cell)
         dx, dy = mx - cx, my - cy
         dist = math.hypot(dx, dy) or 1.0
-        reach = 26.0 + dist * 0.62
-        ox = dx / dist * reach + RNG.uniform(-7, 7)
-        oy = dy / dist * reach + RNG.uniform(-7, 7) - 6.0
+        reach = min(18.0 + dist * 0.34, 62.0)
+        ox = dx / dist * reach + RNG.uniform(-6, 6)
+        oy = dy / dist * reach + RNG.uniform(-6, 6) - 5.0
 
         # A little per-fragment slack on the timing keeps the break-up from
         # happening on one frame, which is what made it read as a cross-fade.
@@ -432,7 +439,10 @@ def main():
     shapes = [place(fn(), N_PARTICLES) for fn in SYMBOLS]
 
     kt_p = [0, K[1], 0.205, 0.855, K[10], 0.910, 1]
+    # Fragments travel far enough to clear the face; the clip keeps the ones
+    # that overshoot from spilling onto the SYSTEM.INFO column next door.
     body = [
+        '<g clip-path="url(#pan)">',
         '<g transform="translate(44.0 115.1) scale(1.604)" shape-rendering="crispEdges">',
         *tiles_svg(pts, cx, cy),
         '</g>',
@@ -443,6 +453,7 @@ def main():
         f' dur="{LOOP}s" begin="{BEGIN}s" repeatCount="indefinite"'
         f' calcMode="spline" keySplines="{splines(6)}"/>',
         *particles_svg(home, shapes),
+        '</g>',
         '</g>',
     ]
 
