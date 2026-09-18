@@ -33,7 +33,7 @@ import math
 import os
 import random
 
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw
 
 HEAD = """<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="706" viewBox="0 0 1180 706"
      font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace"
@@ -116,7 +116,8 @@ TAIL = """
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MASK = os.path.join(ROOT, "assets", "portrait-mask.png")
-OUT = os.path.join(ROOT, "assets", "hero-v14.svg")
+REF = os.path.join(ROOT, "assets", "portrait-colour.png")
+OUT = os.path.join(ROOT, "assets", "hero-v15.svg")
 
 RNG = random.Random(7)
 
@@ -249,11 +250,12 @@ def mask_points(im):
 
 
 # ----------------------------------------------------------------- symbols
-# The run of the working day: open the terminal, write it, build it with a
-# framework, check it against the design, bundle it, commit it, automate round
-# it, put the data somewhere, ship it.  Figma sits mid-set rather than first
-# because the avatar hands straight over to whatever opens the loop, and that
-# wants to be the work itself.  Every mark has to survive being redrawn as 1550
+# The run of the working day: write it, build it with a framework, check it
+# against the design, bundle it, commit it, automate round it, put the data
+# somewhere, ship it - and the terminal it is all driven from, which closes
+# the loop and hands back to her.  Neither Figma nor the terminal opens the
+# set, because the avatar hands straight over to the first mark and that
+# wants to be the work rather than a tool.  Every mark has to survive being redrawn as 1550
 # dots, and that test shapes how each one is drawn.  Fine detail does not
 # survive it - the Octocat loses its silhouette, so GitHub is the branch
 # glyph.  Some tools have no mark anyone reads out of context at all, which is
@@ -397,7 +399,6 @@ def sym_ship():
 # It is also where the tools with no usable mark get named outright.
 DIM = "#31514c"                 # the separator between tools in a caption
 SYMBOLS = [
-    (sym_term, [("claude code", "#D97757"), (" \u00b7 ", DIM), ("codex", "#C9CDD4")]),
     (sym_code, [("html", "#E34F26"), (" \u00b7 ", DIM), ("css", "#4A9BE0"),
                 (" \u00b7 ", DIM), ("javascript", "#F7DF1E")]),
     (sym_react, [("react", "#61DAFB"), (" \u00b7 ", DIM), ("typescript", "#5A9BE0")]),
@@ -408,68 +409,40 @@ SYMBOLS = [
                 (" \u00b7 ", DIM), ("railway", "#B49BEA")]),
     (sym_data, [("postgres", "#4A8BC9"), (" \u00b7 ", DIM), ("indexeddb", "#7FB3E0")]),
     (sym_ship, [("vercel", "#FFFFFF"), (" \u00b7 ", DIM), ("netlify", "#00C7B7")]),
+    (sym_term, [("claude code", "#D97757"), (" \u00b7 ", DIM), ("codex", "#C9CDD4")]),
 ]
 IDLE = "standby"                # shown while the avatar, not a symbol, is up
 
 
 # ------------------------------------------------------------------ colour
-# The stipple is one bit deep, but how densely its dots sit is the tone of the
-# photo it was made from, so a blur of the mask recovers a usable greyscale.
-# What it cannot recover is hue: that is keyed on here by region, with the
-# ramps below and a handful of features placed by hand.
+# The avatar is coloured from the photo it was dithered out of, not from a
+# palette anyone guessed at.  assets/portrait-colour.png is her GitHub avatar
+# resampled onto the stipple's own grid - found by correlating the two, which
+# lines up at 0.87 - so this only has to read a colour per pixel.
 #
-# The ramps are deliberately flat.  Dot density already carries the tone, so
-# mapping tone to brightness a second time squares it and crushes everything
-# to mud - the first pass at this looked burnt for exactly that reason.  They
-# move in hue far more than in luminance.
-SKIN = [(0.00, "#C99A80"), (0.30, "#E3B99E"), (0.55, "#F2D2B8"),
-        (0.78, "#FAE4D2"), (1.00, "#FFF4EC")]
-HAIR = [(0.00, "#262B3C"), (0.40, "#3A4159"), (0.72, "#565F80"), (1.00, "#8089AD")]
-COAT = [(0.00, "#22335A"), (0.40, "#334E88"), (0.75, "#4A6DAE"), (1.00, "#6E93D4")]
-SHIRT = [(0.00, "#BFCDDE"), (0.45, "#DCE6F2"), (1.00, "#FFFFFF")]
-LIP = [(0.00, "#9C4148"), (0.40, "#BC6165"), (0.75, "#D3837C"), (1.00, "#E8A79D")]
-IRIS = [(0.00, "#3A2113"), (0.50, "#5E3620"), (1.00, "#8C5730")]
+# What it does have to do is fix the brightness.  How densely the dots sit is
+# already the tone of the photo, so painting them in the photo's own luminance
+# squares it: hair at a tenth brightness drawn a tenth as densely disappears,
+# and the face goes to paper.  That is what made the earlier pass look like a
+# ghost.  The curve below flattens luminance hard - LO is the floor even pure
+# black is lifted to - and keeps the hue and saturation untouched, so density
+# carries the shading and the photo carries the colour.
+LO, HI, GAMMA, SAT = 0.22, 1.0, 0.52, 1.10
 
-BLUSH = (228, 122, 118)
-SCLERA = (236, 244, 255)
-LINER = (14, 14, 22)
-PUPIL = (22, 13, 9)
-WHITE = (255, 255, 255)
-BROW = (13, 12, 18)
-
-# Read off the portrait itself.  The eyes in particular have to be tight: a
-# generous ellipse puts the sclera on the eyelid and the whole eye reads as a
-# cold smudge across the socket.
-FACE = (145, 139, 61, 81)               # the head, as an ellipse
-NECK = (99, 173, 194, 318)              # neck and chest, as a box
-SHIRT_BOX = (111, 170, 297, 340)
-COAT_EDGE = (214, 42)                   # where the jacket fades in, and over what
+# Placed against the recovered tone, and kept light: the photo already has her
+# make-up in it, so these only lift what is there.  The eyes are the exception
+# worth the trouble - both sit in shadow, and at this dot size they close up to
+# a smudge without a brighter white and a catchlight.
 EYES = ((134, 137, 17, 5.6), (187, 137, 13.5, 5.4))
-BROWS = ((128, 120, 30, 7), (185, 121, 24, 6))
-MOUTH = (147, 189, 26, 8)
 CHEEKS = ((107, 166), (191, 159))
-
-
-def _rgb(h):
-    h = h.lstrip("#")
-    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+SCLERA = (238, 245, 255)
+GLINT = (255, 255, 255)
+BLUSH = (232, 126, 120)
 
 
 def _smooth(a):
     a = 0.0 if a < 0 else (1.0 if a > 1 else a)
     return a * a * (3 - 2 * a)
-
-
-def _ramp(t, stops):
-    if t <= stops[0][0]:
-        return _rgb(stops[0][1])
-    for i in range(len(stops) - 1):
-        a, b = stops[i][0], stops[i + 1][0]
-        if a <= t <= b:
-            u = (t - a) / max(b - a, 1e-6)
-            ca, cb = _rgb(stops[i][1]), _rgb(stops[i + 1][1])
-            return tuple(ca[c] + (cb[c] - ca[c]) * u for c in range(3))
-    return _rgb(stops[-1][1])
 
 
 def _mix(base, top, w):
@@ -483,60 +456,47 @@ def _ell(x, y, cx, cy, rx, ry, feather=0.18):
     return _smooth((1.0 + feather - d) / feather)
 
 
-def _band(v, lo, hi, feather):
-    return _smooth((v - lo) / feather) * _smooth((hi - v) / feather)
-
-
 def paint(mask, pts):
-    """A colour for every lit pixel of the portrait.
-
-    Only the lit pixels are visited - about 15.5k of the 88k on the canvas -
-    which is why this stays plain Python instead of pulling in numpy.
-    """
-    blur = mask.filter(ImageFilter.GaussianBlur(2.4))
-    lo, hi = blur.getextrema()
-    span = max(hi - lo, 1)
-    tp = blur.load()
-
+    """A colour for every lit pixel of the portrait."""
+    ref = Image.open(REF).convert("RGB").load()
     out = {}
     for x, y in pts:
-        t = min(1.0, (tp[x, y] - lo) / span * 1.06)
+        r, g, b = ref[x, y]
 
-        skin = max(_ell(x, y, *FACE, 0.16),
-                   _band(x, NECK[0], NECK[1], 13) * _band(y, NECK[2], NECK[3], 15))
-        shirt = (_band(x, SHIRT_BOX[0], SHIRT_BOX[1], 10)
-                 * _band(y, SHIRT_BOX[2], SHIRT_BOX[3], 11) * _smooth((t - 0.48) / 0.18))
-        coat = _smooth((y - COAT_EDGE[0]) / COAT_EDGE[1])
+        # Her hair is shot against a lilac backdrop and the fine strands let it
+        # through, so the avatar is violet where the cut-out the stipple came
+        # from is hair.  The density there is a real highlight and worth
+        # keeping; only the colour is wrong.
+        #
+        # Two casts to catch, and both have to miss the navy of the jacket and
+        # the warmth of her skin.  Lilac leaves green the darkest channel, which
+        # skin never does (blue is) and navy never does (red is).  The paler
+        # wash at the crown is blue-led but bright and almost grey, where the
+        # jacket is blue-led and dark.  Caught pixels lose the cast and some of
+        # the lift, so the crown reads as sheen on black hair rather than a halo.
+        mx, mn = max(r, g, b), min(r, g, b)
+        lit = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
+        if (g < r and g < b) or (b >= r and b >= g and lit > 0.28
+                                 and (mx - mn) / max(mx, 1) < 0.50):
+            v = lit * 255.0 * 0.76
+            r, g, b = v * 1.06, v * 0.97, v * 0.93
 
-        c = _ramp(t, HAIR)
-        c = _mix(c, _ramp(t, COAT), coat)
-        c = _mix(c, _ramp(t, SKIN), skin)
-        c = _mix(c, _ramp(t, SHIRT), shirt)
+        lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
+        k = (LO + (HI - LO) * (max(lum, 0.0) ** GAMMA)) / max(lum, 0.004)
+        c = [r * k, g * k, b * k]
+        grey = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+        c = [grey + (v - grey) * SAT for v in c]
 
-        c = _mix(c, _ramp(t, LIP), _ell(x, y, *MOUTH, 0.16) * skin * 0.55)
+        for cx, cy in CHEEKS:
+            c = _mix(c, BLUSH, _ell(x, y, cx, cy, 26, 21, 0.9) * 0.10)
 
-        for bx, by in CHEEKS:
-            w = _ell(x, y, bx, by, 26, 21, 0.9) * skin * _smooth((t - 0.5) / 0.3)
-            c = _mix(c, BLUSH, w * 0.20)
-
-        # Both eyes sit in shadow, so keying them off tone alone leaves them a
-        # dark smudge.  They are built from the geometry instead - sclera,
-        # iris, pupil, lash line, catchlight - which reads bright and open.
         for cx, cy, rx, ry in EYES:
             eye = _ell(x, y, cx, cy, rx, ry, 0.13)
             if eye <= 0:
                 continue
             iris = _ell(x, y, cx, cy, 6.0, 5.2, 0.22)
-            c = _mix(c, SCLERA, eye * (1 - iris) * 0.80)
-            c = _mix(c, _ramp(min(1.0, t * 0.5 + 0.35), IRIS), eye * iris * 0.90)
-            c = _mix(c, PUPIL, _ell(x, y, cx, cy, 2.6, 2.4, 0.35) * 0.88)
-            c = _mix(c, LINER, eye * _ell(x, y, cx, cy - ry * 0.80,
-                                          rx * 1.02, ry * 0.60, 0.30) * 0.90)
-            c = _mix(c, WHITE, _ell(x, y, cx + 2.4, cy - 1.5, 1.9, 1.6, 0.5) * 0.92)
-
-        for bx, by, brx, bry in BROWS:
-            c = _mix(c, BROW, _ell(x, y, bx, by, brx, bry, 0.45)
-                     * _smooth((0.46 - t) / 0.3) * 0.8)
+            c = _mix(c, SCLERA, eye * (1 - iris) * 0.55)
+            c = _mix(c, GLINT, _ell(x, y, cx + 2.4, cy - 1.5, 1.9, 1.6, 0.5) * 0.85)
 
         out[(x, y)] = tuple(max(0, min(255, int(round(v)))) for v in c)
     return out
