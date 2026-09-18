@@ -117,7 +117,7 @@ TAIL = """
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MASK = os.path.join(ROOT, "assets", "portrait-mask.png")
 REF = os.path.join(ROOT, "assets", "portrait-colour.png")
-OUT = os.path.join(ROOT, "assets", "hero-v20.svg")
+OUT = os.path.join(ROOT, "assets", "hero-v21.svg")
 
 RNG = random.Random(7)
 
@@ -680,19 +680,26 @@ COMET_TINTS = ("ice", "mint", "iris")
 def comet_defs():
     """One reusable comet, drawn head at the origin with its tail along -x.
 
+    The tail is a filled taper, not a stroked line.  A constant-width stroke
+    with a gradient on it reads as a laser: the edge stays hard all the way out
+    and the head sits on it like a bead.  This one is two quadratics meeting at
+    a point, so it is widest at the head and fades to nothing, and the head is a
+    tight core rather than a blob.
+
     The glow is two gradients rather than a blur filter.  A feGaussianBlur on
-    fourteen moving groups is re-rasterised every frame for something that is
-    never more than a few pixels across; a radial halo behind the head and a
-    linear fade down the tail cost nothing and render the same everywhere.
+    ten moving groups is re-rasterised every frame for something that is never
+    more than a few pixels across; a radial halo behind the head and a linear
+    fade down the tail cost nothing and render the same everywhere.
 
     The tail gradient is in user space, not on the bounding box: the tail is a
     horizontal line, so its box has no height, and a bounding-box gradient on
     that is undefined and drops out in some renderers.
     """
     out = ['<radialGradient id="halo">'
-           '<stop offset="0" stop-color="#FFFFFF" stop-opacity=".85"/>'
-           '<stop offset="0.3" stop-color="#DFF6FF" stop-opacity=".38"/>'
-           '<stop offset="1" stop-color="#9BE7C4" stop-opacity="0"/></radialGradient>']
+           '<stop offset="0" stop-color="#FFFFFF" stop-opacity=".95"/>'
+           '<stop offset="0.18" stop-color="#EAF7FF" stop-opacity=".55"/>'
+           '<stop offset="0.45" stop-color="#A8DBFF" stop-opacity=".17"/>'
+           '<stop offset="1" stop-color="#7FB8FF" stop-opacity="0"/></radialGradient>']
     for name, mid, far in (("ice", "#CFF3FF", "#7FD8FF"),
                            ("mint", "#B8F5D8", "#4FE0A8"),
                            ("iris", "#DCCFFF", "#9B7FF0")):
@@ -700,15 +707,15 @@ def comet_defs():
             f'<linearGradient id="t{name}" gradientUnits="userSpaceOnUse"'
             f' x1="-100" y1="0" x2="0" y2="0">'
             f'<stop offset="0" stop-color="{far}" stop-opacity="0"/>'
-            f'<stop offset="0.55" stop-color="{mid}" stop-opacity=".30"/>'
-            f'<stop offset="0.86" stop-color="{mid}" stop-opacity=".70"/>'
-            f'<stop offset="1" stop-color="#FFFFFF" stop-opacity="1"/></linearGradient>')
+            f'<stop offset="0.45" stop-color="{far}" stop-opacity=".09"/>'
+            f'<stop offset="0.78" stop-color="{mid}" stop-opacity=".28"/>'
+            f'<stop offset="0.95" stop-color="{mid}" stop-opacity=".60"/>'
+            f'<stop offset="1" stop-color="#F2FBFF" stop-opacity=".88"/></linearGradient>')
         out.append(
             f'<g id="c{name}">'
-            f'<path d="M-100 0L-2 0" stroke="url(#t{name})" stroke-width="1.5"'
-            f' stroke-linecap="round" fill="none"/>'
-            f'<circle r="6.5" fill="url(#halo)"/>'
-            f'<circle r="1.35" fill="#FFFFFF"/></g>')
+            f'<path d="M0 -1.45Q-30 -0.85 -100 0Q-30 0.85 0 1.45Z" fill="url(#t{name})"/>'
+            f'<circle r="4.1" fill="url(#halo)"/>'
+            f'<circle r="0.95" fill="#FFFFFF"/></g>')
     return out
 
 
@@ -726,7 +733,7 @@ def comets_svg():
     for i in range(n):
         big = (i == 3)
         if big:
-            scale, alpha, cross = 2.5, 1.0, 5.5
+            scale, alpha, cross = 1.75, 1.0, 5.5
         else:
             # most sit far back; a couple come closer
             z = RNG.choice([0.34, 0.40, 0.46, 0.52, 0.60, 0.72, 0.95, 1.20])
@@ -736,9 +743,11 @@ def comets_svg():
             # thing that can say they are further off is taking longer over it.
             cross = 11.5 - 5.0 * min(z, 1.2) / 1.2
 
-        # Right to left, every one of them, with only enough tilt to keep the
-        # tracks from lying on top of each other.  180 degrees is due left.
-        ang = math.radians(RNG.uniform(158, 202))
+        # Right to left, on one heading.  The earlier spread ran from 158 to 202
+        # degrees, which is left-and-down for half of them and left-and-up for
+        # the other half - two directions, however narrow the band.  A meteor
+        # shower is parallel; these are too, give or take three degrees.
+        ang = math.radians(RNG.uniform(165, 171))
         dx, dy = math.cos(ang), math.sin(ang)
         off = RNG.uniform(-250, 250)
         px, py = -dy * off, dx * off
