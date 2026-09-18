@@ -365,21 +365,17 @@ def sprite_defs():
 
 
 # ---------------------------------------------------------------- sprite sheet
-# The reference atlas holds complete flipbooks for the avatar, turtle, leaf,
-# and snake. Timing code below gives each pose one logical job.
+# The atlas holds the turtle, the leaf and the snake. She is not cut from it
+# any more - see "her, in blocks" below for why - so the avatar rows are gone.
 SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
                           "assets", "sprite-sheet.png")
 SHEET_BG = (0, 26, 28)
 SHEET_PAD = 3
 # The ground line each panel of the sheet is drawn on. Frames keep their own
 # distance from it, so a jump frame really does sit higher than a run frame.
-SHEET_BASE = {"avatar": 221.0, "turtle": 454.0, "lettuce": 665.0, "snake": 884.0}
+SHEET_BASE = {"turtle": 454.0, "lettuce": 665.0, "snake": 884.0}
 # row: (panel, [(x0, y0, x1, y1, centre line of the body), ...])
 SHEET_ROWS = {
-    "run": ("avatar", [(22, 113, 98, 217, 60), (100, 114, 175, 215, 137), (177, 113, 250, 217, 213), (251, 113, 326, 207, 288), (326, 109, 401, 216, 363), (405, 110, 480, 214, 442), (484, 109, 559, 213, 521), (564, 111, 637, 209, 600)]),
-    "jump": ("avatar", [(748, 134, 819, 217, 783), (830, 100, 902, 217, 866), (914, 106, 986, 217, 950), (995, 127, 1066, 216, 1030)]),
-    "hit": ("avatar", [(1106, 120, 1179, 218, 1142), (1190, 111, 1261, 217, 1225), (1274, 122, 1351, 216, 1312)]),
-    "land": ("avatar", [(1397, 134, 1469, 217, 1433), (1488, 136, 1560, 217, 1524), (1571, 115, 1646, 217, 1608)]),
     "twalk": ("turtle", [(33, 393, 103, 446, 68), (125, 399, 193, 447, 159), (208, 393, 279, 446, 243), (296, 398, 364, 446, 330), (382, 393, 451, 446, 416), (466, 396, 532, 446, 499)]),
     "teat": ("turtle", [(566, 407, 607, 451, 586), (620, 401, 690, 449, 655), (740, 402, 811, 450, 775), (833, 406, 904, 450, 868), (925, 417, 957, 449, 941), (1028, 380, 1102, 449, 1065)]),
     "thide": ("turtle", [(1143, 393, 1215, 447, 1179), (1231, 399, 1295, 448, 1263), (1317, 401, 1372, 449, 1344), (1402, 409, 1461, 448, 1431), (1488, 407, 1548, 449, 1518), (1578, 398, 1641, 448, 1609)]),
@@ -1063,42 +1059,189 @@ def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
             f' values="{qv}" keyTimes="{qk}"/>?</text></g></g>')
 
 
-# ---------------------------------------------------------------- her run
-# How the jump window is shared out. She rises through the four jump frames,
-# strikes the block at the top over the three hit frames, and comes down through
-# the three landing frames; the run cycle takes over again the moment she lands.
-JUMP_W = [3.0, 3.0, 3.0, 3.0] + [1.3, 1.3, 1.3] + [2.7, 2.7, 2.7]
+# ---------------------------------------------------------------- her, in blocks
+# The sheet's eight run frames have no gait in them: the same leg is in front in
+# every one of them and the back foot never travels, so she could only ever
+# scrabble on the spot. Built out of blocks she is not a picture any more, she
+# is parts on joints, and the cycle is then right by construction - each leg
+# swings from in front of her through to behind her and back, the arms answer
+# the opposite leg, and the jump is the same parts held at different angles.
+#
+# Proportions are Minecraft's: an 8x8 head, a 12-tall body, 12-tall limbs, 32
+# units tall all told, so one block pixel is GIRL_TARGET_H / 32.
+MCP = GIRL_TARGET_H / 32.0
+MC_HAIR = "#12182B"
+MC_CAP = "#2C3D66"
+MC_BRIM = "#1F2C4C"
+MC_LOGO = "#4AE3C8"
+MC_SKIN = "#F0C7A0"
+MC_COAT = "#27334F"
+MC_COLLAR = "#31405F"
+MC_TRIM = "#3CEDA5"
+MC_LEG = "#191F38"
+MC_SHOE = "#EDF1F6"
+MC_DEEP = 0.62                  # the far arm and leg, seen past her, are dimmer
 
-# The sheet's eight run frames are not in gait order: taken as drawn, the foot
-# carrying her weight goes rear, front, front, rear, rear, rear, rear, front,
-# so she never reads as taking alternate steps. Measured off the sprites, the
-# frames sort into two clean steps - one on each foot - either side of the one
-# frame where both shoes overlap under her, which is the passing pose:
-#   front foot down: 8 (widest), 2, 3 (closing) -> 7 (passing)
-#   rear  foot down: 4 (widest), 6, 5 (closing) -> 7 (passing)
-RUN_ORDER = (7, 1, 2, 6, 3, 5, 4, 6)
-RUN_BOB = 7.0                        # she is 128 tall; a run lifts about 5%
+LEG_W, LEG_H = 4.0 * MCP, 12.0 * MCP
+ARM_W, ARM_H = 4.0 * MCP, 11.0 * MCP
+BODY_W, BODY_H = 6.0 * MCP, 12.0 * MCP
+HEAD_W, HEAD_H = 8.0 * MCP, 8.0 * MCP
+HIP_Y = -12.0 * MCP             # everything is measured up from her feet
+SHOULDER_Y = -23.0 * MCP
+BODY_TOP = -24.0 * MCP
+HEAD_TOP = -32.0 * MCP
+SWING_LEG, SWING_ARM = 34.0, 26.0    # degrees either side of straight down
+
+
+def _dim(col, f):
+    """A darker shade of a colour, for the limbs on her far side."""
+    r, g, b = (int(col[i:i + 2], 16) for i in (1, 3, 5))
+    return "#%02x%02x%02x" % (int(r * f), int(g * f), int(b * f))
+
+
+def _blk(x, y, w, h, fill):
+    return (f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}"'
+            f' fill="{fill}"/>')
+
+
+def _mc_leg(far=False):
+    """A leg hanging from its hip at the origin, shoe on the end."""
+    coat, shoe = (MC_LEG, MC_SHOE)
+    if far:
+        coat, shoe = _dim(coat, MC_DEEP), _dim(shoe, MC_DEEP)
+    sh = 2.6 * MCP
+    return (_blk(-LEG_W / 2, 0, LEG_W, LEG_H - sh, coat)
+            + _blk(-LEG_W / 2, LEG_H - sh, LEG_W + 1.7 * MCP, sh, shoe))
+
+
+def _mc_arm(far=False):
+    """An arm hanging from its shoulder at the origin, hand on the end."""
+    coat, skin = (MC_COAT, MC_SKIN)
+    if far:
+        coat, skin = _dim(coat, MC_DEEP), _dim(skin, MC_DEEP)
+    hand = 2.2 * MCP
+    return (_blk(-ARM_W / 2, 0, ARM_W, ARM_H - hand, coat)
+            + _blk(-ARM_W / 2, ARM_H - hand, ARM_W, hand, skin))
+
+
+def _mc_torso():
+    """Body and head, facing right. Drawn once; only the limbs move."""
+    x0 = -BODY_W / 2
+    out = _blk(x0, BODY_TOP, BODY_W, BODY_H, MC_COAT)
+    out += _blk(x0, BODY_TOP, BODY_W, 1.6 * MCP, MC_COLLAR)
+    out += _blk(x0 + BODY_W - 1.1 * MCP, BODY_TOP + 2.2 * MCP,
+                1.1 * MCP, BODY_H - 4.4 * MCP, MC_TRIM)          # the zip
+    # her hair falls behind her, past the shoulder
+    out += _blk(x0 - 2.6 * MCP, HEAD_TOP + 4.6 * MCP,
+                3.6 * MCP, 15.0 * MCP, MC_HAIR)
+    hx = -HEAD_W / 2
+    out += _blk(hx, HEAD_TOP, HEAD_W, HEAD_H, MC_HAIR)           # head, hair side
+    out += _blk(hx + 4.2 * MCP, HEAD_TOP + 2.4 * MCP,
+                3.8 * MCP, 5.0 * MCP, MC_SKIN)                   # face
+    out += _blk(hx + 4.2 * MCP, HEAD_TOP + 2.4 * MCP,
+                1.0 * MCP, 1.4 * MCP, MC_HAIR)                   # fringe
+    out += _blk(hx + 5.9 * MCP, HEAD_TOP + 4.0 * MCP,
+                1.3 * MCP, 1.5 * MCP, "#20263C")                 # eye
+    out += _blk(hx + 5.9 * MCP, HEAD_TOP + 6.4 * MCP,
+                1.6 * MCP, 0.6 * MCP, "#C98B7A")                 # mouth
+    out += _blk(hx - 0.4 * MCP, HEAD_TOP - 0.4 * MCP,
+                HEAD_W + 0.8 * MCP, 2.6 * MCP, MC_CAP)           # cap
+    out += _blk(hx + HEAD_W + 0.4 * MCP, HEAD_TOP + 0.9 * MCP,
+                3.0 * MCP, 1.7 * MCP, MC_BRIM)                   # brim, pointing the way she runs
+    d = 1.5 * MCP                                                # the diamond on the cap
+    cx, cy = hx + 2.6 * MCP, HEAD_TOP + 1.0 * MCP
+    out += (f'<rect x="{cx - d / 2:.1f}" y="{cy - d / 2:.1f}" width="{d:.1f}"'
+            f' height="{d:.1f}" fill="{MC_LOGO}"'
+            f' transform="rotate(45 {cx:.1f} {cy:.1f})"/>')
+    return out
+
+
+def _mc_plant(cycle, amp, steps=12):
+    """Drop the figure by exactly as much as the swung legs shorten her.
+
+    A leg turned `t` off vertical only reaches LEG_H*cos(t) down, so with both
+    legs out she is LEG_H*(1-cos amp) shorter than standing. Lowering her by
+    that much is what keeps the planted foot on the ground rather than skimming
+    above it, and it produces the rise and fall of a walk for free.
+    """
+    vals, keys = [], []
+    for k in range(steps + 1):
+        f = k / steps                       # half a cycle: both legs pass square once
+        ang = math.radians(amp * math.cos(math.pi * f))
+        vals.append(f"0 {LEG_H * (1.0 - math.cos(ang)):.2f}")
+        keys.append(f"{f:.4f}")
+    return (f'<animateTransform attributeName="transform" type="translate"'
+            f' dur="{cycle / 2.0:.3f}s" repeatCount="indefinite" calcMode="linear"'
+            f' values="{";".join(vals)}" keyTimes="{";".join(keys)}"/>')
+
+
+def _swing(inner, cycle, amp, back_first):
+    """Hang a limb off its joint and swing it, one full pass per cycle."""
+    a, b = (amp, -amp) if back_first else (-amp, amp)
+    return (f'<g><animateTransform attributeName="transform" type="rotate"'
+            f' values="{a:.0f};{b:.0f};{a:.0f}" keyTimes="0;0.5;1"'
+            f' calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"'
+            f' dur="{cycle:.3f}s" repeatCount="indefinite"/>{inner}</g>')
+
+
+def _held(inner, deg):
+    return f'<g transform="rotate({deg:.0f})">{inner}</g>'
+
+
+def _mc_figure(near_leg, far_leg, near_arm, far_arm, baseline):
+    """Stack the parts back to front, feet on `baseline`."""
+    def at(x, y, part):
+        return f'<g transform="translate({x:.1f} {y + baseline:.1f})">{part}</g>'
+    return (at(-0.6 * MCP, HIP_Y, far_leg)
+            + at(-0.6 * MCP, SHOULDER_Y, far_arm)
+            + f'<g transform="translate(0 {baseline:.1f})">{_mc_torso()}</g>'
+            + at(0.6 * MCP, HIP_Y, near_leg)
+            + at(0.9 * MCP, SHOULDER_Y, near_arm))
+
+
+def mc_run(cycle, baseline):
+    """Her walk cycle: legs opposed, arms answering the opposite leg."""
+    figure = _mc_figure(
+        _swing(_mc_leg(), cycle, SWING_LEG, True),
+        _swing(_mc_leg(far=True), cycle, SWING_LEG, False),
+        _swing(_mc_arm(), cycle, SWING_ARM, False),
+        _swing(_mc_arm(far=True), cycle, SWING_ARM, True),
+        baseline)
+    return f'<g>{_mc_plant(cycle, SWING_LEG)}{figure}</g>'
+
+
+def mc_pose(nl, fl, na, fa, baseline):
+    """The same parts held still, for the jump, the block hit and the landing."""
+    return _mc_figure(_held(_mc_leg(), nl), _held(_mc_leg(far=True), fl),
+                      _held(_mc_arm(), na), _held(_mc_arm(far=True), fa),
+                      baseline)
+
+
+# Leg, leg, arm, arm - in degrees, negative swings the limb forward. She gathers,
+# drives up with her arms, reaches over the block, then lands and absorbs it.
+MC_AIR = [(-28.0, 18.0, 22.0, 30.0),      # gather
+          (-40.0, 26.0, -46.0, -30.0),    # drive off the ground
+          (-34.0, 30.0, -74.0, -56.0),    # reaching the block
+          (-18.0, 22.0, -60.0, -44.0),    # over the top
+          (14.0, -20.0, -20.0, -8.0),     # coming down, legs reaching out
+          (26.0, -26.0, 16.0, 26.0)]      # landed, knees taking it
+MC_AIR_W = [1.1, 1.5, 1.6, 1.5, 1.6, 1.7]
 
 
 def girl_runner(jump_windows, T, baseline=6.0):
-    """Her whole flipbook: an eight-frame run that alternates legs properly,
-    with the jump, block hit and landing frames played over the top of it
-    for each square she knocks open."""
-    # Two squares can sit close enough that one jump has not finished before the
-    # next begins; the first then gives way rather than drawing a second of her.
+    """Her whole flipbook, built rather than cut: an eight-beat walk whose legs
+    genuinely alternate, with the jump held over the top of it for each square
+    she knocks open."""
     wins = []
     for t0, t1 in sorted(jump_windows):
-        if wins and t0 < wins[-1][1]:
+        if wins and t0 < wins[-1][1]:       # two blocks close together
             wins[-1] = (wins[-1][0], t0)
         wins.append((t0, t1))
-    run = bob(flipbook(sheet_row("run", GIRL_S, dy=baseline, only=RUN_ORDER),
-                       RUN_CYCLE), RUN_CYCLE / 2.0, RUN_BOB)
+    run = mc_run(RUN_CYCLE, baseline)
     air = ""
     for t0, t1 in wins:
-        air += sequence(sheet_row("jump", GIRL_S, dy=baseline)
-                        + sheet_row("hit", GIRL_S, dy=baseline)
-                        + sheet_row("land", GIRL_S, dy=baseline),
-                        t0, t1, T, weights=JUMP_W)
+        air += sequence([mc_pose(*p, baseline) for p in MC_AIR],
+                        t0, t1, T, weights=MC_AIR_W)
     return gate(run, wins, T) + air
 
 
