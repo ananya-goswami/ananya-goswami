@@ -584,17 +584,14 @@ WALK_CYCLE = 1.24
 TURTLE_BOB = 2.5                     # it is 53 tall; a plod lifts about 5%
 SLITHER_CYCLE = 3.30                 # body wave, then a clearly held tongue-flick hiss
 
-# HUD star. The old one was a crop from the reference art, so it came out
-# tilted a few degrees and sat low beside the x N label. This is generated
-# geometry instead: a regular five-pointed star, first tip straight up, inner
-# radius cos(72)/cos(36) of the outer so every arm matches, centred on the
-# mid-height of the text next to it.
-STAR_R, STAR_CX, STAR_CY = 15.0, 82.0, 149.5
-STAR_RIN = STAR_R * math.cos(math.radians(72)) / math.cos(math.radians(36))
-STAR_ARMS = [(STAR_R if k % 2 == 0 else STAR_RIN, math.radians(36 * k)) for k in range(10)]
-STAR_XY = [(STAR_CX + r * math.sin(a), STAR_CY - r * math.cos(a)) for r, a in STAR_ARMS]
-STAR_D = "M" + " ".join(f"{x:.2f} {y:.2f}" for x, y in STAR_XY) + "Z"
-STAR_HUD = f'<path fill="#3CEDA5" d="{STAR_D}"/>'
+# The tally above the grid. It sits on GX0 so the icon's left edge lines up
+# with the first column of squares instead of hanging out past them, and it is
+# a coin rather than a star because a coin is what these squares actually give
+# up when she hits one - the number beside it counts exactly those.
+HUD_R = 15.0
+HUD_CX, HUD_CY = GX0 + HUD_R, 149.5
+HUD_GAP = 7.0                        # space between the coin and the count
+HUD_SPIN = 3.4                       # a slow flip: alive, but not pulling focus
 
 
 def _keys(vals, times, T):
@@ -915,8 +912,10 @@ def build_runner_panel(weeks, total=None):
 
     hud = ""
     if total is not None:
-        hud = (STAR_HUD +
-               f'<text class="rmono" x="104" y="160" font-size="30" fill="#CFEAE3">x {total}</text>')
+        hud = (f'<g transform="translate({HUD_CX:.1f} {HUD_CY:.1f})">'
+               f'{coin_spin(HUD_SPIN, 0.0, HUD_R)}</g>'
+               f'<text class="rmono" x="{HUD_CX + HUD_R + HUD_GAP:.0f}" y="160"'
+               f' font-size="30" fill="#CFEAE3">x {total}</text>')
 
     px0, py0, px1, py1 = PANEL
     coin_y = GCELL / 2 - GCELL * QBLOCK_S / 2 - COIN_R * 0.5
