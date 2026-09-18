@@ -1060,37 +1060,45 @@ def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
 
 
 # ---------------------------------------------------------------- her, in blocks
-# The sheet's eight run frames have no gait in them: the same leg is in front in
-# every one of them and the back foot never travels, so she could only ever
-# scrabble on the spot. Built out of blocks she is not a picture any more, she
-# is parts on joints, and the cycle is then right by construction - each leg
-# swings from in front of her through to behind her and back, the arms answer
-# the opposite leg, and the jump is the same parts held at different angles.
+# The sheet could not give her a gait. Measured across its eight run frames her
+# back foot sits between -15.6 and -22.9 units behind her and never travels,
+# while the front one swings about 18; all eighteen avatar poses on it have the
+# same leg forward, so the other half of the cycle is not drawn anywhere and no
+# ordering could invent it. Her high-resolution art has the same one pose.
 #
-# Proportions are Minecraft's: an 8x8 head, a 12-tall body, 12-tall limbs, 32
-# units tall all told, so one block pixel is GIRL_TARGET_H / 32.
-MCP = GIRL_TARGET_H / 32.0
-MC_HAIR = "#12182B"
-MC_CAP = "#2C3D66"
-MC_BRIM = "#1F2C4C"
-MC_LOGO = "#4AE3C8"
-MC_SKIN = "#F0C7A0"
-MC_COAT = "#27334F"
-MC_COLLAR = "#31405F"
-MC_TRIM = "#3CEDA5"
-MC_LEG = "#191F38"
-MC_SHOE = "#EDF1F6"
-MC_DEEP = 0.62                  # the far arm and leg, seen past her, are dimmer
+# So she is drawn here instead - parts on joints, not a picture. The legs swing
+# in opposition about their hips and the arms answer the opposite leg, which
+# makes the cycle right by construction. Proportions are hers, not Minecraft's:
+# a big chibi head, a small body and short legs, because that is what she looks
+# like.
+A_HAIR = "#232A4A"
+A_HAIR_D = "#171C34"
+A_CAP = "#2A3557"
+A_CAP_D = "#1D2645"
+A_TEAL = "#5EEAD4"
+A_SKIN = "#F6C9A0"
+A_BLUSH = "#E89A8E"
+A_EYE = "#241C2B"
+A_COAT = "#2B3559"
+A_SLEEVE = "#36416B"
+A_COAT_D = "#212A48"
+A_SHOE = "#F4F7FA"
+A_SHOE_D = "#C8D2DC"
+A_DEEP = 0.66                   # the far arm and leg, seen past her, are dimmer
 
-LEG_W, LEG_H = 4.0 * MCP, 12.0 * MCP
-ARM_W, ARM_H = 4.0 * MCP, 11.0 * MCP
-BODY_W, BODY_H = 6.0 * MCP, 12.0 * MCP
-HEAD_W, HEAD_H = 8.0 * MCP, 8.0 * MCP
-HIP_Y = -12.0 * MCP             # everything is measured up from her feet
-SHOULDER_Y = -23.0 * MCP
-BODY_TOP = -24.0 * MCP
-HEAD_TOP = -32.0 * MCP
-SWING_LEG, SWING_ARM = 34.0, 26.0    # degrees either side of straight down
+# The cap sits 6 above the head, so 6 + head + body + legs is her full height
+# and has to come to GIRL_TARGET_H: the jump solves for how much lift it takes
+# to reach a given square off exactly that number.
+HEAD_W, HEAD_H = 46.0, 44.0
+BODY_W, BODY_H = 27.0, 34.0
+LEG_W, LEG_H = 12.0, 44.0
+assert 6.0 + HEAD_H + BODY_H + LEG_H == GIRL_TARGET_H
+ARM_W, ARM_H = 10.0, 24.0
+HIP_Y = -LEG_H                              # everything measured up from her feet
+BODY_TOP = HIP_Y - BODY_H                   # -72
+HEAD_TOP = BODY_TOP - HEAD_H                # -114
+SHOULDER_Y = BODY_TOP + 7.0
+SWING_LEG, SWING_ARM = 30.0, 20.0           # degrees either side of straight down
 
 
 def _dim(col, f):
@@ -1099,74 +1107,80 @@ def _dim(col, f):
     return "#%02x%02x%02x" % (int(r * f), int(g * f), int(b * f))
 
 
-def _blk(x, y, w, h, fill):
+def _blk(x, y, w, h, fill, rx=0.0):
+    r = f' rx="{rx:.1f}"' if rx else ""
     return (f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}"'
-            f' fill="{fill}"/>')
+            f'{r} fill="{fill}"/>')
 
 
-def _mc_leg(far=False):
-    """A leg hanging from its hip at the origin, shoe on the end."""
-    coat, shoe = (MC_LEG, MC_SHOE)
+def _a_leg(far=False):
+    """A leg hanging from its hip at the origin, trainer on the end."""
+    coat, shoe, trim = A_COAT, A_SHOE, A_TEAL
     if far:
-        coat, shoe = _dim(coat, MC_DEEP), _dim(shoe, MC_DEEP)
-    sh = 2.6 * MCP
-    return (_blk(-LEG_W / 2, 0, LEG_W, LEG_H - sh, coat)
-            + _blk(-LEG_W / 2, LEG_H - sh, LEG_W + 1.7 * MCP, sh, shoe))
+        coat, shoe, trim = _dim(A_COAT_D, A_DEEP), _dim(A_SHOE, A_DEEP), _dim(A_TEAL, A_DEEP)
+    sole = 7.0
+    return (_blk(-LEG_W / 2, 0, LEG_W, LEG_H - sole, coat, 3)
+            + _blk(-LEG_W / 2, LEG_H - sole, LEG_W + 7.0, sole, shoe, 3)
+            + _blk(-LEG_W / 2 + 1.0, LEG_H - sole + 2.0, LEG_W + 3.0, 1.6, trim))
 
 
-def _mc_arm(far=False):
-    """An arm hanging from its shoulder at the origin, hand on the end."""
-    coat, skin = (MC_COAT, MC_SKIN)
+def _a_arm(far=False):
+    """An arm from its shoulder at the origin, fist on the end."""
+    coat, skin = A_SLEEVE, A_SKIN
     if far:
-        coat, skin = _dim(coat, MC_DEEP), _dim(skin, MC_DEEP)
-    hand = 2.2 * MCP
-    return (_blk(-ARM_W / 2, 0, ARM_W, ARM_H - hand, coat)
-            + _blk(-ARM_W / 2, ARM_H - hand, ARM_W, hand, skin))
+        coat, skin = _dim(A_SLEEVE, A_DEEP), _dim(A_SKIN, A_DEEP)
+    fist = 8.5
+    return (_blk(-ARM_W / 2, 0, ARM_W, ARM_H - fist + 2.0, coat, 5)
+            + _blk(-ARM_W / 2 - 1.0, ARM_H - fist, ARM_W + 2.0, fist, skin, 4))
 
 
-def _mc_torso():
-    """Body and head, facing right. Drawn once; only the limbs move."""
-    x0 = -BODY_W / 2
-    out = _blk(x0, BODY_TOP, BODY_W, BODY_H, MC_COAT)
-    out += _blk(x0, BODY_TOP, BODY_W, 1.6 * MCP, MC_COLLAR)
-    out += _blk(x0 + BODY_W - 1.1 * MCP, BODY_TOP + 2.2 * MCP,
-                1.1 * MCP, BODY_H - 4.4 * MCP, MC_TRIM)          # the zip
-    # her hair falls behind her, past the shoulder
-    out += _blk(x0 - 2.6 * MCP, HEAD_TOP + 4.6 * MCP,
-                3.6 * MCP, 15.0 * MCP, MC_HAIR)
-    hx = -HEAD_W / 2
-    out += _blk(hx, HEAD_TOP, HEAD_W, HEAD_H, MC_HAIR)           # head, hair side
-    out += _blk(hx + 4.2 * MCP, HEAD_TOP + 2.4 * MCP,
-                3.8 * MCP, 5.0 * MCP, MC_SKIN)                   # face
-    out += _blk(hx + 4.2 * MCP, HEAD_TOP + 2.4 * MCP,
-                1.0 * MCP, 1.4 * MCP, MC_HAIR)                   # fringe
-    out += _blk(hx + 5.9 * MCP, HEAD_TOP + 4.0 * MCP,
-                1.3 * MCP, 1.5 * MCP, "#20263C")                 # eye
-    out += _blk(hx + 5.9 * MCP, HEAD_TOP + 6.4 * MCP,
-                1.6 * MCP, 0.6 * MCP, "#C98B7A")                 # mouth
-    out += _blk(hx - 0.4 * MCP, HEAD_TOP - 0.4 * MCP,
-                HEAD_W + 0.8 * MCP, 2.6 * MCP, MC_CAP)           # cap
-    out += _blk(hx + HEAD_W + 0.4 * MCP, HEAD_TOP + 0.9 * MCP,
-                3.0 * MCP, 1.7 * MCP, MC_BRIM)                   # brim, pointing the way she runs
-    d = 1.5 * MCP                                                # the diamond on the cap
-    cx, cy = hx + 2.6 * MCP, HEAD_TOP + 1.0 * MCP
+def _a_body():
+    """Hoodie, head, hair and cap - everything that does not swing."""
+    bx = -BODY_W / 2 + 2.0
+    out = _blk(bx - 1.5, BODY_TOP + 4.0, BODY_W + 3.0, BODY_H - 2.0, A_COAT_D, 7)
+    out += _blk(bx, BODY_TOP + 2.0, BODY_W, BODY_H - 2.0, A_COAT, 7)   # hoodie
+    out += _blk(bx + BODY_W - 9.0, BODY_TOP + 9.0, 2.2, BODY_H - 17.0, A_TEAL)  # zip
+    out += _blk(bx + BODY_W - 16.0, BODY_TOP + 12.0, 6.0, 2.0, A_TEAL)         # chest flash
+
+    hx, hy = -HEAD_W / 2 + 3.0, HEAD_TOP
+    out += _blk(bx - 3.0, BODY_TOP + 1.0, BODY_W + 6.0, 11.0, A_COAT_D, 5)   # hood
+    # hair behind her, blowing back as she runs
+    out += _blk(hx - 14.0, hy + 8.0, 24.0, 44.0, A_HAIR_D, 10)
+    out += _blk(hx - 22.0, hy + 15.0, 16.0, 30.0, A_HAIR_D, 8)
+    out += _blk(hx - 27.0, hy + 21.0, 12.0, 18.0, A_HAIR_D, 6)
+    out += _blk(hx - 8.0, hy + 2.0, HEAD_W - 2.0, HEAD_H + 6.0, A_HAIR, 13)
+    # face
+    out += _blk(hx + 4.0, hy + 8.0, HEAD_W - 12.0, HEAD_H - 6.0, A_SKIN, 12)
+    out += _blk(hx + 1.0, hy + 6.0, 12.0, 22.0, A_HAIR, 6)                     # side lock
+    # eyes, with the highlight that makes them read as hers
+    for ex in (hx + 13.0, hx + 26.0):
+        out += _blk(ex, hy + 20.0, 7.0, 9.0, A_EYE, 3)
+        out += _blk(ex + 1.2, hy + 21.5, 2.6, 3.2, "#FFFFFF", 1)
+    out += _blk(hx + 10.0, hy + 31.0, 5.0, 2.6, A_BLUSH, 1)
+    out += _blk(hx + 30.0, hy + 31.0, 5.0, 2.6, A_BLUSH, 1)
+    out += _blk(hx + 19.0, hy + 32.0, 7.0, 4.0, "#B4485A", 2)                  # smile
+    # cap: crown, brim pointing the way she runs, and the diamond
+    out += _blk(hx - 6.0, hy - 6.0, HEAD_W - 2.0, 17.0, A_CAP, 9)
+    out += _blk(hx + HEAD_W - 14.0, hy + 3.5, 21.0, 7.5, A_CAP_D, 4)    # the peak
+    d = 8.0
+    cx, cy = hx + 20.0, hy + 2.0
     out += (f'<rect x="{cx - d / 2:.1f}" y="{cy - d / 2:.1f}" width="{d:.1f}"'
-            f' height="{d:.1f}" fill="{MC_LOGO}"'
+            f' height="{d:.1f}" fill="none" stroke="{A_TEAL}" stroke-width="2.4"'
             f' transform="rotate(45 {cx:.1f} {cy:.1f})"/>')
     return out
 
 
-def _mc_plant(cycle, amp, steps=12):
-    """Drop the figure by exactly as much as the swung legs shorten her.
+def _a_plant(cycle, amp, steps=12):
+    """Drop her by exactly as much as the swung legs shorten her.
 
     A leg turned `t` off vertical only reaches LEG_H*cos(t) down, so with both
     legs out she is LEG_H*(1-cos amp) shorter than standing. Lowering her by
-    that much is what keeps the planted foot on the ground rather than skimming
-    above it, and it produces the rise and fall of a walk for free.
+    that much keeps the planted foot on the ground instead of skimming above
+    it, and the rise and fall of a walk comes out of that for free.
     """
     vals, keys = [], []
     for k in range(steps + 1):
-        f = k / steps                       # half a cycle: both legs pass square once
+        f = k / steps                  # half a cycle: both legs pass square once
         ang = math.radians(amp * math.cos(math.pi * f))
         vals.append(f"0 {LEG_H * (1.0 - math.cos(ang)):.2f}")
         keys.append(f"{f:.4f}")
@@ -1188,60 +1202,58 @@ def _held(inner, deg):
     return f'<g transform="rotate({deg:.0f})">{inner}</g>'
 
 
-def _mc_figure(near_leg, far_leg, near_arm, far_arm, baseline):
+def _a_figure(near_leg, far_leg, near_arm, far_arm, baseline):
     """Stack the parts back to front, feet on `baseline`."""
     def at(x, y, part):
         return f'<g transform="translate({x:.1f} {y + baseline:.1f})">{part}</g>'
-    return (at(-0.6 * MCP, HIP_Y, far_leg)
-            + at(-0.6 * MCP, SHOULDER_Y, far_arm)
-            + f'<g transform="translate(0 {baseline:.1f})">{_mc_torso()}</g>'
-            + at(0.6 * MCP, HIP_Y, near_leg)
-            + at(0.9 * MCP, SHOULDER_Y, near_arm))
+    return (at(-4.0, HIP_Y, far_leg)
+            + at(-7.0, SHOULDER_Y, far_arm)
+            + f'<g transform="translate(0 {baseline:.1f})">{_a_body()}</g>'
+            + at(4.0, HIP_Y, near_leg)
+            + at(7.0, SHOULDER_Y, near_arm))
 
 
-def mc_run(cycle, baseline):
+def avatar_run(cycle, baseline):
     """Her walk cycle: legs opposed, arms answering the opposite leg."""
-    figure = _mc_figure(
-        _swing(_mc_leg(), cycle, SWING_LEG, True),
-        _swing(_mc_leg(far=True), cycle, SWING_LEG, False),
-        _swing(_mc_arm(), cycle, SWING_ARM, False),
-        _swing(_mc_arm(far=True), cycle, SWING_ARM, True),
+    figure = _a_figure(
+        _swing(_a_leg(), cycle, SWING_LEG, True),
+        _swing(_a_leg(far=True), cycle, SWING_LEG, False),
+        _swing(_a_arm(), cycle, SWING_ARM, False),
+        _swing(_a_arm(far=True), cycle, SWING_ARM, True),
         baseline)
-    return f'<g>{_mc_plant(cycle, SWING_LEG)}{figure}</g>'
+    return f'<g>{_a_plant(cycle, SWING_LEG)}{figure}</g>'
 
 
-def mc_pose(nl, fl, na, fa, baseline):
+def avatar_pose(nl, fl, na, fa, baseline):
     """The same parts held still, for the jump, the block hit and the landing."""
-    return _mc_figure(_held(_mc_leg(), nl), _held(_mc_leg(far=True), fl),
-                      _held(_mc_arm(), na), _held(_mc_arm(far=True), fa),
-                      baseline)
+    return _a_figure(_held(_a_leg(), nl), _held(_a_leg(far=True), fl),
+                     _held(_a_arm(), na), _held(_a_arm(far=True), fa), baseline)
 
 
 # Leg, leg, arm, arm - in degrees, negative swings the limb forward. She gathers,
 # drives up with her arms, reaches over the block, then lands and absorbs it.
-MC_AIR = [(-28.0, 18.0, 22.0, 30.0),      # gather
-          (-40.0, 26.0, -46.0, -30.0),    # drive off the ground
-          (-34.0, 30.0, -74.0, -56.0),    # reaching the block
-          (-18.0, 22.0, -60.0, -44.0),    # over the top
-          (14.0, -20.0, -20.0, -8.0),     # coming down, legs reaching out
-          (26.0, -26.0, 16.0, 26.0)]      # landed, knees taking it
-MC_AIR_W = [1.1, 1.5, 1.6, 1.5, 1.6, 1.7]
+AIR_POSES = [(-26.0, 16.0, 20.0, 28.0),      # gather
+             (-38.0, 24.0, -44.0, -28.0),    # drive off the ground
+             (-32.0, 28.0, -70.0, -54.0),    # reaching the block
+             (-16.0, 20.0, -58.0, -42.0),    # over the top
+             (12.0, -18.0, -18.0, -6.0),     # coming down, legs reaching out
+             (24.0, -24.0, 14.0, 24.0)]      # landed, knees taking it
+AIR_W = [1.1, 1.5, 1.6, 1.5, 1.6, 1.7]
 
 
 def girl_runner(jump_windows, T, baseline=6.0):
-    """Her whole flipbook, built rather than cut: an eight-beat walk whose legs
-    genuinely alternate, with the jump held over the top of it for each square
-    she knocks open."""
+    """Her whole flipbook, built rather than cut: a walk whose legs genuinely
+    alternate, with the jump held over the top of it for each square she opens."""
     wins = []
     for t0, t1 in sorted(jump_windows):
         if wins and t0 < wins[-1][1]:       # two blocks close together
             wins[-1] = (wins[-1][0], t0)
         wins.append((t0, t1))
-    run = mc_run(RUN_CYCLE, baseline)
+    run = avatar_run(RUN_CYCLE, baseline)
     air = ""
     for t0, t1 in wins:
-        air += sequence([mc_pose(*p, baseline) for p in MC_AIR],
-                        t0, t1, T, weights=MC_AIR_W)
+        air += sequence([avatar_pose(*p, baseline) for p in AIR_POSES],
+                        t0, t1, T, weights=AIR_W)
     return gate(run, wins, T) + air
 
 
