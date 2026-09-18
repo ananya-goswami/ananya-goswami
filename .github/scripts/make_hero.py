@@ -28,17 +28,12 @@ import math
 import os
 import random
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 HEAD = """<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="706" viewBox="0 0 1180 706"
      font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace"
      role="img" aria-label="Ananya Goswami, senior product associate">
 <defs>
-  <linearGradient id="ink" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
-    <stop offset="0" stop-color="#7FEFC8"><animate attributeName="stop-color" values="#7FEFC8;#74D2FB;#C0A2FF;#7FEFC8" dur="14s" repeatCount="indefinite"/></stop>
-    <stop offset="0.55" stop-color="#74D2FB"><animate attributeName="stop-color" values="#74D2FB;#C0A2FF;#7FEFC8;#74D2FB" dur="14s" repeatCount="indefinite"/></stop>
-    <stop offset="1" stop-color="#C0A2FF"><animate attributeName="stop-color" values="#C0A2FF;#7FEFC8;#74D2FB;#C0A2FF" dur="14s" repeatCount="indefinite"/></stop>
-  </linearGradient>
   <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0" stop-color="#00FF9C" stop-opacity=".75"/><stop offset="1" stop-color="#22D3EE" stop-opacity=".55"/>
   </linearGradient>
@@ -136,6 +131,8 @@ EASE = ".4 0 .2 1"              # one ease-in-out, reused on every segment; it i
                                 # short spelling is worth ~100KB on the file
 
 N_PARTICLES = 1550
+N_INKS = 28                     # colours the painted avatar is cut down to
+N_DOT_TONES = 4                 # and the far coarser set the dots use
 TILE_COLS, TILE_ROWS = 12, 15
 
 # The symbols are drawn in a 0..100 box and then mapped into the avatar's own
@@ -162,7 +159,7 @@ def to_px(pts):
     return [(x * UP, y * UP) for x, y in pts]
 
 
-def stroke(d, pts, w, closed=False):
+def stroke(d, pts, w, closed=False, ink=1):
     """A round-capped, round-joined stroke, laid down as a run of discs.
 
     Pillow's `line` gives square ends and mitres that notch where two thick
@@ -179,12 +176,12 @@ def stroke(d, pts, w, closed=False):
         for i in range(n + 1):
             t = i / n
             x, y = x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
-            d.ellipse([x - r, y - r, x + r, y + r], fill=255)
+            d.ellipse([x - r, y - r, x + r, y + r], fill=ink)
 
 
-def disc(d, cx, cy, r):
+def disc(d, cx, cy, r, ink=1):
     (x, y), rr = to_px([(cx, cy)])[0], r * UP
-    d.ellipse([x - rr, y - rr, x + rr, y + rr], fill=255)
+    d.ellipse([x - rr, y - rr, x + rr, y + rr], fill=ink)
 
 
 def arc(cx, cy, r, a0=0, a1=360, steps=240):
@@ -215,12 +212,12 @@ def bez(p0, p1, p2, p3, steps=90):
     return out
 
 
-def ring(d, cx, cy, r, w):
-    stroke(d, arc(cx, cy, r), w, closed=True)
+def ring(d, cx, cy, r, w, ink=1):
+    stroke(d, arc(cx, cy, r), w, closed=True, ink=ink)
 
 
-def poly(d, pts):
-    d.polygon(to_px(pts), fill=255)
+def poly(d, pts, ink=1):
+    d.polygon(to_px(pts), fill=ink)
 
 
 def punch(d, cx, cy, r):
@@ -254,28 +251,28 @@ def mask_points(im):
 # wants to be the work itself.  Every mark has to survive being redrawn as 1550
 # dots, and that test shapes how each one is drawn.  Fine detail does not
 # survive it - the Octocat loses its silhouette, so GitHub is the branch
-# glyph.  Nor does a mark that only works in colour, which is why the Figma
-# pieces below are inset apart: at full size they touch, and in one colour
-# that fuses them into a slab.
+# glyph.  Some tools have no mark anyone reads out of context at all, which is
+# the honest position for WAHA, Railway and n8n, so automation is a plain gear
+# and those three are named outright in the caption under it.
 #
-# Some tools have no mark anyone reads out of context at all.  That is the
-# honest position for WAHA, Railway and n8n, so automation is a plain gear and
-# those three are named outright in the caption under it, where they are read
-# rather than guessed.
+# Each function draws its regions with ink=1, 2, 3... and returns the colours
+# those inks stand for, so a mark can carry its real palette rather than one
+# flat tint.  Every colour here is the tool's own, lifted toward the light end
+# where it has to be: a brand colour chosen for a white page goes muddy on a
+# near-black panel, and Postgres navy disappears into it outright.
 #
-# Most of these are stroked, which holds their weight even.  The two solids -
-# the Vite bolt and the Vercel triangle - are shapes that lose their identity
-# as outlines: an outlined triangle is a generic delta, not the Vercel mark.
-# Both are small enough that 1550 dots still read as a solid; a fill across
-# the whole box would thin out to a haze.
+# Most marks are stroked, which holds their weight even.  The two solids - the
+# Vite bolt and the Vercel triangle - lose their identity as outlines, since an
+# outlined triangle is a generic delta rather than the Vercel mark.  Both are
+# small enough that 1550 dots still read solid; a fill across the whole box
+# would thin out to a haze.
 def sym_figma():
     """The Figma mark, where a screen is settled before any of it is built.
 
-    Five shapes on a 2x3 grid: three down the left, a lobe top right, a loose
-    circle in the middle and another at the foot.  The real mark has them
-    touching, which in one colour fuses the whole left column into a slab.
-    Insetting each piece puts the gaps back, and it is the five-piece
-    arrangement that identifies it once the colour is gone.
+    Five shapes on a 2x3 grid, in its five official colours and their official
+    places: three down the left, a lobe top right, a loose circle in the middle
+    and another at the foot.  The real mark has them touching, which fuses the
+    left column into a slab; insetting each piece puts the gaps back.
     """
     im, d = raster()
     s, ox, oy, g = 1.12, 28.7, 18.0, 0.9          # logo units are 38 x 57
@@ -283,67 +280,71 @@ def sym_figma():
     def at(x, y):
         return ox + x * s, oy + y * s
 
-    def blob(cx, cy, r):
+    def blob(cx, cy, r, ink):
         (x, y), rr = at(cx, cy), (r - g) * s
-        d.ellipse([x - rr, y - rr, x + rr, y + rr], fill=255)
+        d.ellipse([x - rr, y - rr, x + rr, y + rr], fill=ink)
 
-    def half(x0, y0, side):
+    def half(x0, y0, side, ink):
         """One cell of the grid, with its outer edge rounded to a semicircle."""
-        blob(x0 + 9.5, y0 + 9.5, 9.5)
+        blob(x0 + 9.5, y0 + 9.5, 9.5, ink)
         a, b = at(x0 + (9.5 if side < 0 else g), y0 + g)
         c, e = at(x0 + (19 - g if side < 0 else 9.5), y0 + 19 - g)
-        d.rectangle([a, b, c, e], fill=255)
+        d.rectangle([a, b, c, e], fill=ink)
 
-    half(0, 0, -1)          # top left, rounded left
-    half(19, 0, +1)         # top right, rounded right
-    half(0, 19, -1)         # middle left, rounded left
-    blob(28.5, 28.5, 9.5)   # the loose circle, middle right
-    blob(9.5, 47.5, 9.5)    # and the foot
-    return im
+    half(0, 0, -1, 1)           # top left
+    half(19, 0, +1, 2)          # top right
+    half(0, 19, -1, 3)          # middle left
+    blob(28.5, 28.5, 9.5, 4)    # the loose circle, middle right
+    blob(9.5, 47.5, 9.5, 5)     # and the foot
+    return im, ["#F24E1E", "#A259FF", "#FF7262", "#1ABCFE", "#0ACF83"]
 
 
 def sym_term():
     """>_ - Claude Code and Codex, where most of the day actually starts."""
     im, d = raster()
-    stroke(d, rrect(8, 20, 84, 60, 9), 3.6, closed=True)
-    stroke(d, [(28, 40), (44, 53), (28, 66)], 5.0)
-    stroke(d, [(52, 66), (74, 66)], 5.0)
-    return im
+    stroke(d, rrect(8, 20, 84, 60, 9), 3.6, closed=True, ink=1)
+    stroke(d, [(28, 40), (44, 53), (28, 66)], 5.0, ink=2)
+    stroke(d, [(52, 66), (74, 66)], 5.0, ink=2)
+    return im, ["#D97757", "#F4A88C"]           # Claude coral, and its light tint
 
 
 def sym_code():
-    """</> - the games are hand-written HTML, CSS and JavaScript."""
+    """</> - the games are hand-written HTML, CSS and JavaScript.
+
+    Three strokes, so each takes one of the three languages' own colours.
+    """
     im, d = raster()
-    stroke(d, [(35, 27), (15, 50), (35, 73)], 5.6)
-    stroke(d, [(58, 19), (42, 81)], 5.6)
-    stroke(d, [(65, 27), (85, 50), (65, 73)], 5.6)
-    return im
+    stroke(d, [(35, 27), (15, 50), (35, 73)], 5.6, ink=1)
+    stroke(d, [(58, 19), (42, 81)], 5.6, ink=2)
+    stroke(d, [(65, 27), (85, 50), (65, 73)], 5.6, ink=3)
+    return im, ["#E34F26", "#1572B6", "#F7DF1E"]   # HTML5, CSS3, JavaScript
 
 
 def sym_react():
     """The React mark: what the bigger builds are put together with."""
     im, d = raster()
     for tilt in (0, 60, 120):
-        stroke(d, ellipse_path(50, 50, 42, 16, tilt), 3.4, closed=True)
-    disc(d, 50, 50, 6.4)
-    return im
+        stroke(d, ellipse_path(50, 50, 42, 16, tilt), 3.4, closed=True, ink=1)
+    disc(d, 50, 50, 6.4, ink=2)
+    return im, ["#61DAFB", "#3178C6"]           # React cyan, TypeScript blue
 
 
 def sym_vite():
-    """Vite's bolt: the build step under every one of those games."""
+    """Vite's bolt inside its shield: the build step under every game."""
     im, d = raster()
-    poly(d, [(62, 8), (30, 54), (46, 54), (38, 92), (72, 44), (54, 44)])
-    return im
+    stroke(d, [(13, 17), (50, 89), (87, 17)], 4.6, ink=1)          # the shield
+    poly(d, [(59, 26), (37, 55), (49, 55), (43, 80), (65, 49), (53, 49)], ink=2)  # the bolt
+    return im, ["#BD34FE", "#FFD028"]           # Vite purple, Vite yellow
 
 
 def sym_git():
     """The branch glyph: git, and the GitHub the whole README lives on."""
     im, d = raster()
-    stroke(d, [(33, 30), (33, 74)], 4.2)                      # the trunk
-    stroke(d, bez((33, 58), (33, 42), (52, 34), (67, 34)), 4.2)  # and the branch
+    stroke(d, [(33, 30), (33, 74)], 4.2, ink=1)                      # the trunk
+    stroke(d, bez((33, 58), (33, 42), (52, 34), (67, 34)), 4.2, ink=1)  # the branch
     for c in ((33, 22), (33, 82), (75, 34)):
-        disc(d, c[0], c[1], 8.0)
-    return im
+        disc(d, c[0], c[1], 8.0, ink=2)                              # and the commits
+    return im, ["#F05133", "#E6EDF3"]           # git orange, GitHub near-white
 
 
 def sym_gear():
@@ -355,9 +356,9 @@ def sym_gear():
         a = 360.0 * i / teeth
         pts += arc(50, 50, r_out, a - 13, a + 13, 10)
         pts += arc(50, 50, r_in, a + 19, a + 360.0 / teeth - 19, 10)
-    poly(d, pts)
+    poly(d, pts, ink=1)
     punch(d, 50, 50, 14.0)
-    return im
+    return im, ["#EA4B71"]                      # n8n pink
 
 
 def sym_data():
@@ -370,46 +371,187 @@ def sym_data():
         return [(50 + rx * math.cos(math.radians(a)), y + ry * math.sin(math.radians(a)))
                 for a in range(0, 181, 3)]
 
-    stroke(d, ellipse_path(50, 27, rx, ry, 0), 3.8, closed=True)   # the lid
     for y in (45, 62):
-        stroke(d, front(y), 3.8)                                   # the courses
-    stroke(d, front(73), 3.8)                                      # and the base
-    stroke(d, [(50 - rx, 27), (50 - rx, 73)], 3.8)                 # the sides
-    stroke(d, [(50 + rx, 27), (50 + rx, 73)], 3.8)
-    return im
+        stroke(d, front(y), 3.8, ink=1)                            # the courses
+    stroke(d, front(73), 3.8, ink=1)                               # and the base
+    stroke(d, [(50 - rx, 27), (50 - rx, 73)], 3.8, ink=1)          # the sides
+    stroke(d, [(50 + rx, 27), (50 + rx, 73)], 3.8, ink=1)
+    stroke(d, ellipse_path(50, 27, rx, ry, 0), 3.8, closed=True, ink=2)   # the lid
+    return im, ["#4A8BC9", "#7FB3E0"]           # Postgres blue, lifted off navy
 
 
 def sym_ship():
     """The Vercel triangle: nearly every game in the README ships there."""
     im, d = raster()
-    poly(d, [(50, 19), (89, 77), (11, 77)])
-    return im
+    poly(d, [(50, 19), (89, 77), (11, 77)], ink=1)
+    return im, ["#FFFFFF"]                      # Vercel is black on white, so white here
 
 
 # Each mark carries the line that appears under the panel while it is on
-# screen, so TOOLCHAIN.SCAN reads as a caption rather than an unrelated
-# ticker.  It is also where the tools with no usable mark get named outright:
-# the gear is n8n, WAHA and Railway, and the triangle is both hosts.
-#
-# The third field is the colour the whole dot cloud takes while that mark is
-# up.  Each is its tool's own, lifted toward the light end - a brand colour
-# picked for white backgrounds goes muddy on a near-black panel, and Postgres
-# navy in particular disappears into it.  They are also ordered so no two
-# neighbours land on the same part of the wheel, which is why GitHub is the
-# near-white break between Vite's amber and n8n's pink rather than git orange.
+# screen, so TOOLCHAIN.SCAN reads as a caption rather than an unrelated ticker.
+# It is also where the tools with no usable mark get named outright.
+DIM = "#31514c"                 # the separator between tools in a caption
 SYMBOLS = [
-    (sym_term, "claude code · codex", "#E8865F"),      # Claude coral
-    (sym_code, "html · css · javascript", "#F7DF1E"),  # JavaScript yellow
-    (sym_react, "react · typescript", "#61DAFB"),      # React cyan
-    (sym_figma, "figma", "#A259FF"),                        # Figma purple
-    (sym_vite, "vite", "#FFC016"),                          # Vite amber
-    (sym_git, "git · github", "#E6EDF3"),              # GitHub near-white
-    (sym_gear, "n8n · waha · railway", "#EA4B71"),  # n8n pink
-    (sym_data, "postgres · indexeddb", "#6BA6E8"),     # Postgres blue, lifted
-    (sym_ship, "vercel · netlify", "#00E5C7"),         # Netlify teal
+    (sym_term, [("claude code", "#D97757"), (" \u00b7 ", DIM), ("codex", "#C9CDD4")]),
+    (sym_code, [("html", "#E34F26"), (" \u00b7 ", DIM), ("css", "#4A9BE0"),
+                (" \u00b7 ", DIM), ("javascript", "#F7DF1E")]),
+    (sym_react, [("react", "#61DAFB"), (" \u00b7 ", DIM), ("typescript", "#5A9BE0")]),
+    (sym_figma, [("figma", "#A259FF")]),
+    (sym_vite, [("vite", "#FFD028")]),
+    (sym_git, [("git", "#F05133"), (" \u00b7 ", DIM), ("github", "#E6EDF3")]),
+    (sym_gear, [("n8n", "#EA4B71"), (" \u00b7 ", DIM), ("waha", "#25D366"),
+                (" \u00b7 ", DIM), ("railway", "#B49BEA")]),
+    (sym_data, [("postgres", "#4A8BC9"), (" \u00b7 ", DIM), ("indexeddb", "#7FB3E0")]),
+    (sym_ship, [("vercel", "#FFFFFF"), (" \u00b7 ", DIM), ("netlify", "#00C7B7")]),
 ]
 IDLE = "standby"                # shown while the avatar, not a symbol, is up
-HOME = "#CFF3FF"                # the cloud's colour while it is her face
+
+
+# ------------------------------------------------------------------ colour
+# The stipple is one bit deep, but how densely its dots sit is the tone of the
+# photo it was made from, so a blur of the mask recovers a usable greyscale.
+# What it cannot recover is hue: that is keyed on here by region, with the
+# ramps below and a handful of features placed by hand.
+#
+# The ramps are deliberately flat.  Dot density already carries the tone, so
+# mapping tone to brightness a second time squares it and crushes everything
+# to mud - the first pass at this looked burnt for exactly that reason.  They
+# move in hue far more than in luminance.
+SKIN = [(0.00, "#C99A80"), (0.30, "#E3B99E"), (0.55, "#F2D2B8"),
+        (0.78, "#FAE4D2"), (1.00, "#FFF4EC")]
+HAIR = [(0.00, "#262B3C"), (0.40, "#3A4159"), (0.72, "#565F80"), (1.00, "#8089AD")]
+COAT = [(0.00, "#22335A"), (0.40, "#334E88"), (0.75, "#4A6DAE"), (1.00, "#6E93D4")]
+SHIRT = [(0.00, "#BFCDDE"), (0.45, "#DCE6F2"), (1.00, "#FFFFFF")]
+LIP = [(0.00, "#9C4148"), (0.40, "#BC6165"), (0.75, "#D3837C"), (1.00, "#E8A79D")]
+IRIS = [(0.00, "#3A2113"), (0.50, "#5E3620"), (1.00, "#8C5730")]
+
+BLUSH = (228, 122, 118)
+SCLERA = (236, 244, 255)
+LINER = (14, 14, 22)
+PUPIL = (22, 13, 9)
+WHITE = (255, 255, 255)
+BROW = (13, 12, 18)
+
+# Read off the portrait itself.  The eyes in particular have to be tight: a
+# generous ellipse puts the sclera on the eyelid and the whole eye reads as a
+# cold smudge across the socket.
+FACE = (145, 139, 61, 81)               # the head, as an ellipse
+NECK = (99, 173, 194, 318)              # neck and chest, as a box
+SHIRT_BOX = (111, 170, 297, 340)
+COAT_EDGE = (214, 42)                   # where the jacket fades in, and over what
+EYES = ((134, 137, 17, 5.6), (187, 137, 13.5, 5.4))
+BROWS = ((128, 120, 30, 7), (185, 121, 24, 6))
+MOUTH = (147, 189, 26, 8)
+CHEEKS = ((107, 166), (191, 159))
+
+
+def _rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def _smooth(a):
+    a = 0.0 if a < 0 else (1.0 if a > 1 else a)
+    return a * a * (3 - 2 * a)
+
+
+def _ramp(t, stops):
+    if t <= stops[0][0]:
+        return _rgb(stops[0][1])
+    for i in range(len(stops) - 1):
+        a, b = stops[i][0], stops[i + 1][0]
+        if a <= t <= b:
+            u = (t - a) / max(b - a, 1e-6)
+            ca, cb = _rgb(stops[i][1]), _rgb(stops[i + 1][1])
+            return tuple(ca[c] + (cb[c] - ca[c]) * u for c in range(3))
+    return _rgb(stops[-1][1])
+
+
+def _mix(base, top, w):
+    if w <= 0:
+        return base
+    return tuple(base[c] + (top[c] - base[c]) * w for c in range(3))
+
+
+def _ell(x, y, cx, cy, rx, ry, feather=0.18):
+    d = math.hypot((x - cx) / rx, (y - cy) / ry)
+    return _smooth((1.0 + feather - d) / feather)
+
+
+def _band(v, lo, hi, feather):
+    return _smooth((v - lo) / feather) * _smooth((hi - v) / feather)
+
+
+def paint(mask, pts):
+    """A colour for every lit pixel of the portrait.
+
+    Only the lit pixels are visited - about 15.5k of the 88k on the canvas -
+    which is why this stays plain Python instead of pulling in numpy.
+    """
+    blur = mask.filter(ImageFilter.GaussianBlur(2.4))
+    lo, hi = blur.getextrema()
+    span = max(hi - lo, 1)
+    tp = blur.load()
+
+    out = {}
+    for x, y in pts:
+        t = min(1.0, (tp[x, y] - lo) / span * 1.06)
+
+        skin = max(_ell(x, y, *FACE, 0.16),
+                   _band(x, NECK[0], NECK[1], 13) * _band(y, NECK[2], NECK[3], 15))
+        shirt = (_band(x, SHIRT_BOX[0], SHIRT_BOX[1], 10)
+                 * _band(y, SHIRT_BOX[2], SHIRT_BOX[3], 11) * _smooth((t - 0.48) / 0.18))
+        coat = _smooth((y - COAT_EDGE[0]) / COAT_EDGE[1])
+
+        c = _ramp(t, HAIR)
+        c = _mix(c, _ramp(t, COAT), coat)
+        c = _mix(c, _ramp(t, SKIN), skin)
+        c = _mix(c, _ramp(t, SHIRT), shirt)
+
+        c = _mix(c, _ramp(t, LIP), _ell(x, y, *MOUTH, 0.16) * skin * 0.55)
+
+        for bx, by in CHEEKS:
+            w = _ell(x, y, bx, by, 26, 21, 0.9) * skin * _smooth((t - 0.5) / 0.3)
+            c = _mix(c, BLUSH, w * 0.20)
+
+        # Both eyes sit in shadow, so keying them off tone alone leaves them a
+        # dark smudge.  They are built from the geometry instead - sclera,
+        # iris, pupil, lash line, catchlight - which reads bright and open.
+        for cx, cy, rx, ry in EYES:
+            eye = _ell(x, y, cx, cy, rx, ry, 0.13)
+            if eye <= 0:
+                continue
+            iris = _ell(x, y, cx, cy, 6.0, 5.2, 0.22)
+            c = _mix(c, SCLERA, eye * (1 - iris) * 0.80)
+            c = _mix(c, _ramp(min(1.0, t * 0.5 + 0.35), IRIS), eye * iris * 0.90)
+            c = _mix(c, PUPIL, _ell(x, y, cx, cy, 2.6, 2.4, 0.35) * 0.88)
+            c = _mix(c, LINER, eye * _ell(x, y, cx, cy - ry * 0.80,
+                                          rx * 1.02, ry * 0.60, 0.30) * 0.90)
+            c = _mix(c, WHITE, _ell(x, y, cx + 2.4, cy - 1.5, 1.9, 1.6, 0.5) * 0.92)
+
+        for bx, by, brx, bry in BROWS:
+            c = _mix(c, BROW, _ell(x, y, bx, by, brx, bry, 0.45)
+                     * _smooth((0.46 - t) / 0.3) * 0.8)
+
+        out[(x, y)] = tuple(max(0, min(255, int(round(v)))) for v in c)
+    return out
+
+
+def quantize(colours, n):
+    """Cut the painted pixels down to n inks.
+
+    Every distinct colour would mean its own <path> inside every fragment it
+    touches.  Quantising first keeps that to a handful per fragment, and at
+    this dot size the banding it introduces is invisible.
+    """
+    keys = list(colours)
+    strip = Image.new("RGB", (len(keys), 1))
+    strip.putdata([colours[k] for k in keys])
+    pal = strip.quantize(colors=n, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    table = pal.getpalette()
+    inks = ["#%02X%02X%02X" % tuple(table[i * 3:i * 3 + 3]) for i in range(n)]
+    idx = list(pal.getdata()) if not hasattr(pal, "get_flattened_data") else list(pal.get_flattened_data())
+    return inks, {k: idx[i] for i, k in enumerate(keys)}
 
 
 # ---------------------------------------------------------------- sampling
@@ -473,18 +615,26 @@ def polar_rank(pts, sectors=96):
 
 
 def place(im, n):
-    """A symbol's mask -> n points, in the avatar's coordinate space."""
-    pts = mask_points(im)
-    pts = scatter(pts, n)
+    """A symbol's mask -> n points in the avatar's space, each with its ink.
+
+    The ink is the pixel's own value on the canvas, so a dot keeps whichever
+    region of the mark it was sampled from and can be coloured by it.
+    """
+    pts = scatter(mask_points(im), n)
+    ink = im.load()
     xs = [p[0] for p in pts]
     ys = [p[1] for p in pts]
     x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
     s = min(SYM_W / max(x1 - x0, 1), SYM_H / max(y1 - y0, 1))
     mx, my = (x0 + x1) / 2.0, (y0 + y1) / 2.0
-    return [(SYM_CX + (x - mx) * s, SYM_CY + (y - my) * s) for x, y in pts]
+    return [(SYM_CX + (x - mx) * s, SYM_CY + (y - my) * s, ink[x, y] - 1) for x, y in pts]
 
 
 # ------------------------------------------------------------------ output
+def esc(t):
+    return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def fmt(v):
     return f"{v:.1f}".rstrip("0").rstrip(".")
 
@@ -524,8 +674,13 @@ def _stops():
 K = _stops()
 
 
-def tiles_svg(pts, cx, cy):
-    """The avatar, cut into fragments that fly apart and come back."""
+def tiles_svg(pts, cx, cy, inks, ink_of):
+    """The avatar, cut into fragments that fly apart and come back.
+
+    A fragment is one <g> carrying the animation, with one <path> inside per
+    ink it contains.  Keeping the animation on the group is what makes the
+    colour affordable: the paths multiply, the four animations do not.
+    """
     xs = [p[0] for p in pts]
     ys = [p[1] for p in pts]
     x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
@@ -542,7 +697,12 @@ def tiles_svg(pts, cx, cy):
     out = []
     for i, key in enumerate(order):
         cell = cells[key]
-        d = "".join(f"M{x} {y}h1v1h-1z" for x, y in cell)
+        by_ink = {}
+        for p in cell:
+            by_ink.setdefault(ink_of[p], []).append(p)
+        paths = "".join(
+            '<path d="%s" fill="%s"/>' % ("".join(f"M{x} {y}h1v1h-1z" for x, y in ps), inks[k])
+            for k, ps in sorted(by_ink.items()))
 
         # Fly out along the line from the centre of the face, further the
         # further out the fragment already is, so the avatar opens up rather
@@ -580,104 +740,125 @@ def tiles_svg(pts, cx, cy):
             f' values="0 0;0 0;{fmt(ox)} {fmt(oy)};{fmt(ox)} {fmt(oy)};0 0;0 0"'
             f' keyTimes="{ktimes(kt_t)}" dur="{LOOP}s" begin="{BEGIN}s" repeatCount="indefinite"'
             f' calcMode="spline" keySplines="{splines(kt_t)}"/>'
-            f'<path d="{d}" fill="url(#ink)"/></g>')
+            f'{paths}</g>')
     return out
 
 
-def particles_svg(home, shapes):
-    """The dots: avatar pixel -> each symbol in turn -> the same pixel back."""
+def particles_svg(home, home_ink, shapes, palettes):
+    """The dots: avatar pixel -> each mark in turn -> the same pixel back.
+
+    Colour is carried by grouping rather than per dot.  A dot's colour at every
+    stop is fixed once its rank is, so dots that share a whole colour sequence
+    share a <g> and one <animate> recolours all of them.  Because the marks'
+    regions fall in roughly contiguous bands of polar rank, the number of
+    distinct sequences stays in the dozens rather than the product of the
+    region counts - a per-dot fill animation would cost several hundred KB.
+    """
     rank_home = polar_rank(home)
     rank_sym = [polar_rank(s) for s in shapes]
 
-    out = []
+    groups = {}
     for r in range(len(home)):
-        p = home[rank_home[r]]
-        stops = [p, p]
-        for s, rk in zip(shapes, rank_sym):
-            q = s[rk[r]]
-            stops.append(q)
-            # The second copy of each symbol drifts a hair off the first, so
-            # the hold breathes instead of freezing dead still.
-            stops.append((q[0] + RNG.uniform(-1.1, 1.1), q[1] + RNG.uniform(-1.1, 1.1)))
-        stops += [p, p]
+        h = home_ink[rank_home[r]]
+        seq = tuple(palettes[k][shapes[k][rank_sym[k][r]][2]] for k in range(len(shapes)))
+        groups.setdefault((h,) + seq, []).append(r)
 
-        j = RNG.uniform(-0.009, 0.009)
-        ks = [K[0]] + [k + j for k in K[1:-1]] + [K[-1]]
-        vals = ";".join(f"{fmt(x)} {fmt(y)}" for x, y in stops)
-        href = "#e" if RNG.random() < 0.085 else "#d"
+    out = []
+    for key, ranks in sorted(groups.items(), key=lambda kv: -len(kv[1])):
+        h, seq = key[0], key[1:]
+        vals = ";".join([h, h] + [c for col in seq for c in (col, col)] + [h, h])
+        dots = []
+        for r in ranks:
+            p = home[rank_home[r]]
+            stops = [p, p]
+            for k, s in enumerate(shapes):
+                q = s[rank_sym[k][r]][:2]
+                stops.append(q)
+                # The second copy of each mark drifts a hair off the first, so
+                # the hold breathes instead of freezing dead still.
+                stops.append((q[0] + RNG.uniform(-1.1, 1.1), q[1] + RNG.uniform(-1.1, 1.1)))
+            stops += [p, p]
+
+            j = RNG.uniform(-0.009, 0.009)
+            ks = [K[0]] + [k + j for k in K[1:-1]] + [K[-1]]
+            vs = ";".join(f"{fmt(x)} {fmt(y)}" for x, y in stops)
+            href = "#e" if RNG.random() < 0.085 else "#d"
+            dots.append(
+                f'<use href="{href}"><animateTransform attributeName="transform"'
+                f' type="translate" values="{vs}" keyTimes="{ktimes(ks)}" dur="{LOOP}s"'
+                f' begin="{BEGIN}s" repeatCount="indefinite" calcMode="spline"'
+                f' keySplines="{splines(ks)}"/></use>')
         out.append(
-            f'<use href="{href}"><animateTransform attributeName="transform"'
-            f' type="translate" values="{vals}" keyTimes="{ktimes(ks)}" dur="{LOOP}s"'
-            f' begin="{BEGIN}s" repeatCount="indefinite" calcMode="spline"'
-            f' keySplines="{splines(ks)}"/></use>')
-    return out
-
-
-def tints():
-    """The cloud's colour at each stop: home, each mark twice, home again."""
-    out = [HOME, HOME]
-    for _, _, colour in SYMBOLS:
-        out += [colour, colour]
-    return ";".join(out + [HOME, HOME])
+            f'<g fill="{h}"><animate attributeName="fill" values="{vals}"'
+            f' keyTimes="{ktimes(K)}" dur="{LOOP}s" begin="{BEGIN}s" repeatCount="indefinite"'
+            f' calcMode="spline" keySplines="{splines(K)}"/>' + "".join(dots) + '</g>')
+    return out, len(groups)
 
 
 def ticker_svg():
-    """The TOOLCHAIN.SCAN line, cut to the same clock as the symbols.
+    """The TOOLCHAIN.SCAN line, cut to the same clock as the marks.
 
     It used to run its own 20s loop against the panel's 30s one, so the name
     underneath drifted against the shape above it and only agreed by accident.
-    Both now come off K, so a label is up exactly while its mark is.
+    Both now come off K, so a caption is up exactly while its mark is.  Each
+    tool in a caption is set in its own colour, which is also where the ones
+    with no symbol of their own - WAHA, Railway, Netlify - get to show theirs.
     """
     lead, tail = 0.45 / LOOP, 0.35 / LOOP        # a beat either side of the hold
     out = [f'<text x="60" y="650" font-size="13" fill="#31514c">&#9656; {IDLE}'
            f'<animate attributeName="opacity" values="1;1;0;0;1;1"'
            f' keyTimes="{ktimes([0, F_REST, F_SYM1, F_BACK, F_BACK + 0.4 / LOOP, 1])}"'
            f' dur="{LOOP}s" begin="{BEGIN}s" repeatCount="indefinite"/></text>']
-    for i, (_, label, colour) in enumerate(SYMBOLS):
+    for i, (_, caption) in enumerate(SYMBOLS):
         on, off = K[2 + 2 * i], K[3 + 2 * i]
         kt = [0, on - lead, on + 0.10 / LOOP, off, off + tail, 1]
-        # The caption takes the mark's colour too, so the line under the panel
-        # and the cloud above it are visibly the same thing.
+        spans = "".join(f'<tspan fill="{c}">{esc(t)}</tspan>' for t, c in caption)
         out.append(
-            f'<text x="60" y="650" font-size="13" fill="{colour}" opacity="0">'
-            f'&#9656; {label}<animate attributeName="opacity" values="0;0;1;1;0;0"'
+            f'<text x="60" y="650" font-size="13" opacity="0" xml:space="preserve">'
+            f'<tspan fill="#31514c">&#9656; </tspan>{spans}'
+            f'<animate attributeName="opacity" values="0;0;1;1;0;0"'
             f' keyTimes="{ktimes(kt)}" dur="{LOOP}s" begin="{BEGIN}s"'
             f' repeatCount="indefinite"/></text>')
     return out
 
 
 def main():
-    im = Image.open(MASK).convert("L")
-    pts = mask_points(im)
+    mask = Image.open(MASK).convert("L")
+    pts = mask_points(mask)
     cx = sum(p[0] for p in pts) / len(pts)
     cy = sum(p[1] for p in pts) / len(pts)
 
+    painted = paint(mask, pts)
+    inks, ink_of = quantize(painted, N_INKS)
+
     home = sample_tone(pts, N_PARTICLES)
-    shapes = [place(fn(), N_PARTICLES) for fn, _, _ in SYMBOLS]
+    # The dots take the colour of the pixel they came off, cut to a few tones.
+    # Every extra tone multiplies the number of colour groups, and a handful is
+    # enough for the cloud to resolve into a face rather than a pale smear.
+    tones, tone_of = quantize({p: painted[p] for p in home}, N_DOT_TONES)
+    home_ink = [tones[tone_of[p]] for p in home]
+
+    built = [fn() for fn, _ in SYMBOLS]
+    shapes = [place(im, N_PARTICLES) for im, _ in built]
+    palettes = [pal for _, pal in built]
 
     kt_p = [0, F_REST, F_SYM1, F_HOME - 0.22 * RETURN / LOOP, F_HOME,
             F_HOME + 0.28 * SETTLE / LOOP, 1]
+    dots, n_groups = particles_svg(home, home_ink, shapes, palettes)
     # Fragments travel far enough to clear the face; the clip keeps the ones
     # that overshoot from spilling onto the SYSTEM.INFO column next door.
     body = [
         '<g clip-path="url(#pan)">',
         '<g transform="translate(44.0 115.1) scale(1.604)" shape-rendering="crispEdges">',
-        *tiles_svg(pts, cx, cy),
+        *tiles_svg(pts, cx, cy, inks, ink_of),
         '</g>',
         '',
         '<g transform="translate(44.0 115.1) scale(1.604)" shape-rendering="crispEdges"'
-        f' opacity="0" fill="{HOME}">'
+        ' opacity="0">'
         f'<animate attributeName="opacity" values="0;0;1;1;1;0;0" keyTimes="{ktimes(kt_p)}"'
         f' dur="{LOOP}s" begin="{BEGIN}s" repeatCount="indefinite"'
-        f' calcMode="spline" keySplines="{splines(kt_p)}"/>'
-        # One fill animation on the group recolours all of the dots at once,
-        # because #d and #e declare no fill of their own and inherit it.  It
-        # runs on the same stops as the movement, so a mark's colour arrives
-        # exactly as its shape does.
-        f'<animate attributeName="fill" values="{tints()}" keyTimes="{ktimes(K)}"'
-        f' dur="{LOOP}s" begin="{BEGIN}s" repeatCount="indefinite"'
-        f' calcMode="spline" keySplines="{splines(K)}"/>',
-        *particles_svg(home, shapes),
+        f' calcMode="spline" keySplines="{splines(kt_p)}"/>',
+        *dots,
         '</g>',
         '</g>',
     ]
@@ -688,8 +869,8 @@ def main():
         f.write("\n")
         f.write(TAIL.replace("<!--TICKER-->", "\n".join(ticker_svg())))
     print(f"{OUT}  {os.path.getsize(OUT) / 1024:.0f} KB  "
-          f"{len(pts)} avatar px, {N_PARTICLES} particles, "
-          f"{len(SYMBOLS)} symbols, {LOOP:.1f}s loop")
+          f"{len(pts)} avatar px in {N_INKS} inks, {N_PARTICLES} particles in "
+          f"{n_groups} colour groups, {len(SYMBOLS)} symbols, {LOOP:.1f}s loop")
 
 
 if __name__ == "__main__":
