@@ -546,14 +546,18 @@ LEVELS = ["#06313E", "#128070", "#18A088", "#20D898", "#9BEFD9"]
 # character is all that is needed to land it at the size the panel used before.
 GIRL_TARGET_H = 128.0                # her displayed height, unchanged
 GIRL_S = GIRL_TARGET_H / 104.0       # a run frame is 104px tall on the sheet
-TURTLE_S, LEAF_S, SNAKE_S = 1.00, 1.30, 0.92
-V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 52.0, 22.0
+TURTLE_S, LEAF_S, SNAKE_S = 1.00, 1.30, 1.02
+V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 39.0, 22.0
 EAT = 3.0                            # a readable set of bites, not a rapid flicker
 LEAF_GAP = 46.0                      # it halts this far short, mouth on the leaf
 # Flipbook speeds. Each is the time for one full loop of that character's cycle.
-RUN_CYCLE = 0.60                     # 8 frames: contact, pass, contact, pass
+# One cycle is two steps. Her stride is 62 units a step at this scale and she
+# crosses the panel at 134 units a second, so two steps have to take 0.92s; at
+# the 0.60 it used to run, her legs churned half again too fast for the ground
+# and she skated along instead of walking.
+RUN_CYCLE = 0.92                     # 8 frames: contact, pass, contact, pass
 WALK_CYCLE = 0.78                    # 6 frames of turtle plod
-SLITHER_CYCLE = 3.30                 # three body waves, then a tongue flick
+SLITHER_CYCLE = 3.30                 # body wave, then a clearly held tongue-flick hiss
 LEAF_SLIDE_CYCLE = 0.52              # 4 frames of leaf skittering along the ground
 
 # HUD star. The old one was a crop from the reference art, so it came out
@@ -636,12 +640,17 @@ def build_runner_panel(weeks, total=None):
     # Use the displayed sprite height instead of a magic head position.  The
     # peak is timed exactly when her horizontal centre passes under the block.
     HEAD = GROUND - GIRL_TARGET_H
-    JD = 1.08
+    JD_MAX, LIFT_MAX = 1.08, 184.0
     vals, keys = ["0,0"], [0.0]
     jump_windows = []
     for e in events:
-        lift = min(184.0, max(38.0, HEAD - (e["y"] + GCELL)))
-        t0, t1 = e["t"] - JD * 0.54, e["t"] + JD * 0.46
+        lift = min(LIFT_MAX, max(38.0, HEAD - (e["y"] + GCELL)))
+        # A hop onto a low square is over quickly; only a full-height jump is
+        # worth the whole beat. Time scales with the root of the height, the way
+        # a real fall does, so a small hop stops hanging in the air - and the
+        # shorter window leaves her running for longer between two blocks.
+        jd = max(0.62, JD_MAX * math.sqrt(lift / LIFT_MAX))
+        t0, t1 = e["t"] - jd * 0.54, e["t"] + jd * 0.46
         jump_windows.append((t0, t1))
         jump = ((0.00, 0.0), (0.08, -5.0), (0.30, lift * 0.62),
                 (0.54, lift), (0.66, lift * 0.94), (0.84, lift * 0.48),
@@ -702,8 +711,11 @@ def build_runner_panel(weeks, total=None):
 
     if e2:
         t2 = e2["t"]
+        # The second hit releases the tortoise, but the story must still read
+        # leaf first, tortoise second. Keep it hidden until the leaf has landed.
+        turtle_in = max(t2, leaf_land + 0.30)
         tx0 = e2["x"] - 34.0
-        t_land2 = t2 + 1.6
+        t_land2 = turtle_in + 1.6
         t_limb = t_land2 - 0.3          # head and legs are out before it moves off
         t_walk2 = t_land2 + 0.9
         # solve for the moment its mouth, not its middle, reaches the leaf
@@ -786,8 +798,8 @@ def build_runner_panel(weeks, total=None):
 
     if e2:
         walk = flipbook(sheet_row("twalk", TURTLE_S), WALK_CYCLE)
-        pts = [(t2, e2["x"], e2["y"] + GCELL / 2),
-               (t2 + 0.55, e2["x"] - 14.0, e2["y"] - 66.0),
+        pts = [(turtle_in, e2["x"], e2["y"] + GCELL / 2),
+               (turtle_in + 0.55, e2["x"] - 14.0, e2["y"] - 66.0),
                (t_land2, tx0, BASE),
                (t_walk2, tx0, BASE),
                (t_eat, eat_x, BASE),
@@ -811,23 +823,34 @@ def build_runner_panel(weeks, total=None):
             quiet.append((t_hide, t_emerge))
         else:
             pts += [(T, eat_x - V_TURTLE * (T - t_resume), BASE)]
-        pops.append(moving(gate(walk, quiet, T) + meal, pts, t2, T))
+        pops.append(moving(gate(walk, quiet, T) + meal, pts, turtle_in, T))
 
     if e3:
         snake_gone = max(sx0 - V_SNAKE * (t_gone - t_slith), -240.0)
         pts = [(t3, e3["x"], e3["y"] + GCELL / 2),
                (t3 + 0.55, e3["x"] - 12.0, e3["y"] - 60.0),
                (t_land3, sx0, BASE),
-               (t_slith, sx0, BASE),
-               (t_gone, snake_gone, BASE),
-               (T, snake_gone, BASE)]
-        # The eight slither frames carry the wave from head to tail on their
-        # own, so the path stays flat; the old hand-built zig-zag used to fight
-        # them. Three waves go by, then the tongue flicks and it carries on.
+               (t_slith, sx0, BASE)]
+        # A shallow zig-zag makes the travel direction readable without making
+        # the grounded snake look as though it is hopping. The body flipbook
+        # supplies the larger head-to-tail wave.
+        zig_t = t_slith + 0.34
+        zig_i = 0
+        while zig_t < t_gone:
+            zig_x = snake_at(zig_t)
+            zig_y = BASE - (3.5 if zig_i % 2 == 0 else 0.0)
+            pts.append((zig_t, zig_x, zig_y))
+            zig_t += 0.34
+            zig_i += 1
+        pts += [(t_gone, snake_gone, BASE), (T, snake_gone, BASE)]
+
+        # Run a clear tongue-flick/hiss beat in every slither cycle so the hiss
+        # cannot disappear inside one brief pair of frames.
         slither = sheet_row("sslith", SNAKE_S)
-        snake = flipbook(slither * 3 + sheet_row("stongue", SNAKE_S)
-                         + sheet_row("scont", SNAKE_S), SLITHER_CYCLE,
-                         weights=[1.0] * 24 + [1.6, 2.2, 1.0, 1.0])
+        tongue = sheet_row("stongue", SNAKE_S)
+        snake = flipbook(slither + tongue + tongue[::-1] + sheet_row("scont", SNAKE_S),
+                         SLITHER_CYCLE,
+                         weights=[1.0] * 8 + [2.0, 2.8, 2.8, 2.0, 1.0, 1.0])
         pops.append(moving(snake, pts, t3, t_gone))
 
     # ---- her ----
