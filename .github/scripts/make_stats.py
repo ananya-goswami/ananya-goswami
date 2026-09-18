@@ -295,28 +295,7 @@ def build_projects(index):
 '''
 
 
-# ---------------------------------------------------------------- reference art
-ART_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
-                        "assets", "image.png")
-ART_BOXES = {
-    "turtle": (955, 505, 1086, 586),
-    "shell":  (740, 258, 856, 332),
-    "qblock": (752, 346, 840, 430),
-    "leaf":   (1214, 316, 1332, 400),
-    "signL": (108, 402, 312, 572),
-    "signR":  (1898, 402, 2088, 572),
-    "hill":   (1655, 468, 1900, 588),
-    "grass":  (1178, 530, 1264, 584),
-    # star: drawn as geometry now, see STAR_HUD
-    "tag":    (1628, 116, 2102, 162),
-}
-ART_FLAT = ("hill", "tag")          # pasted as-is, no alpha key
-ART_BG = ((7, 15, 26), (0, 10, 18), (0, 14, 21), (2, 20, 30),
-          (6, 49, 62), (7, 44, 57), (4, 35, 46))
-_ART = None
-_MOUTH = {}  # sprite name -> keyed-out mouth, as fractions of the sprite
-
-
+# ------------------------------------------------------------------ alpha keying
 def _feather(mask, radius=0.9):
         """Soften a hard 0/255 cut into an anti-aliased edge.
         
@@ -376,121 +355,166 @@ def _silhouette(d, np, cut=24.0):
     grown[:, :-1] |= outside[:, 1:]
     return _feather(np.where(grown & raw, 0.0, 255.0))
 
-def _keep_blobs(alpha, np, frac=0.015):
-    """Drop detached specks, but keep every real piece of the sprite.
-
-    The art sets sparkle bubbles beside her shoes. Nothing links them to
-    the crop edge, so the border flood leaves them behind. Keeping only the
-    single largest island cleared them away, but it also threw out her whole
-    body whenever the key nicked her collar, which is why she ran across the
-    grid as a floating head. Every island at least frac of the biggest one
-    now survives, so the bubbles still go and she keeps her legs.
-    """
-    from collections import deque
-    h, w = alpha.shape
-    solid = alpha > 0
-    seen = np.zeros((h, w), dtype=bool)
-    blobs = []
-    for sy in range(h):
-        for sx in range(w):
-            if not solid[sy, sx] or seen[sy, sx]:
-                continue
-            seen[sy, sx] = True
-            q, blob = deque([(sy, sx)]), []
-            while q:
-                y, x = q.popleft()
-                blob.append((y, x))
-                for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                    ny, nx = y + dy, x + dx
-                    if not (0 <= ny < h and 0 <= nx < w):
-                        continue
-                    if solid[ny, nx] and not seen[ny, nx]:
-                        seen[ny, nx] = True
-                        q.append((ny, nx))
-            blobs.append(blob)
-    if not blobs:
-        return alpha
-    floor = max(len(b) for b in blobs) * frac
-    out = np.zeros((h, w), dtype=float)
-    for blob in blobs:
-        if len(blob) < floor:
-            continue
-        for y, x in blob:
-            out[y, x] = 255.0
-    return out
-
-
-def art():
-    """Cut the runner's cast out of the reference art, keyed to transparency.
-
-    Returns {name: (data_uri, w, h)}; empty if the art or Pillow is missing.
-    """
-    global _ART
-    if _ART is not None:
-        return _ART
-    _ART = {}
-    try:
-        import base64, io
-        import numpy as np
-        from PIL import Image
-    except Exception as exc:
-        print("art skipped (no Pillow):", exc)
-        return _ART
-    try:
-        src = Image.open(ART_PATH).convert("RGB")
-    except Exception as exc:
-        print("art skipped (no reference):", exc)
-        return _ART
-
-    bg = [np.array(c, dtype=float) for c in ART_BG]
-    for name, box in ART_BOXES.items():
-        crop = src.crop(box)
-        tongue = None
-        if name in ART_FLAT:
-            img = crop.convert("RGBA")
-        else:
-            a = np.array(crop).astype(float)
-            d = np.stack([np.linalg.norm(a - c, axis=2) for c in bg], axis=0).min(axis=0)
-            alpha = _silhouette(d, np)
-        img = Image.fromarray(np.dstack([a, alpha]).astype(np.uint8), "RGBA")
-        bb = img.getbbox()
-        if bb:
-            img = img.crop(bb)
-        buf = io.BytesIO()
-        flat = img.convert("RGB").quantize(colors=96, method=Image.FASTOCTREE).convert("RGBA")
-        flat.putalpha(img.getchannel("A"))
-        flat.save(buf, "PNG", optimize=True)
-        _ART[name] = ("data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
-                      img.width, img.height)
-    return _ART
-
-
-_USED = {}
-
-
-def sprite(name, x, y, anchor="bottom", scale=1.0, flip=False, extra=""):
-    """Place a sprite. x is its centre, y its baseline (or top, when anchored so).
-
-    The bitmap goes into <defs> once and every placement is a <use>, so a hill
-    repeated across the panel costs a few bytes instead of another base64 blob.
-    """
-    a = art().get(name)
-    if not a:
-        return ""
-    uri, w, h = a
-    _USED[name] = (uri, w, h)
-    sw, sh = w * scale, h * scale
-    top = y if anchor == "top" else y - sh
-    left = x - sw / 2
-    tx = left + sw if flip else left            # mirror inside the same box
-    return (f'<use xlink:href="#sp-{name}" transform="translate({tx:.1f} {top:.1f})'
-            f' scale({-scale if flip else scale:.4f} {scale:.4f})" {extra}/>')
+_USED = {}      # sprite id -> (data uri, w, h), for one <defs> entry each
 
 
 def sprite_defs():
     """<image> definitions for every sprite that was actually placed."""
     return "".join(f'<image id="sp-{n}" x="0" y="0" width="{w}" height="{h}"'
                    f' xlink:href="{u}"/>' for n, (u, w, h) in _USED.items())
+
+
+# ---------------------------------------------------------------- sprite sheet
+# The reference sheet holds a real flipbook for every character: her run, jump,
+# block hit and landing; the turtle's walk, meal and shell; the leaf's pop, fall,
+# bounce and slide; the snake's slither and tongue flick. Frames are cut out
+# whole rather than one static pose being nudged around, which is what used to
+# make the turtle look like it was sliding instead of chewing.
+SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
+                          "assets", "sprite-sheet.png")
+SHEET_BG = (0, 26, 28)
+SHEET_PAD = 3          # a margin of clean background for the alpha flood to start in
+# The ground line each panel of the sheet is drawn on. Frames keep their own
+# distance from it, so a jump frame really does sit higher than a run frame.
+SHEET_BASE = {"avatar": 221.0, "turtle": 454.0, "lettuce": 665.0, "snake": 884.0}
+# row: (panel, [(x0, y0, x1, y1, centre line of the body), ...])
+SHEET_ROWS = {
+    "run": ("avatar", [(22, 113, 98, 217, 60), (100, 114, 175, 215, 137), (177, 113, 250, 217, 213), (251, 113, 326, 207, 288), (326, 109, 401, 216, 363), (405, 110, 480, 214, 442), (484, 109, 559, 213, 521), (564, 111, 637, 209, 600)]),
+    "jump": ("avatar", [(748, 134, 819, 217, 783), (830, 100, 902, 217, 866), (914, 106, 986, 217, 950), (995, 127, 1066, 216, 1030)]),
+    "hit": ("avatar", [(1106, 120, 1179, 218, 1142), (1190, 111, 1261, 217, 1225), (1274, 122, 1351, 216, 1312)]),
+    "land": ("avatar", [(1397, 134, 1469, 217, 1433), (1488, 136, 1560, 217, 1524), (1571, 115, 1646, 217, 1608)]),
+    "twalk": ("turtle", [(33, 393, 103, 446, 68), (125, 399, 193, 447, 159), (208, 393, 279, 446, 243), (296, 398, 364, 446, 330), (382, 393, 451, 446, 416), (466, 396, 532, 446, 499)]),
+    "teat": ("turtle", [(566, 407, 607, 451, 586), (620, 401, 690, 449, 655), (740, 402, 811, 450, 775), (833, 406, 904, 450, 868), (925, 417, 957, 449, 941), (1028, 380, 1102, 449, 1065)]),
+    "thide": ("turtle", [(1143, 393, 1215, 447, 1179), (1231, 399, 1295, 448, 1263), (1317, 401, 1372, 449, 1344), (1402, 409, 1461, 448, 1431), (1488, 407, 1548, 449, 1518), (1578, 398, 1641, 448, 1609)]),
+    "lpop": ("lettuce", [(467, 609, 500, 649, 483), (555, 591, 600, 656, 577)]),
+    "lfall": ("lettuce", [(685, 612, 723, 652, 704), (777, 607, 814, 648, 795), (872, 606, 910, 648, 891)]),
+    "lbounce": ("lettuce", [(991, 619, 1035, 659, 1013), (1079, 612, 1124, 646, 1101), (1171, 610, 1213, 649, 1192)]),
+    "lslide": ("lettuce", [(1286, 621, 1330, 659, 1308), (1376, 615, 1421, 654, 1398), (1459, 613, 1504, 654, 1481), (1541, 615, 1586, 656, 1563)]),
+    "sslith": ("snake", [(27, 812, 135, 878, 81), (155, 815, 252, 880, 203), (264, 816, 363, 880, 313), (377, 815, 473, 879, 425), (488, 811, 593, 877, 540), (610, 811, 715, 877, 662), (731, 814, 837, 877, 784), (851, 810, 958, 878, 904)]),
+    "stongue": ("snake", [(1006, 814, 1121, 878, 1063), (1145, 806, 1261, 879, 1203)]),
+    "scont": ("snake", [(1349, 812, 1446, 879, 1397), (1465, 814, 1561, 878, 1513)]),
+}
+_SHEET = None
+
+
+def sheet():
+    """Cut every sheet frame out, keyed to transparency.
+
+    Returns {(row, i): (data_uri, w, h, ox, oy)}, where ox/oy is the frame's own
+    anchor: the centre line of the body and the ground it stands on. Two frames
+    placed at the same point therefore line their bodies and their feet up,
+    instead of lining up two bounding boxes of different sizes.
+    """
+    global _SHEET
+    if _SHEET is not None:
+        return _SHEET
+    _SHEET = {}
+    try:
+        import base64, io
+        import numpy as np
+        from PIL import Image
+        src = Image.open(SHEET_PATH).convert("RGB")
+    except Exception as exc:
+        print("sheet skipped:", exc)
+        return _SHEET
+    bg = np.array(SHEET_BG, dtype=float)
+    for row, (panel, frames) in SHEET_ROWS.items():
+        base_y = SHEET_BASE[panel]
+        for i, (x0, y0, x1, y1, ax) in enumerate(frames):
+            cx0, cy0 = x0 - SHEET_PAD, y0 - SHEET_PAD
+            crop = src.crop((cx0, cy0, x1 + SHEET_PAD, y1 + SHEET_PAD))
+            a = np.array(crop).astype(float)
+            # The sheet sits on one flat colour, so the border flood only has
+            # that to clear and every dark outline inside the sprite stays solid.
+            alpha = _silhouette(np.linalg.norm(a - bg, axis=2), np, cut=10.0)
+            img = Image.fromarray(np.dstack([a, alpha]).astype(np.uint8), "RGBA")
+            buf = io.BytesIO()
+            flat = img.convert("RGB").quantize(colors=96, method=Image.FASTOCTREE).convert("RGBA")
+            flat.putalpha(img.getchannel("A"))
+            flat.save(buf, "PNG", optimize=True)
+            _SHEET[(row, i)] = (
+                "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
+                img.width, img.height, ax - cx0, base_y - cy0)
+    return _SHEET
+
+
+def sheet_use(row, i, scale=1.0, dx=0.0, dy=0.0):
+    """One sheet frame, drawn with its anchor on the origin."""
+    got = sheet().get((row, i))
+    if not got:
+        return ""
+    uri, w, h, ox, oy = got
+    fid = "sf-%s%d" % (row, i)
+    _USED[fid] = (uri, w, h)
+    return (f'<use xlink:href="#sp-{fid}" transform="translate({dx - ox * scale:.1f}'
+            f' {dy - oy * scale:.1f}) scale({scale:.4f})"/>')
+
+
+def sheet_row(row, scale=1.0, dx=0.0, dy=0.0, only=None):
+    """Frames of a row, in order, ready to hand to flipbook() or sequence()."""
+    idx = range(len(SHEET_ROWS[row][1])) if only is None else only
+    return [sheet_use(row, i, scale, dx, dy) for i in idx]
+
+
+# ---------------------------------------------------------------- flipbooks
+def flipbook(frames, cycle, weights=None):
+    """Loop frames on their own clock, independent of the panel's timeline.
+
+    One nested <animate> per frame, repeating every `cycle` seconds, costs the
+    same whether the walk lasts two seconds or fifty, so a cycle never has to be
+    unrolled across the whole 56s panel.
+    """
+    frames = [f for f in frames if f]
+    if not frames:
+        return ""
+    ws = list(weights) if weights else [1.0] * len(frames)
+    total = sum(ws) or 1.0
+    out, t = "", 0.0
+    for svg, w in zip(frames, ws):
+        a, b = t, t + cycle * w / total
+        t = b
+        sv, sk = _keys(["0", "1", "0", "0"], [0.0, a, b, cycle], cycle)
+        out += (f'<g opacity="0"><animate attributeName="opacity" dur="{cycle:.3f}s"'
+                f' repeatCount="indefinite" calcMode="discrete"'
+                f' values="{sv}" keyTimes="{sk}"/>{svg}</g>')
+    return out
+
+
+def sequence(frames, t0, t1, T, weights=None):
+    """Play frames once, in order, across [t0, t1] of the panel's timeline."""
+    frames = [f for f in frames if f]
+    if not frames or t1 <= t0:
+        return ""
+    ws = list(weights) if weights else [1.0] * len(frames)
+    total = sum(ws) or 1.0
+    out, t = "", t0
+    for svg, w in zip(frames, ws):
+        a, b = t, t + (t1 - t0) * w / total
+        t = b
+        sv, sk = _keys(["0", "1", "0", "0"], [0.0, a, b, T], T)
+        out += (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s"'
+                f' repeatCount="indefinite" calcMode="discrete"'
+                f' values="{sv}" keyTimes="{sk}"/>{svg}</g>')
+    return out
+
+
+def gate(svg, windows, T):
+    """Show svg the whole time except inside the given windows.
+
+    This is what lets a looping walk cycle sit underneath one-shot sequences:
+    the loop keeps its own clock and simply blanks while the meal is playing.
+    """
+    if not svg or not windows:
+        return svg
+    times, vals = [0.0], ["1"]
+    for a, b in sorted(windows):
+        times += [a, b]
+        vals += ["0", "1"]
+    times.append(T)
+    vals.append(vals[-1])
+    gv, gk = _keys(vals, times, T)
+    return (f'<g><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
+            f' calcMode="discrete" values="{gv}" keyTimes="{gk}"/>{svg}</g>')
 
 
 def _levels(weeks):
@@ -518,11 +542,19 @@ PANEL = (33, 95, 2139, 627)
 GX0, GY0, GCELL, GPX, GPY = 85.0, 180.0, 26.0, 37.2, 36.5
 GROUND = 588.0                          # top of the ground line
 LEVELS = ["#06313E", "#128070", "#18A088", "#20D898", "#9BEFD9"]
-LEAF_S, TURTLE_S, SNAKE_S = 0.62, 0.66, 1.10
+# Every sprite comes off the sheet at its drawn size, so one scale per
+# character is all that is needed to land it at the size the panel used before.
+GIRL_TARGET_H = 128.0                # her displayed height, unchanged
+GIRL_S = GIRL_TARGET_H / 104.0       # a run frame is 104px tall on the sheet
+TURTLE_S, LEAF_S, SNAKE_S = 1.00, 1.30, 0.92
 V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 52.0, 22.0
 EAT = 3.0                            # a readable set of bites, not a rapid flicker
-LEAF_GAP = 44.0                      # it halts this far short, mouth on the leaf
-SNAKE_WAVE, SNAKE_WAVE_LEN = 8.0, 92.0    # low, quick travelling slither
+LEAF_GAP = 46.0                      # it halts this far short, mouth on the leaf
+# Flipbook speeds. Each is the time for one full loop of that character's cycle.
+RUN_CYCLE = 0.60                     # 8 frames: contact, pass, contact, pass
+WALK_CYCLE = 0.78                    # 6 frames of turtle plod
+SLITHER_CYCLE = 3.30                 # three body waves, then a tongue flick
+LEAF_SLIDE_CYCLE = 0.52              # 4 frames of leaf skittering along the ground
 
 # HUD star. The old one was a crop from the reference art, so it came out
 # tilted a few degrees and sat low beside the x N label. This is generated
@@ -638,24 +670,17 @@ def build_runner_panel(weeks, total=None):
                 continue
             cells.append(qblock(x + GCELL / 2, y + GCELL / 2, e["t"], T))
 
-    def actor(frames, pts, t_in, t_out):
-        """frames: [(svg, from_t, to_t)]; pts: [(t, x, y)] absolute, in order."""
-        vals = [f"{pts[0][1]:.1f},{pts[0][2]:.1f}"] + \
-               [f"{x:.1f},{y:.1f}" for _, x, y in pts] + \
-               [f"{pts[-1][1]:.1f},{pts[-1][2]:.1f}"]
+    def moving(inner, pts, t_in, t_out):
+        """Carry one already-animated character along pts: [(t, x, y)], in order.
+
+        Its frames run on their own clocks inside `inner`, so this only has to
+        deal with where the character is and whether it is on screen yet.
+        """
+        vals = [f"{pts[0][1]:.1f},{pts[0][2]:.1f}"] +                [f"{x:.1f},{y:.1f}" for _, x, y in pts] +                [f"{pts[-1][1]:.1f},{pts[-1][2]:.1f}"]
         times = [0.0] + [t for t, _, _ in pts] + [T]
         mv, mk = _keys(vals, times, T)
         ov, ok = _keys(["0", "0", "1", "1", "0", "0"],
                        [0.0, t_in, t_in + 0.06, t_out - 0.45, t_out, T], T)
-        inner = ""
-        for svg, a, b in frames:
-            # discrete: a frame is either on or off. Crossfading two of them
-            # left both half transparent for a moment, and with a bite every
-            # 0.3s that is what made the turtle look see-through all meal.
-            sv, sk = _keys(["0", "1", "0", "0"], [0.0, a, b, T], T)
-            inner += (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s"'
-                      f' repeatCount="indefinite" calcMode="discrete"'
-                      f' values="{sv}" keyTimes="{sk}"/>{svg}</g>')
         return (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s"'
                 f' repeatCount="indefinite" values="{ov}" keyTimes="{ok}"/>'
                 f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
@@ -707,7 +732,8 @@ def build_runner_panel(weeks, total=None):
         def snake_at(t):
             return sx0 - V_SNAKE * max(0.0, t - t_slith)
 
-        t_hide, probe = T - 7.0, t_slith
+        # Never mid-meal: it cannot be chewing and shut in its shell at once.
+        t_hide, probe = T - 7.0, max(t_slith, t_resume + 0.2)
         while probe < T - 7.0:
             if snake_at(probe) - turtle_at(probe) <= 115.0:
                 t_hide = probe
@@ -719,26 +745,35 @@ def build_runner_panel(weeks, total=None):
         t_crawl = t_emerge + 0.7
         exit_x = hide_x - V_LIMP * max(0.0, T - 0.4 - t_crawl)
 
+    # A bite is the turtle lowering its head and closing on the leaf. The meal
+    # is an approach, two of those, and a happy look, and the leaf loses a piece
+    # on each one, so the two sequences have to agree on when a bite lands.
+    APPROACH, LOWER, BITE, HAPPY = 0.50, 0.45, 0.45, 0.70
+    bite1 = t_eat + APPROACH + LOWER + BITE if e2 else 0.0
+    bite2 = bite1 + LOWER + BITE if e2 else 0.0
+
     if e1:
         # it drifts along the ground until the turtle catches it up, then it
         # sits still and loses a piece to every bite until there is none
         leaf_x = eat_x - LEAF_GAP if e2 else lx0 - V_LEAF * (T - leaf_land)
-        leaf_end = t_eat + EAT if e2 else T
-        bites = max(1, int(EAT / CHOMP)) if e2 else 0
-        frames = [(sprite("leaf", 0, 0, scale=LEAF_S), t1,
-                   t_eat if e2 else T)]
-        leaf_art = art().get("leaf")
-        leaf_full_w = leaf_art[1] * LEAF_S if leaf_art else 0.0
-        for k in range(bites):
-            left = 1.0 - (k + 1.0) / bites
-            if left <= 0.02:
-                break
-            # Keep the edge at the turtle's mouth fixed as the far side is
-            # eaten away. Scaling around the centre made the leaf retreat.
-            mouth_anchor = leaf_full_w * (1.0 - left) / 2.0
-            frames.append((sprite("leaf", mouth_anchor, 0, scale=LEAF_S * left),
-                           t_eat + k * CHOMP,
-                           min(leaf_end, t_eat + (k + 1.0) * CHOMP)))
+        leaf_end = bite2 if e2 else T
+        bounce_end = leaf_land + 0.50
+        # The turtle eats from the right, so the leaf has to keep its right edge
+        # where the mouth is; only the far side may shrink away.
+        full_w = float(SHEET_ROWS["lslide"][1][0][2] - SHEET_ROWS["lslide"][1][0][0])
+        crumb_w = float(SHEET_ROWS["teat"][1][4][2] - SHEET_ROWS["teat"][1][4][0])
+        crumb_dx = (full_w - crumb_w) / 2.0 * LEAF_S
+        leaf = (sequence(sheet_row("lpop", LEAF_S), t1, t1 + 0.55, T)
+                + sequence(sheet_row("lfall", LEAF_S), t1 + 0.55, leaf_land, T)
+                + sequence(sheet_row("lbounce", LEAF_S), leaf_land, bounce_end, T))
+        if e2:
+            leaf += sequence([flipbook(sheet_row("lslide", LEAF_S), LEAF_SLIDE_CYCLE)],
+                             bounce_end, bite1, T)
+            # one bite in, all that is left is the scrap the sheet draws
+            leaf += sequence([sheet_use("teat", 4, LEAF_S, dx=crumb_dx)], bite1, bite2, T)
+        else:
+            leaf += sequence([flipbook(sheet_row("lslide", LEAF_S), LEAF_SLIDE_CYCLE)],
+                             bounce_end, T, T)
         lpts = [(t1, e1["x"], e1["y"] + GCELL / 2),
                 (t1 + 0.55, e1["x"] - 26.0, e1["y"] - 62.0),
                 (t1 + 1.3, e1["x"] - 72.0, BASE - 34.0),
@@ -747,48 +782,53 @@ def build_runner_panel(weeks, total=None):
             lpts.append((t_eat, leaf_x, BASE))
             lpts.append((leaf_end, leaf_x, BASE))
         lpts.append((T, leaf_x, BASE))
-        pops.append(actor(frames, lpts, t1, leaf_end))
+        pops.append(moving(leaf, lpts, t1, leaf_end))
 
     if e2:
-        shell = sprite("shell", 0, 0, scale=TURTLE_S, flip=True)
-        turt = sprite("turtle", 0, 0, scale=TURTLE_S, flip=True)
+        walk = flipbook(sheet_row("twalk", TURTLE_S), WALK_CYCLE)
         pts = [(t2, e2["x"], e2["y"] + GCELL / 2),
                (t2 + 0.55, e2["x"] - 14.0, e2["y"] - 66.0),
                (t_land2, tx0, BASE),
                (t_walk2, tx0, BASE),
-               (t_eat, eat_x, BASE)]
-        pts.append((t_resume, eat_x, BASE))  # the bites are frames now
-        eating = chomp_frames(turt, t_eat, EAT)
+               (t_eat, eat_x, BASE),
+               (t_resume, eat_x, BASE)]
+        # approach, lower, bite, lower, bite, then a pleased look
+        meal = sequence(sheet_row("teat", TURTLE_S, only=(1, 2, 3, 2, 3, 5)),
+                        t_eat, t_resume, T,
+                        weights=[APPROACH, LOWER, BITE, LOWER, BITE, HAPPY])
+        quiet = [(t_eat, t_resume)]
         if e3:
             pts += [(t_hide, hide_x, BASE), (t_crawl, hide_x, BASE),
                     (T - 0.4, exit_x, BASE), (T, exit_x, BASE)]
-            frames = ([(shell, t2, t_limb), (turt, t_limb, t_eat)]
-                          + eating + [(turt, t_resume, t_hide),
-                                      (shell, t_hide, t_emerge),
-                                      (turt, t_emerge, T)])
+            # head and all four legs go in fast, the closed shell sits out the
+            # snake, then everything comes back out and it plods on
+            shut = t_hide + 0.26
+            meal += sequence(sheet_row("thide", TURTLE_S, only=(2, 3)), t_hide, shut, T)
+            meal += sequence(sheet_row("thide", TURTLE_S, only=(3, 4, 3, 4)),
+                             shut, t_pass, T)
+            meal += sequence(sheet_row("thide", TURTLE_S, only=(4, 2, 5)),
+                             t_pass, t_emerge, T)
+            quiet.append((t_hide, t_emerge))
         else:
             pts += [(T, eat_x - V_TURTLE * (T - t_resume), BASE)]
-            frames = ([(shell, t2, t_limb), (turt, t_limb, t_eat)]
-                          + eating + [(turt, t_resume, T)])
-        pops.append(actor(frames, pts, t2, T))
+        pops.append(moving(gate(walk, quiet, T) + meal, pts, t2, T))
 
     if e3:
+        snake_gone = max(sx0 - V_SNAKE * (t_gone - t_slith), -240.0)
         pts = [(t3, e3["x"], e3["y"] + GCELL / 2),
                (t3 + 0.55, e3["x"] - 12.0, e3["y"] - 60.0),
                (t_land3, sx0, BASE),
-               (t_slith, sx0, BASE)]
-        # Sample a travelling ground wave densely enough that the snake glides
-        # through a visible zig-zag instead of hopping between hard corners.
-        step = SNAKE_WAVE_LEN / 12.0
-        sx, st, k = sx0, t_slith, 0
-        while st < t_gone and sx > -240.0:
-            k += 1
-            sx -= step
-            st += step / V_SNAKE
-            lift = SNAKE_WAVE * 0.5 * (1.0 - math.cos(k * math.pi / 6.0))
-            pts.append((min(st, t_gone), max(sx, -240.0), BASE - lift))
-        pts.append((T, max(sx, -240.0), BASE))
-        pops.append(actor([("", t3, T)], pts, t3, t_gone))
+               (t_slith, sx0, BASE),
+               (t_gone, snake_gone, BASE),
+               (T, snake_gone, BASE)]
+        # The eight slither frames carry the wave from head to tail on their
+        # own, so the path stays flat; the old hand-built zig-zag used to fight
+        # them. Three waves go by, then the tongue flicks and it carries on.
+        slither = sheet_row("sslith", SNAKE_S)
+        snake = flipbook(slither * 3 + sheet_row("stongue", SNAKE_S)
+                         + sheet_row("scont", SNAKE_S), SLITHER_CYCLE,
+                         weights=[1.0] * 24 + [1.6, 2.2, 1.0, 1.0])
+        pops.append(moving(snake, pts, t3, t_gone))
 
     # ---- her ----
     girl = (f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
@@ -815,7 +855,6 @@ def build_runner_panel(weeks, total=None):
     if total is not None:
         hud = (STAR_HUD +
                f'<text class="rmono" x="104" y="160" font-size="30" fill="#CFEAE3">x {total}</text>')
-    hud += sprite("tag", 1865, 116, anchor="top")
 
     px0, py0, px1, py1 = PANEL
     coin_y = GCELL / 2 - GCELL * QBLOCK_S / 2 - COIN_R * 0.5
@@ -964,122 +1003,31 @@ def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
 
 
 # ---------------------------------------------------------------- her run
-FRAME_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "assets")
-FRAME_BG = ((255, 255, 255),)
-GIRL_RUN_SEQ = ["girl_run_1.png", "girl_run_2.png", "girl_run_3.png",
-                "girl_run_4.png", "girl_run_5.png"]
-GIRL_JUMP_IMG = "girl_jump.png"
-GIRL_CROUCH_IMG = "girl_crouch_1.png"
-GIRL_TARGET_H = 128.0  # every frame is scaled to this displayed height
-GIRL_CYCLE = 0.60  # seconds for one full running-flipbook loop
-CROUCH_T = 0.14  # anticipation / landing squat either side of a jump
-_FRAMES = {}
+# How the jump window is shared out. She rises through the four jump frames,
+# strikes the block at the top over the three hit frames, and comes down through
+# the three landing frames; the run cycle takes over again the moment she lands.
+JUMP_W = [3.0, 3.0, 3.0, 3.0] + [1.3, 1.3, 1.3] + [2.7, 2.7, 2.7]
 
-def _load_frame(fname):
-    """Cut one avatar frame out of its own white-background image,
-    keyed to transparency the same way the reference art is."""
-    if fname in _FRAMES:
-        return _FRAMES[fname]
-    try:
-        import base64, io
-        import numpy as np
-        from PIL import Image
-        img = Image.open(os.path.join(FRAME_DIR, fname)).convert("RGB")
-    except Exception as exc:
-        print("frame skipped", fname, exc)
-        return None
-    a = np.array(img).astype(float)
-    d = np.stack([np.linalg.norm(a - np.array(c, dtype=float), axis=2)
-                   for c in FRAME_BG], axis=0).min(axis=0)
-    alpha = _keep_blobs(_silhouette(d, np, cut=36.0), np, frac=0.02)
-    out = Image.fromarray(np.dstack([a, alpha]).astype(np.uint8), "RGBA")
-    bb = out.getbbox()
-    if bb:
-        out = out.crop(bb)
-    buf = io.BytesIO()
-    flat = out.convert("RGB").quantize(colors=96, method=Image.FASTOCTREE).convert("RGBA")
-    flat.putalpha(out.getchannel("A"))
-    flat.save(buf, "PNG", optimize=True)
-    uri = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
-    _FRAMES[fname] = (uri, out.width, out.height)
-    return _FRAMES[fname]
-
-def frame_use(fname):
-    """<use> for one girl sprite frame; registers it in <defs>."""
-    got = _load_frame(fname)
-    if not got:
-        return None
-    uri, w, h = got
-    fid = "gf_" + fname.replace(".", "_")
-    _USED[fid] = (uri, w, h)
-    return f'<use xlink:href="#sp-{fid}"/>', w, h
-
-def _pose_group(frame, values, keys, baseline, T):
-    use, w, h = frame
-    scale = GIRL_TARGET_H / h
-    sw, sh = w * scale, h * scale
-    return (f'<g transform="translate({-sw / 2:.1f} {baseline - sh:.1f}) scale({scale:.4f})" opacity="0">'
-            f'<animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
-            f' calcMode="discrete" values="{values}" keyTimes="{keys}"/>{use}</g>')
 
 def girl_runner(jump_windows, T, baseline=6.0):
-    """Flip through her real running frames, with a crouch/jump pose
-    swapped in on top whenever she is airborne - no more slicing and
-    rotating pieces of one static image."""
-    n = len(GIRL_RUN_SEQ)
-    seg = GIRL_CYCLE / n
-    run_svg = ""
-    for i, fname in enumerate(GIRL_RUN_SEQ):
-        frame = frame_use(fname)
-        if not frame:
-            continue
-        u, w, h = frame
-        scale = GIRL_TARGET_H / h
-        a0, b0 = i * seg, (i + 1) * seg
-        sv, sk = _keys(["0", "1", "0", "0"], [0.0, a0, b0, GIRL_CYCLE], GIRL_CYCLE)
-        sw, sh = w * scale, h * scale
-        run_svg += (f'<g transform="translate({-sw / 2:.1f} {baseline - sh:.1f}) scale({scale:.4f})" opacity="0">'
-                    f'<animate attributeName="opacity" dur="{GIRL_CYCLE:.3f}s"'
-                    f' repeatCount="indefinite" calcMode="discrete"'
-                    f' values="{sv}" keyTimes="{sk}"/>{u}</g>')
-    overlay = ""
-    if jump_windows:
-        jump = frame_use(GIRL_JUMP_IMG)
-        crouch = frame_use(GIRL_CROUCH_IMG)
-        if jump:
-            times, vj, vc = [0.0], ["0"], ["0"]
-            for t0, t1 in jump_windows:
-                c1 = min(t0 + CROUCH_T, t1)
-                c2 = max(t1 - CROUCH_T, c1)
-                times += [t0, c1, c2, t1]
-                vj += ["0", "1", "1", "0"]
-                vc += ["1", "0", "0", "1"]
-            times.append(T)
-            vj.append("0")
-            vc.append("0")
-            jv, jk = _keys(vj, times, T)
-            cv, ck = _keys(vc, times, T)
-            overlay = _pose_group(jump, jv, jk, baseline, T)
-            if crouch:
-                overlay += _pose_group(crouch, cv, ck, baseline, T)
-    return run_svg + overlay
-    
-                 
-# ---------------------------------------------------------------- the cast
-CHOMP = 0.90  # seconds per complete bite: reach, close, recover
-def chomp_frames(turt, t0, dur):
-    """Three readable poses per bite, without teleporting the whole turtle."""
-    out, t = [], t0
-    reach = f'<g transform="translate(-9 5) rotate(-5 0 0)">{turt}</g>'
-    bite = f'<g transform="translate(-17 9) rotate(-9 0 0)">{turt}</g>'
-    while t + CHOMP <= t0 + dur:
-        out.append((reach, t, t + CHOMP * 0.24))
-        out.append((bite, t + CHOMP * 0.24, t + CHOMP * 0.58))
-        out.append((turt, t + CHOMP * 0.58, t + CHOMP))
-        t += CHOMP
-    if t < t0 + dur:
-        out.append((turt, t, t0 + dur))
-    return out
+    """Her whole flipbook: an eight-frame run that alternates legs properly,
+    with the jump, block hit and landing frames played over the top of it
+    for each square she knocks open."""
+    # Two squares can sit close enough that one jump has not finished before the
+    # next begins; the first then gives way rather than drawing a second of her.
+    wins = []
+    for t0, t1 in sorted(jump_windows):
+        if wins and t0 < wins[-1][1]:
+            wins[-1] = (wins[-1][0], t0)
+        wins.append((t0, t1))
+    run = flipbook(sheet_row("run", GIRL_S, dy=baseline), RUN_CYCLE)
+    air = ""
+    for t0, t1 in wins:
+        air += sequence(sheet_row("jump", GIRL_S, dy=baseline)
+                        + sheet_row("hit", GIRL_S, dy=baseline)
+                        + sheet_row("land", GIRL_S, dy=baseline),
+                        t0, t1, T, weights=JUMP_W)
+    return gate(run, wins, T) + air
 
 
 if __name__ == "__main__":
