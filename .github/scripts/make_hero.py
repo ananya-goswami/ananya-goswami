@@ -23,6 +23,11 @@ return runs the same move backwards and lands the particles back on their
 own pixels just as the fragments settle, so the loop closes without a seam.
 
 Run it from the repo root:  python .github/scripts/make_hero.py
+
+Bump the filename in OUT, and the readme with it, on any change anyone is
+meant to see.  GitHub serves README images through camo, which caches them by
+URL, so republishing to the same path leaves everyone looking at the first
+version that was ever fetched - no amount of pushing shifts it.
 """
 import math
 import os
@@ -111,7 +116,7 @@ TAIL = """
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MASK = os.path.join(ROOT, "assets", "portrait-mask.png")
-OUT = os.path.join(ROOT, "assets", "hero-v13.svg")
+OUT = os.path.join(ROOT, "assets", "hero-v14.svg")
 
 RNG = random.Random(7)
 
