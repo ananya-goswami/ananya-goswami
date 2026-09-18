@@ -117,7 +117,7 @@ TAIL = """
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MASK = os.path.join(ROOT, "assets", "portrait-mask.png")
 REF = os.path.join(ROOT, "assets", "portrait-colour.png")
-OUT = os.path.join(ROOT, "assets", "hero-v15.svg")
+OUT = os.path.join(ROOT, "assets", "hero-v16.svg")
 
 RNG = random.Random(7)
 
@@ -137,7 +137,9 @@ EASE = ".4 0 .2 1"              # one ease-in-out, reused on every segment; it i
                                 # short spelling is worth ~100KB on the file
 
 N_PARTICLES = 1550
-N_INKS = 28                     # colours the painted avatar is cut down to
+N_INKS = 64                     # colours the painted avatar is cut down to; at 28
+                                # median-cut spent them all on skin and flattened
+                                # her mouth into a grey
 N_DOT_TONES = 4                 # and the far coarser set the dots use
 TILE_COLS, TILE_ROWS = 12, 15
 
@@ -435,6 +437,7 @@ LO, HI, GAMMA, SAT = 0.22, 1.0, 0.52, 1.10
 # a smudge without a brighter white and a catchlight.
 EYES = ((134, 137, 17, 5.6), (187, 137, 13.5, 5.4))
 CHEEKS = ((107, 166), (191, 159))
+MOUTH = (150, 193, 31, 14)      # kept out of the backdrop correction below
 SCLERA = (238, 245, 255)
 GLINT = (255, 255, 255)
 BLUSH = (232, 126, 120)
@@ -474,10 +477,18 @@ def paint(mask, pts):
         # wash at the crown is blue-led but bright and almost grey, where the
         # jacket is blue-led and dark.  Caught pixels lose the cast and some of
         # the lift, so the crown reads as sheen on black hair rather than a halo.
+        # Her mouth is exempt.  Rose has green as its darkest channel just as
+        # lilac does, so the first test catches her lips too and flattens them
+        # to grey, which against warm skin reads as blue.  Telling the two
+        # apart by how far red runs ahead of blue does fix the mouth, but it
+        # then lets warm mid-dark hair through as well - and lifting a dark
+        # brown only makes a lighter brown, which is salmon.  The mouth is one
+        # small place in a known spot, so excluding it there is the honest fix.
         mx, mn = max(r, g, b), min(r, g, b)
         lit = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
-        if (g < r and g < b) or (b >= r and b >= g and lit > 0.28
-                                 and (mx - mn) / max(mx, 1) < 0.50):
+        mouth = _ell(x, y, *MOUTH, 0.30) > 0.3
+        if (not mouth and g < r and g < b) or (b >= r and b >= g and lit > 0.28
+                                               and (mx - mn) / max(mx, 1) < 0.50):
             v = lit * 255.0 * 0.76
             r, g, b = v * 1.06, v * 0.97, v * 0.93
 
