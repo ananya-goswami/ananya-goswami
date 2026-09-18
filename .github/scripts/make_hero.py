@@ -51,9 +51,6 @@ HEAD = """<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="706" view
   <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse"><path d="M34 0H0V34" fill="none" stroke="#00FF9C" stroke-opacity=".04"/></pattern>
   <rect id="d" width="1.25" height="1.25"/>
   <rect id="e" width="2" height="2" fill-opacity=".45"/>
-  <linearGradient id="tail" x1="1" y1="1" x2="0" y2="0">
-    <stop offset="0" stop-color="#EAF6FF" stop-opacity=".9"/><stop offset="1" stop-color="#EAF6FF" stop-opacity="0"/>
-  </linearGradient>
   <clipPath id="pan"><rect x="39" y="89" width="440" height="580" rx="8"/></clipPath>
 </defs>
 <style>.rv { opacity: 1 }</style>
@@ -120,7 +117,7 @@ TAIL = """
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MASK = os.path.join(ROOT, "assets", "portrait-mask.png")
 REF = os.path.join(ROOT, "assets", "portrait-colour.png")
-OUT = os.path.join(ROOT, "assets", "hero-v17.svg")
+OUT = os.path.join(ROOT, "assets", "hero-v18.svg")
 
 RNG = random.Random(7)
 
@@ -417,7 +414,12 @@ SYMBOLS = [
     (sym_ship, [("vercel", "#FFFFFF"), (" \u00b7 ", DIM), ("netlify", "#00C7B7")]),
     (sym_term, [("claude code", "#D97757"), (" \u00b7 ", DIM), ("codex", "#C9CDD4")]),
 ]
-IDLE = "standby"                # shown while the avatar, not a symbol, is up
+# Shown while the avatar, rather than a mark, is up.  A machine word like
+# "standby" reads as the panel waiting for something; this is the line her
+# own README opens with, so the rest is what she builds it with.
+IDLE = [("classroom idea", "#9BE7C4"), (" → ", "#31514c"),
+        ("prototype", "#22D3EE"), (" → ", "#31514c"),
+        ("shipped", "#00FF9C")]
 
 
 # ------------------------------------------------------------------ colour
@@ -669,6 +671,95 @@ def _stops():
 K = _stops()
 
 
+COMET_PERIOD = 28.0             # the whole procession repeats on this
+COMET_GAP = 2.0                 # and one sets off every this many seconds
+COMET_TINTS = ("ice", "mint", "iris")
+
+
+def comet_defs():
+    """One reusable comet, drawn head at the origin with its tail along -x.
+
+    The glow is two gradients rather than a blur filter.  A feGaussianBlur on
+    fourteen moving groups is re-rasterised every frame for something that is
+    never more than a few pixels across; a radial halo behind the head and a
+    linear fade down the tail cost nothing and render the same everywhere.
+
+    The tail gradient is in user space, not on the bounding box: the tail is a
+    horizontal line, so its box has no height, and a bounding-box gradient on
+    that is undefined and drops out in some renderers.
+    """
+    out = ['<radialGradient id="halo">'
+           '<stop offset="0" stop-color="#FFFFFF" stop-opacity=".85"/>'
+           '<stop offset="0.3" stop-color="#DFF6FF" stop-opacity=".38"/>'
+           '<stop offset="1" stop-color="#9BE7C4" stop-opacity="0"/></radialGradient>']
+    for name, mid, far in (("ice", "#CFF3FF", "#7FD8FF"),
+                           ("mint", "#B8F5D8", "#4FE0A8"),
+                           ("iris", "#DCCFFF", "#9B7FF0")):
+        out.append(
+            f'<linearGradient id="t{name}" gradientUnits="userSpaceOnUse"'
+            f' x1="-100" y1="0" x2="0" y2="0">'
+            f'<stop offset="0" stop-color="{far}" stop-opacity="0"/>'
+            f'<stop offset="0.55" stop-color="{mid}" stop-opacity=".30"/>'
+            f'<stop offset="0.86" stop-color="{mid}" stop-opacity=".70"/>'
+            f'<stop offset="1" stop-color="#FFFFFF" stop-opacity="1"/></linearGradient>')
+        out.append(
+            f'<g id="c{name}">'
+            f'<path d="M-100 0L-2 0" stroke="url(#t{name})" stroke-width="1.5"'
+            f' stroke-linecap="round" fill="none"/>'
+            f'<circle r="6.5" fill="url(#halo)"/>'
+            f'<circle r="1.35" fill="#FFFFFF"/></g>')
+    return out
+
+
+def comets_svg():
+    """A procession of them, one setting off every COMET_GAP seconds.
+
+    Depth is carried by three things at once, because scale alone reads as a
+    near comet that happens to be small: a far one is also dimmer and slower,
+    since parallax is what actually says how distant something is.  One is
+    deliberately much larger than the rest so the stream has an event in it.
+    """
+    cx, cy, reach = 259.0, 379.0, 430.0
+    n = int(round(COMET_PERIOD / COMET_GAP))
+    out = []
+    for i in range(n):
+        big = (i == 3)
+        if big:
+            scale, alpha, cross = 2.5, 1.0, 1.15
+        else:
+            # most sit far back; a couple come closer
+            z = RNG.choice([0.34, 0.40, 0.46, 0.52, 0.60, 0.72, 0.95, 1.20])
+            scale, alpha = z, min(0.95, 0.30 + 0.62 * z)
+            cross = 2.7 - 1.3 * min(z, 1.2) / 1.2
+
+        ang = math.radians(RNG.uniform(0, 360))
+        dx, dy = math.cos(ang), math.sin(ang)
+        off = RNG.uniform(-250, 250)
+        px, py = -dy * off, dx * off
+        x0, y0 = cx + px - dx * reach, cy + py - dy * reach
+        x1, y1 = cx + px + dx * reach, cy + py + dy * reach
+
+        begin = i * COMET_GAP + RNG.uniform(-0.25, 0.25)
+        a = cross / COMET_PERIOD
+        tint = COMET_TINTS[i % len(COMET_TINTS)]
+        out.append(
+            f'<g opacity="0">'
+            # Every one of these has to be a fraction of the crossing, not of the
+            # period.  A fixed fade-in put keyTimes out of order once the cross
+            # was short, and an out-of-order list makes the whole animation
+            # invalid - the comets simply never appeared.
+            f'<animate attributeName="opacity" values="0;{alpha:.2f};{alpha:.2f};0;0"'
+            f' keyTimes="0;{a * 0.12:.4f};{a * 0.74:.4f};{a:.4f};1" dur="{COMET_PERIOD}s"'
+            f' begin="{begin:.2f}s" repeatCount="indefinite"/>'
+            f'<animateTransform attributeName="transform" type="translate"'
+            f' values="{x0:.0f} {y0:.0f};{x1:.0f} {y1:.0f};{x1:.0f} {y1:.0f}"'
+            f' keyTimes="0;{a:.4f};1" dur="{COMET_PERIOD}s" begin="{begin:.2f}s"'
+            f' repeatCount="indefinite"/>'
+            f'<use href="#c{tint}" transform="rotate({math.degrees(ang):.1f})'
+            f' scale({scale:.2f})"/></g>')
+    return out
+
+
 def space_svg():
     """A quiet starfield behind her, and a comet through it now and then.
 
@@ -701,22 +792,6 @@ def space_svg():
             f' dur="{dur:.1f}s" begin="-{RNG.uniform(0, dur):.1f}s"'
             f' repeatCount="indefinite"/></circle>')
 
-    # Two comets, on long unrelated periods, so one is a surprise rather than a
-    # metronome.  Each is visible for only a slice of its own cycle.
-    for (x0, y0), (x1, y1), period, cross, delay in (
-            ((500, 120), (60, 430), 23.0, 2.2, 3.0),
-            ((20, 250), (430, 640), 31.0, 2.6, 17.0)):
-        a, b = cross / period, (cross + 0.35) / period
-        out.append(
-            f'<g opacity="0">'
-            f'<animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.06;{a:.3f};{b:.3f};1"'
-            f' dur="{period}s" begin="{delay}s" repeatCount="indefinite"/>'
-            f'<animateTransform attributeName="transform" type="translate"'
-            f' values="{x0} {y0};{x1} {y1};{x1} {y1}" keyTimes="0;{a:.3f};1"'
-            f' dur="{period}s" begin="{delay}s" repeatCount="indefinite"/>'
-            f'<path d="M0 0L{(x0 - x1) * 0.13:.1f} {(y0 - y1) * 0.13:.1f}"'
-            f' stroke="url(#tail)" stroke-width="1.7" stroke-linecap="round" fill="none"/>'
-            f'<circle r="1.5" fill="#EAF6FF"/></g>')
     return out
 
 
@@ -851,7 +926,9 @@ def ticker_svg():
     with no symbol of their own - WAHA, Railway, Netlify - get to show theirs.
     """
     lead, tail = 0.45 / LOOP, 0.35 / LOOP        # a beat either side of the hold
-    out = [f'<text x="60" y="650" font-size="13" fill="#31514c">&#9656; {IDLE}'
+    idle = "".join(f'<tspan fill="{c}">{esc(t)}</tspan>' for t, c in IDLE)
+    out = [f'<text x="60" y="650" font-size="13" xml:space="preserve">'
+           f'<tspan fill="#31514c">&#9656; </tspan>{idle}'
            f'<animate attributeName="opacity" values="1;1;0;0;1;1"'
            f' keyTimes="{ktimes([0, F_REST, F_SYM1, F_BACK, F_BACK + 0.4 / LOOP, 1])}"'
            f' dur="{LOOP}s" begin="{BEGIN}s" repeatCount="indefinite"/></text>']
@@ -894,8 +971,10 @@ def main():
     # Fragments travel far enough to clear the face; the clip keeps the ones
     # that overshoot from spilling onto the SYSTEM.INFO column next door.
     body = [
+        '<defs>' + ''.join(comet_defs()) + '</defs>',
         '<g clip-path="url(#pan)">',
         *space_svg(),
+        *comets_svg(),
         '<g transform="translate(44.0 115.1) scale(1.604)" shape-rendering="crispEdges">',
         *tiles_svg(pts, cx, cy, inks, ink_of),
         '</g>',
