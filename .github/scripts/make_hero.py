@@ -117,7 +117,7 @@ TAIL = """
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MASK = os.path.join(ROOT, "assets", "portrait-mask.png")
 REF = os.path.join(ROOT, "assets", "portrait-colour.png")
-OUT = os.path.join(ROOT, "assets", "hero-v18.svg")
+OUT = os.path.join(ROOT, "assets", "hero-v19.svg")
 
 RNG = random.Random(7)
 
@@ -725,14 +725,19 @@ def comets_svg():
     for i in range(n):
         big = (i == 3)
         if big:
-            scale, alpha, cross = 2.5, 1.0, 1.15
+            scale, alpha, cross = 2.5, 1.0, 5.5
         else:
             # most sit far back; a couple come closer
             z = RNG.choice([0.34, 0.40, 0.46, 0.52, 0.60, 0.72, 0.95, 1.20])
             scale, alpha = z, min(0.95, 0.30 + 0.62 * z)
-            cross = 2.7 - 1.3 * min(z, 1.2) / 1.2
+            # The far ones take longest to cross.  That is the parallax: they
+            # are the same distance across the panel either way, so the only
+            # thing that can say they are further off is taking longer over it.
+            cross = 11.5 - 5.0 * min(z, 1.2) / 1.2
 
-        ang = math.radians(RNG.uniform(0, 360))
+        # Right to left, every one of them, with only enough tilt to keep the
+        # tracks from lying on top of each other.  180 degrees is due left.
+        ang = math.radians(RNG.uniform(158, 202))
         dx, dy = math.cos(ang), math.sin(ang)
         off = RNG.uniform(-250, 250)
         px, py = -dy * off, dx * off
