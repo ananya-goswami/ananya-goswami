@@ -546,19 +546,18 @@ LEVELS = ["#06313E", "#128070", "#18A088", "#20D898", "#9BEFD9"]
 # character is all that is needed to land it at the size the panel used before.
 GIRL_TARGET_H = 128.0                # her displayed height, unchanged
 GIRL_S = GIRL_TARGET_H / 104.0       # a run frame is 104px tall on the sheet
-TURTLE_S, LEAF_S, SNAKE_S = 1.00, 1.30, 1.02
+TURTLE_S, LEAF_S, SNAKE_S = 1.10, 0.82, 1.02
 V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 39.0, 22.0
 EAT = 3.0                            # a readable set of bites, not a rapid flicker
-LEAF_GAP = 46.0                      # it halts this far short, mouth on the leaf
+LEAF_GAP = 39.0                      # smaller leaf halts with its edge at the mouth
 # Flipbook speeds. Each is the time for one full loop of that character's cycle.
 # One cycle is two steps. Her stride is 62 units a step at this scale and she
 # crosses the panel at 134 units a second, so two steps have to take 0.92s; at
 # the 0.60 it used to run, her legs churned half again too fast for the ground
 # and she skated along instead of walking.
 RUN_CYCLE = 0.92                     # 8 frames: contact, pass, contact, pass
-WALK_CYCLE = 0.78                    # 6 frames of turtle plod
+WALK_CYCLE = 1.04                    # slow enough for alternating legs to read
 SLITHER_CYCLE = 3.30                 # body wave, then a clearly held tongue-flick hiss
-LEAF_SLIDE_CYCLE = 0.52              # 4 frames of leaf skittering along the ground
 
 # HUD star. The old one was a crop from the reference art, so it came out
 # tilted a few degrees and sat low beside the x N label. This is generated
@@ -758,34 +757,23 @@ def build_runner_panel(weeks, total=None):
         exit_x = hide_x - V_LIMP * max(0.0, T - 0.4 - t_crawl)
 
     # A bite is the turtle lowering its head and closing on the leaf. The meal
-    # is an approach, two of those, and a happy look, and the leaf loses a piece
-    # on each one, so the two sequences have to agree on when a bite lands.
+    # is an approach, two bites, and a happy look. Once the head lowers, the
+    # authored eating frames own both turtle and leaf, avoiding a duplicate leaf.
     APPROACH, LOWER, BITE, HAPPY = 0.50, 0.45, 0.45, 0.70
-    bite1 = t_eat + APPROACH + LOWER + BITE if e2 else 0.0
-    bite2 = bite1 + LOWER + BITE if e2 else 0.0
-
     if e1:
         # it drifts along the ground until the turtle catches it up, then it
         # sits still and loses a piece to every bite until there is none
         leaf_x = eat_x - LEAF_GAP if e2 else lx0 - V_LEAF * (T - leaf_land)
-        leaf_end = bite2 if e2 else T
-        bounce_end = leaf_land + 0.50
-        # The turtle eats from the right, so the leaf has to keep its right edge
-        # where the mouth is; only the far side may shrink away.
-        full_w = float(SHEET_ROWS["lslide"][1][0][2] - SHEET_ROWS["lslide"][1][0][0])
-        crumb_w = float(SHEET_ROWS["teat"][1][4][2] - SHEET_ROWS["teat"][1][4][0])
-        crumb_dx = (full_w - crumb_w) / 2.0 * LEAF_S
+        leaf_end = t_eat + APPROACH if e2 else T
         leaf = (sequence(sheet_row("lpop", LEAF_S), t1, t1 + 0.55, T)
-                + sequence(sheet_row("lfall", LEAF_S), t1 + 0.55, leaf_land, T)
-                + sequence(sheet_row("lbounce", LEAF_S), leaf_land, bounce_end, T))
+                + sequence(sheet_row("lfall", LEAF_S), t1 + 0.55, leaf_land, T))
+        # Once it touches the ground, keep one fixed side facing the viewer.
+        # Position animation carries this frame left; no flipping or rotation.
+        grounded_leaf = sheet_use("lslide", 0, LEAF_S)
         if e2:
-            leaf += sequence([flipbook(sheet_row("lslide", LEAF_S), LEAF_SLIDE_CYCLE)],
-                             bounce_end, bite1, T)
-            # one bite in, all that is left is the scrap the sheet draws
-            leaf += sequence([sheet_use("teat", 4, LEAF_S, dx=crumb_dx)], bite1, bite2, T)
+            leaf += sequence([grounded_leaf], leaf_land, leaf_end, T)
         else:
-            leaf += sequence([flipbook(sheet_row("lslide", LEAF_S), LEAF_SLIDE_CYCLE)],
-                             bounce_end, T, T)
+            leaf += sequence([grounded_leaf], leaf_land, T, T)
         lpts = [(t1, e1["x"], e1["y"] + GCELL / 2),
                 (t1 + 0.55, e1["x"] - 26.0, e1["y"] - 62.0),
                 (t1 + 1.3, e1["x"] - 72.0, BASE - 34.0),
@@ -797,7 +785,12 @@ def build_runner_panel(weeks, total=None):
         pops.append(moving(leaf, lpts, t1, leaf_end))
 
     if e2:
-        walk = flipbook(sheet_row("twalk", TURTLE_S), WALK_CYCLE)
+        # Alternate the strongest front/back leg poses instead of scanning the
+        # row left-to-right. At profile size this makes the stride visibly go
+        # forward and back rather than reading as head-only bobbing.
+        walk_frames = sheet_row("twalk", TURTLE_S, only=(0, 3, 1, 4, 2, 5, 4, 1))
+        walk = flipbook(walk_frames, WALK_CYCLE,
+                        weights=(1.0, 1.15, 1.0, 1.15, 1.0, 1.15, 1.0, 1.15))
         pts = [(turtle_in, e2["x"], e2["y"] + GCELL / 2),
                (turtle_in + 0.55, e2["x"] - 14.0, e2["y"] - 66.0),
                (t_land2, tx0, BASE),
