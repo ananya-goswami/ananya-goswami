@@ -51,6 +51,9 @@ HEAD = """<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="706" view
   <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse"><path d="M34 0H0V34" fill="none" stroke="#00FF9C" stroke-opacity=".04"/></pattern>
   <rect id="d" width="1.25" height="1.25"/>
   <rect id="e" width="2" height="2" fill-opacity=".45"/>
+  <linearGradient id="tail" x1="1" y1="1" x2="0" y2="0">
+    <stop offset="0" stop-color="#EAF6FF" stop-opacity=".9"/><stop offset="1" stop-color="#EAF6FF" stop-opacity="0"/>
+  </linearGradient>
   <clipPath id="pan"><rect x="39" y="89" width="440" height="580" rx="8"/></clipPath>
 </defs>
 <style>.rv { opacity: 1 }</style>
@@ -117,7 +120,7 @@ TAIL = """
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MASK = os.path.join(ROOT, "assets", "portrait-mask.png")
 REF = os.path.join(ROOT, "assets", "portrait-colour.png")
-OUT = os.path.join(ROOT, "assets", "hero-v16.svg")
+OUT = os.path.join(ROOT, "assets", "hero-v17.svg")
 
 RNG = random.Random(7)
 
@@ -145,6 +148,7 @@ TILE_COLS, TILE_ROWS = 12, 15
 
 # The symbols are drawn in a 0..100 box and then mapped into the avatar's own
 # coordinate space, so a particle's trip from face to symbol stays short.
+PANEL = (38, 88, 442, 582)      # the VISUAL.MAP box, in panel coordinates
 SYM_CX, SYM_CY = 134.0, 146.0
 SYM_W, SYM_H = 196.0, 166.0
 
@@ -437,10 +441,15 @@ LO, HI, GAMMA, SAT = 0.22, 1.0, 0.52, 1.10
 # a smudge without a brighter white and a catchlight.
 EYES = ((134, 137, 17, 5.6), (187, 137, 13.5, 5.4))
 CHEEKS = ((107, 166), (191, 159))
-MOUTH = (150, 193, 31, 14)      # kept out of the backdrop correction below
+MOUTH = (161, 198, 30, 13)      # found from the lip-coloured pixels themselves,
+                                # not by eye: her head is turned, so the mouth sits
+                                # right of centre and lower than it looks
 SCLERA = (238, 245, 255)
 GLINT = (255, 255, 255)
 BLUSH = (232, 126, 120)
+LIPS = (252, 116, 158)          # a rose that still reads as pink beside the skin;
+                                # both clamp red at 255 once lifted, so the tint has
+                                # to carry in green and blue or it vanishes
 
 
 def _smooth(a):
@@ -497,6 +506,16 @@ def paint(mask, pts):
         c = [r * k, g * k, b * k]
         grey = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
         c = [grey + (v - grey) * SAT for v in c]
+
+        # Lips.  The photo has them barely a shade off the skin around them, so
+        # they read as nothing but a dark line at this dot size.  Which pixels
+        # are lip is decided by colour rather than by the ellipse alone: lips
+        # run redder than the skin beside them, about 0.52 green-to-red against
+        # 0.63, so the ellipse says where to look and the ratio says what to
+        # tint.  That keeps the chin and the philtrum out of it.
+        if mouth:
+            w = _ell(x, y, *MOUTH, 0.30) * _smooth((0.615 - g / max(r, 1)) / 0.090)
+            c = _mix(c, LIPS, w * 0.72)
 
         for cx, cy in CHEEKS:
             c = _mix(c, BLUSH, _ell(x, y, cx, cy, 26, 21, 0.9) * 0.10)
@@ -648,6 +667,57 @@ def _stops():
 
 
 K = _stops()
+
+
+def space_svg():
+    """A quiet starfield behind her, and a comet through it now and then.
+
+    Panel coordinates, not the avatar's, so this sits under both layers and
+    needs no transform.  Stars are given their own periods and offsets rather
+    than a shared one: a field that pulses together reads as a flicker, and the
+    point is that it should barely be noticed.  Nothing is drawn over the face
+    itself - the stipple is dense there and a star behind it only muddies her -
+    so the field thins out toward the middle.
+    """
+    out = []
+    cx, cy = 259.0, 380.0                       # roughly where her head sits
+    for _ in range(190):
+        x = RNG.uniform(PANEL[0] + 4, PANEL[0] + PANEL[2] - 4)
+        y = RNG.uniform(PANEL[1] + 4, PANEL[1] + PANEL[3] - 4)
+        # thin the field out over her, and keep it off the caption bar
+        near = math.hypot((x - cx) / 150.0, (y - cy) / 210.0)
+        if near < 1.0 and RNG.random() > near * near * 0.7:
+            continue
+        if y > 596:
+            continue
+        r = RNG.choice([0.5, 0.5, 0.6, 0.7, 0.7, 0.9, 1.1])
+        hi = RNG.uniform(0.30, 0.85) * (0.6 if r < 0.6 else 1.0)
+        lo = hi * RNG.uniform(0.15, 0.45)
+        dur = RNG.uniform(2.4, 7.5)
+        col = RNG.choice(["#CFF3FF", "#CFF3FF", "#9BE7C4", "#B9A7FA", "#FFFFFF"])
+        out.append(
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{col}" opacity="{lo:.2f}">'
+            f'<animate attributeName="opacity" values="{lo:.2f};{hi:.2f};{lo:.2f}"'
+            f' dur="{dur:.1f}s" begin="-{RNG.uniform(0, dur):.1f}s"'
+            f' repeatCount="indefinite"/></circle>')
+
+    # Two comets, on long unrelated periods, so one is a surprise rather than a
+    # metronome.  Each is visible for only a slice of its own cycle.
+    for (x0, y0), (x1, y1), period, cross, delay in (
+            ((500, 120), (60, 430), 23.0, 2.2, 3.0),
+            ((20, 250), (430, 640), 31.0, 2.6, 17.0)):
+        a, b = cross / period, (cross + 0.35) / period
+        out.append(
+            f'<g opacity="0">'
+            f'<animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.06;{a:.3f};{b:.3f};1"'
+            f' dur="{period}s" begin="{delay}s" repeatCount="indefinite"/>'
+            f'<animateTransform attributeName="transform" type="translate"'
+            f' values="{x0} {y0};{x1} {y1};{x1} {y1}" keyTimes="0;{a:.3f};1"'
+            f' dur="{period}s" begin="{delay}s" repeatCount="indefinite"/>'
+            f'<path d="M0 0L{(x0 - x1) * 0.13:.1f} {(y0 - y1) * 0.13:.1f}"'
+            f' stroke="url(#tail)" stroke-width="1.7" stroke-linecap="round" fill="none"/>'
+            f'<circle r="1.5" fill="#EAF6FF"/></g>')
+    return out
 
 
 def tiles_svg(pts, cx, cy, inks, ink_of):
@@ -825,6 +895,7 @@ def main():
     # that overshoot from spilling onto the SYSTEM.INFO column next door.
     body = [
         '<g clip-path="url(#pan)">',
+        *space_svg(),
         '<g transform="translate(44.0 115.1) scale(1.604)" shape-rendering="crispEdges">',
         *tiles_svg(pts, cx, cy, inks, ink_of),
         '</g>',
