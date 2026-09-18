@@ -33,7 +33,7 @@ import math
 import os
 import random
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 HEAD = """<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="706" viewBox="0 0 1180 706"
      font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace"
@@ -117,7 +117,7 @@ TAIL = """
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MASK = os.path.join(ROOT, "assets", "portrait-mask.png")
 REF = os.path.join(ROOT, "assets", "portrait-colour.png")
-OUT = os.path.join(ROOT, "assets", "hero-v19.svg")
+OUT = os.path.join(ROOT, "assets", "hero-v20.svg")
 
 RNG = random.Random(7)
 
@@ -146,6 +146,7 @@ TILE_COLS, TILE_ROWS = 12, 15
 # The symbols are drawn in a 0..100 box and then mapped into the avatar's own
 # coordinate space, so a particle's trip from face to symbol stays short.
 PANEL = (38, 88, 442, 582)      # the VISUAL.MAP box, in panel coordinates
+PANEL_BG = "#030a08"            # and what it is filled with, so the occluder matches
 SYM_CX, SYM_CY = 134.0, 146.0
 SYM_W, SYM_H = 196.0, 166.0
 
@@ -671,8 +672,8 @@ def _stops():
 K = _stops()
 
 
-COMET_PERIOD = 28.0             # the whole procession repeats on this
-COMET_GAP = 2.0                 # and one sets off every this many seconds
+COMET_PERIOD = 30.0             # the whole procession repeats on this
+COMET_GAP = 3.0                 # and one sets off every this many seconds
 COMET_TINTS = ("ice", "mint", "iris")
 
 
@@ -798,6 +799,55 @@ def space_svg():
             f' repeatCount="indefinite"/></circle>')
 
     return out
+
+
+def occluder_svg(mask):
+    """A solid silhouette of her, in the panel's own colour, under the stipple.
+
+    The stipple only covers about a sixth of the pixels it spans, so anything
+    drawn behind her shows through the gaps - a comet crossing behind her hair
+    reads as crossing over it.  Being behind in document order is not enough;
+    something has to actually stop the light.
+
+    It is filled with the panel background, so it is invisible except for what
+    it hides, and it fades on the same beats as the fragments.  It has to: left
+    solid through the symbols it would punch a person-shaped hole in the sky,
+    and comets would wink out crossing an empty panel.
+
+    Emitted as horizontal runs rather than per pixel - a filled shape is a
+    handful of spans per row instead of a few hundred rects.
+    """
+    px = mask.load()
+    W, H = mask.size
+    blur = mask.filter(ImageFilter.GaussianBlur(3.0)).load()
+
+    runs, solid = [], 0
+    for y in range(H):
+        x = 0
+        while x < W:
+            if px[x, y] or blur[x, y] > 9:       # a dot, or dots close by
+                x0 = x
+                gap = 0
+                while x < W and gap < 3:         # bridge the dither's own gaps
+                    if px[x, y] or blur[x, y] > 9:
+                        gap = 0
+                    else:
+                        gap += 1
+                    x += 1
+                x1 = x - gap
+                if x1 > x0:
+                    runs.append(f"M{x0} {y}h{x1 - x0}v1h-{x1 - x0}z")
+                    solid += x1 - x0
+            else:
+                x += 1
+
+    kt = [0, F_REST, F_REST + 0.72 * DISSOLVE / LOOP,
+          F_HOME - 0.30 * RETURN / LOOP, F_HOME + 0.34 * SETTLE / LOOP, 1]
+    return [f'<g transform="translate(44.0 115.1) scale(1.604)" shape-rendering="crispEdges">'
+            f'<path d="{"".join(runs)}" fill="{PANEL_BG}">'
+            f'<animate attributeName="opacity" values="1;1;0;0;1;1" keyTimes="{ktimes(kt)}"'
+            f' dur="{LOOP}s" begin="{BEGIN}s" repeatCount="indefinite"'
+            f' calcMode="spline" keySplines="{splines(kt)}"/></path></g>'], len(runs), solid
 
 
 def tiles_svg(pts, cx, cy, inks, ink_of):
@@ -973,6 +1023,7 @@ def main():
     kt_p = [0, F_REST, F_SYM1, F_HOME - 0.22 * RETURN / LOOP, F_HOME,
             F_HOME + 0.28 * SETTLE / LOOP, 1]
     dots, n_groups = particles_svg(home, home_ink, shapes, palettes)
+    occ, n_runs, n_solid = occluder_svg(mask)
     # Fragments travel far enough to clear the face; the clip keeps the ones
     # that overshoot from spilling onto the SYSTEM.INFO column next door.
     body = [
@@ -980,6 +1031,7 @@ def main():
         '<g clip-path="url(#pan)">',
         *space_svg(),
         *comets_svg(),
+        *occ,
         '<g transform="translate(44.0 115.1) scale(1.604)" shape-rendering="crispEdges">',
         *tiles_svg(pts, cx, cy, inks, ink_of),
         '</g>',
