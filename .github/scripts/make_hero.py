@@ -7,9 +7,13 @@ The VISUAL.MAP panel has two layers that hand off to each other:
   tiles      the avatar itself, cut into a grid of fragments.  Each fragment
              is one <path> of stipple pixels, so the resting portrait is the
              full-density image, not a thinned-out cloud of dots.
-  particles  ~1700 dots that live at avatar pixels, then travel through the
-             eight marks in SYMBOLS - the run of a working day, from the
-             terminal the morning starts in to the deploy it ends with.
+  particles  ~1550 dots that live at avatar pixels, then travel through the
+             marks in SYMBOLS - the run of a working day, from the screen
+             being settled in Figma to the deploy it ends with.
+
+Each mark carries its own caption, and the TOOLCHAIN.SCAN line under the
+panel is generated from the same key times, so the name on screen is always
+the name of the shape above it.
 
 The handoff is the whole point.  The fragments fly apart along the vector
 from the centre of the face while the particles light up on the pixels they
@@ -70,16 +74,7 @@ TAIL = """
 <rect x="46" y="610" width="426" height="46" fill="#030a08" fill-opacity=".88"/>
 <line x1="46" y1="610" x2="472" y2="610" stroke="#00FF9C" stroke-opacity=".18"/>
 <text x="60" y="630" font-size="11" letter-spacing="2.4" fill="#31514c">TOOLCHAIN.SCAN</text>
-<text x="60" y="650" font-size="13" fill="#00FF9C" opacity="0">&#9656; figma<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.0000;0.0125;0.0875;0.1000;1" dur="20.0s" begin="0s" repeatCount="indefinite"/></text>
-<text x="60" y="650" font-size="13" fill="#00FF9C" opacity="0">&#9656; vite<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.1000;0.1125;0.1875;0.2000;1" dur="20.0s" begin="0s" repeatCount="indefinite"/></text>
-<text x="60" y="650" font-size="13" fill="#00FF9C" opacity="0">&#9656; react<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.2000;0.2125;0.2875;0.3000;1" dur="20.0s" begin="0s" repeatCount="indefinite"/></text>
-<text x="60" y="650" font-size="13" fill="#00FF9C" opacity="0">&#9656; n8n<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.3000;0.3125;0.3875;0.4000;1" dur="20.0s" begin="0s" repeatCount="indefinite"/></text>
-<text x="60" y="650" font-size="13" fill="#00FF9C" opacity="0">&#9656; waha<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.4000;0.4125;0.4875;0.5000;1" dur="20.0s" begin="0s" repeatCount="indefinite"/></text>
-<text x="60" y="650" font-size="13" fill="#00FF9C" opacity="0">&#9656; railway<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.5000;0.5125;0.5875;0.6000;1" dur="20.0s" begin="0s" repeatCount="indefinite"/></text>
-<text x="60" y="650" font-size="13" fill="#00FF9C" opacity="0">&#9656; postgres<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.6000;0.6125;0.6875;0.7000;1" dur="20.0s" begin="0s" repeatCount="indefinite"/></text>
-<text x="60" y="650" font-size="13" fill="#00FF9C" opacity="0">&#9656; claude api<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.7000;0.7125;0.7875;0.8000;1" dur="20.0s" begin="0s" repeatCount="indefinite"/></text>
-<text x="60" y="650" font-size="13" fill="#00FF9C" opacity="0">&#9656; vercel<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.8000;0.8125;0.8875;0.9000;1" dur="20.0s" begin="0s" repeatCount="indefinite"/></text>
-<text x="60" y="650" font-size="13" fill="#00FF9C" opacity="0">&#9656; netlify<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.9000;0.9125;0.9875;1.0000;1" dur="20.0s" begin="0s" repeatCount="indefinite"/></text>
+<!--TICKER-->
 
 <text x="500" y="80" font-size="12" letter-spacing="3" fill="#3f5f58">SYSTEM.INFO</text>
 <text x="1140" y="80" font-size="12" text-anchor="end" letter-spacing="1.5" fill="#00FF9C">● LIVE
@@ -140,7 +135,7 @@ EASE = ".4 0 .2 1"              # one ease-in-out, reused on every segment; it i
                                 # repeated once per segment per element, so the
                                 # short spelling is worth ~100KB on the file
 
-N_PARTICLES = 1700
+N_PARTICLES = 1550
 TILE_COLS, TILE_ROWS = 12, 15
 
 # The symbols are drawn in a 0..100 box and then mapped into the avatar's own
@@ -252,21 +247,59 @@ def mask_points(im):
 
 
 # ----------------------------------------------------------------- symbols
-# The run of the working day: open the terminal, write it, build it with a
-# framework, bundle it, commit it, automate round it, put the data somewhere,
-# ship it.  Every mark has to survive being redrawn as 1700 dots, and that
-# test decides the set more than preference does.  It rules out anything that
-# leans on colour (the Figma mark is five coloured shapes and collapses into
-# one grey stack here), anything that leans on fine detail (the Octocat), and
-# anything with no mark people read out of context - which is the honest
-# position for WAHA, Railway and n8n, so automation is the gear and the tools
-# themselves stay in the TOOLCHAIN.SCAN ticker below the panel.
+# The run of the working day: settle the screen, open the terminal, write it,
+# build it with a framework, bundle it, commit it, automate round it, put the
+# data somewhere, ship it.  Every mark has to survive being redrawn as 1550
+# dots, and that test shapes how each one is drawn.  Fine detail does not
+# survive it - the Octocat loses its silhouette, so GitHub is the branch
+# glyph.  Nor does a mark that only works in colour, which is why the Figma
+# pieces below are inset apart: at full size they touch, and in one colour
+# that fuses them into a slab.
+#
+# Some tools have no mark anyone reads out of context at all.  That is the
+# honest position for WAHA, Railway and n8n, so automation is a plain gear and
+# those three are named outright in the caption under it, where they are read
+# rather than guessed.
 #
 # Most of these are stroked, which holds their weight even.  The two solids -
 # the Vite bolt and the Vercel triangle - are shapes that lose their identity
 # as outlines: an outlined triangle is a generic delta, not the Vercel mark.
-# Both are small enough that 1700 dots still read as a solid; a fill across
+# Both are small enough that 1550 dots still read as a solid; a fill across
 # the whole box would thin out to a haze.
+def sym_figma():
+    """The Figma mark, where a screen is settled before any of it is built.
+
+    Five shapes on a 2x3 grid: three down the left, a lobe top right, a loose
+    circle in the middle and another at the foot.  The real mark has them
+    touching, which in one colour fuses the whole left column into a slab.
+    Insetting each piece puts the gaps back, and it is the five-piece
+    arrangement that identifies it once the colour is gone.
+    """
+    im, d = raster()
+    s, ox, oy, g = 1.12, 28.7, 18.0, 0.9          # logo units are 38 x 57
+
+    def at(x, y):
+        return ox + x * s, oy + y * s
+
+    def blob(cx, cy, r):
+        (x, y), rr = at(cx, cy), (r - g) * s
+        d.ellipse([x - rr, y - rr, x + rr, y + rr], fill=255)
+
+    def half(x0, y0, side):
+        """One cell of the grid, with its outer edge rounded to a semicircle."""
+        blob(x0 + 9.5, y0 + 9.5, 9.5)
+        a, b = at(x0 + (9.5 if side < 0 else g), y0 + g)
+        c, e = at(x0 + (19 - g if side < 0 else 9.5), y0 + 19 - g)
+        d.rectangle([a, b, c, e], fill=255)
+
+    half(0, 0, -1)          # top left, rounded left
+    half(19, 0, +1)         # top right, rounded right
+    half(0, 19, -1)         # middle left, rounded left
+    blob(28.5, 28.5, 9.5)   # the loose circle, middle right
+    blob(9.5, 47.5, 9.5)    # and the foot
+    return im
+
+
 def sym_term():
     """>_ - Claude Code and Codex, where most of the day actually starts."""
     im, d = raster()
@@ -351,8 +384,22 @@ def sym_ship():
     return im
 
 
-SYMBOLS = [sym_term, sym_code, sym_react, sym_vite,
-           sym_git, sym_gear, sym_data, sym_ship]
+# Each mark carries the line that appears under the panel while it is on
+# screen, so TOOLCHAIN.SCAN reads as a caption rather than an unrelated
+# ticker.  It is also where the tools with no usable mark get named outright:
+# the gear is n8n, WAHA and Railway, and the triangle is both hosts.
+SYMBOLS = [
+    (sym_figma, "figma"),
+    (sym_term, "claude code · codex"),
+    (sym_code, "html · css · javascript"),
+    (sym_react, "react · typescript"),
+    (sym_vite, "vite"),
+    (sym_git, "git · github"),
+    (sym_gear, "n8n · waha · railway"),
+    (sym_data, "postgres · indexeddb"),
+    (sym_ship, "vercel · netlify"),
+]
+IDLE = "standby"                # shown while the avatar, not a symbol, is up
 
 
 # ---------------------------------------------------------------- sampling
@@ -556,6 +603,29 @@ def particles_svg(home, shapes):
     return out
 
 
+def ticker_svg():
+    """The TOOLCHAIN.SCAN line, cut to the same clock as the symbols.
+
+    It used to run its own 20s loop against the panel's 30s one, so the name
+    underneath drifted against the shape above it and only agreed by accident.
+    Both now come off K, so a label is up exactly while its mark is.
+    """
+    lead, tail = 0.45 / LOOP, 0.35 / LOOP        # a beat either side of the hold
+    out = [f'<text x="60" y="650" font-size="13" fill="#31514c">&#9656; {IDLE}'
+           f'<animate attributeName="opacity" values="1;1;0;0;1;1"'
+           f' keyTimes="{ktimes([0, F_REST, F_SYM1, F_BACK, F_BACK + 0.4 / LOOP, 1])}"'
+           f' dur="{LOOP}s" begin="{BEGIN}s" repeatCount="indefinite"/></text>']
+    for i, (_, label) in enumerate(SYMBOLS):
+        on, off = K[2 + 2 * i], K[3 + 2 * i]
+        kt = [0, on - lead, on + 0.10 / LOOP, off, off + tail, 1]
+        out.append(
+            f'<text x="60" y="650" font-size="13" fill="#00FF9C" opacity="0">'
+            f'&#9656; {label}<animate attributeName="opacity" values="0;0;1;1;0;0"'
+            f' keyTimes="{ktimes(kt)}" dur="{LOOP}s" begin="{BEGIN}s"'
+            f' repeatCount="indefinite"/></text>')
+    return out
+
+
 def main():
     im = Image.open(MASK).convert("L")
     pts = mask_points(im)
@@ -563,7 +633,7 @@ def main():
     cy = sum(p[1] for p in pts) / len(pts)
 
     home = sample_tone(pts, N_PARTICLES)
-    shapes = [place(fn(), N_PARTICLES) for fn in SYMBOLS]
+    shapes = [place(fn(), N_PARTICLES) for fn, _ in SYMBOLS]
 
     kt_p = [0, F_REST, F_SYM1, F_HOME - 0.22 * RETURN / LOOP, F_HOME,
             F_HOME + 0.28 * SETTLE / LOOP, 1]
@@ -589,7 +659,7 @@ def main():
         f.write(HEAD)
         f.write("\n".join(body))
         f.write("\n")
-        f.write(TAIL)
+        f.write(TAIL.replace("<!--TICKER-->", "\n".join(ticker_svg())))
     print(f"{OUT}  {os.path.getsize(OUT) / 1024:.0f} KB  "
           f"{len(pts)} avatar px, {N_PARTICLES} particles, "
           f"{len(SYMBOLS)} symbols, {LOOP:.1f}s loop")
