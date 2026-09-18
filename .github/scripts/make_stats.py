@@ -751,25 +751,39 @@ def build_runner_panel(weeks, total=None):
         t_crawl = t_emerge + 0.7
         exit_x = hide_x - V_LIMP * max(0.0, T - 0.4 - t_crawl)
 
-    # A bite is the turtle lowering its head and closing on the leaf. The leaf
-    # stays put through the approach, then the authored bite frames take over.
+    # The meal is approach, lower, two bites, then a pleased look. The leaf has
+    # to lose a piece on the same beat that a bite pose lands, so both sequences
+    # are measured off one set of boundaries rather than timed by hand.
     APPROACH, LOWER, BITE, HAPPY = 0.50, 0.45, 0.45, 0.70
     MEAL_WEIGHTS = [APPROACH, LOWER, BITE, BITE, HAPPY]
-    leaf_handoff = (t_eat + EAT * APPROACH / sum(MEAL_WEIGHTS)) if e2 else T
-    crumb_start = (t_eat + EAT * (APPROACH + LOWER) / sum(MEAL_WEIGHTS)) if e2 else T
-    happy_start = (t_eat + EAT * sum(MEAL_WEIGHTS[:-1]) / sum(MEAL_WEIGHTS)) if e2 else T
+    _mw = sum(MEAL_WEIGHTS)
+    _edge = [t_eat + EAT * sum(MEAL_WEIGHTS[:k]) / _mw for k in range(6)] if e2         else [T] * 6
+    bite1, bite2, meal_done = _edge[2], _edge[3], _edge[4]
     if e1:
         # it drifts along the ground until the turtle catches it up, then it
         # sits still and loses a piece to every bite until there is none
         leaf_x = eat_x - LEAF_GAP if e2 else lx0 - V_LEAF * (T - leaf_land)
-        leaf_end = leaf_handoff + 0.06 if e2 else T
+        leaf_end = meal_done if e2 else T
         leaf = (sequence(sheet_row("lpop", LEAF_S), t1, t1 + 0.55, T)
                 + sequence(sheet_row("lfall", LEAF_S), t1 + 0.55, leaf_land, T))
         # Once it touches the ground, keep one fixed side facing the viewer.
         # Position animation carries this frame left; no flipping or rotation.
         grounded_leaf = sheet_use("lslide", 0, LEAF_S)
         if e2:
-            leaf += sequence([grounded_leaf], leaf_land, leaf_handoff, T)
+            # The turtle eats from the right, so the side its mouth is on has to
+            # stay put and only the far side may shrink away; scaling about the
+            # centre would make the leaf shuffle backwards out of its mouth.
+            full_w = float(SHEET_ROWS["lslide"][1][0][2] - SHEET_ROWS["lslide"][1][0][0])
+            crumb_w = float(SHEET_ROWS["teat"][1][4][2] - SHEET_ROWS["teat"][1][4][0])
+            mouth = full_w * LEAF_S / 2.0
+            half_s, crumb_s = LEAF_S * 0.66, LEAF_S * 0.62
+            leaf += sequence([grounded_leaf], leaf_land, bite1, T)
+            leaf += sequence([sheet_use("lslide", 0, half_s,
+                                        dx=mouth - full_w * half_s / 2.0)], bite1, bite2, T)
+            # one more bite and only the scrap the sheet draws is left
+            leaf += sequence([sheet_use("teat", 4, crumb_s,
+                                        dx=mouth - crumb_w * crumb_s / 2.0)],
+                             bite2, meal_done, T)
         else:
             leaf += sequence([grounded_leaf], leaf_land, T, T)
         lpts = [(t1, e1["x"], e1["y"] + GCELL / 2),
@@ -796,13 +810,11 @@ def build_runner_panel(weeks, total=None):
                           turtle_in, t_land2, T)
         states += sequence(sheet_row("thide", TURTLE_S, only=(3, 2, 1, 0)),
                            t_land2, t_walk2, T)
-        # Approach, mouth open, two bite poses, then the happy-heart pose. Frame
-        # 4 is leaf-only, so it is layered separately instead of replacing him.
+        # Approach, mouth open, two bite poses, then the happy-heart pose. The
+        # leaf is its own actor and shrinks on these same beats.
         states += sequence(sheet_row("teat", TURTLE_S, only=(1, 2, 3, 3, 5)),
                         t_eat, t_resume, T,
                         weights=MEAL_WEIGHTS)
-        states += sequence([sheet_use("teat", 4, TURTLE_S, dx=-LEAF_GAP + 2.0)],
-                           crumb_start, happy_start, T)
         quiet = [(turtle_in, t_walk2), (t_eat, t_resume)]
         if e3:
             pts += [(t_hide, hide_x, BASE), (t_crawl, hide_x, BASE),
