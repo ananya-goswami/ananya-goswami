@@ -8,8 +8,8 @@ The VISUAL.MAP panel has two layers that hand off to each other:
              is one <path> of stipple pixels, so the resting portrait is the
              full-density image, not a thinned-out cloud of dots.
   particles  ~1550 dots that live at avatar pixels, then travel through the
-             marks in SYMBOLS - the run of a working day, from the screen
-             being settled in Figma to the deploy it ends with.
+             marks in SYMBOLS - the run of a working day, from the terminal
+             the morning opens in to the deploy it ends with.
 
 Each mark carries its own caption, and the TOOLCHAIN.SCAN line under the
 panel is generated from the same key times, so the name on screen is always
@@ -35,9 +35,9 @@ HEAD = """<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="706" view
      role="img" aria-label="Ananya Goswami, senior product associate">
 <defs>
   <linearGradient id="ink" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
-    <stop offset="0" stop-color="#9BE7C4"><animate attributeName="stop-color" values="#9BE7C4;#8FD4F5;#B9A7FA;#9BE7C4" dur="12s" repeatCount="indefinite"/></stop>
-    <stop offset="0.55" stop-color="#8FD4F5"><animate attributeName="stop-color" values="#8FD4F5;#B9A7FA;#9BE7C4;#8FD4F5" dur="12s" repeatCount="indefinite"/></stop>
-    <stop offset="1" stop-color="#B9A7FA"><animate attributeName="stop-color" values="#B9A7FA;#9BE7C4;#8FD4F5;#B9A7FA" dur="12s" repeatCount="indefinite"/></stop>
+    <stop offset="0" stop-color="#7FEFC8"><animate attributeName="stop-color" values="#7FEFC8;#74D2FB;#C0A2FF;#7FEFC8" dur="14s" repeatCount="indefinite"/></stop>
+    <stop offset="0.55" stop-color="#74D2FB"><animate attributeName="stop-color" values="#74D2FB;#C0A2FF;#7FEFC8;#74D2FB" dur="14s" repeatCount="indefinite"/></stop>
+    <stop offset="1" stop-color="#C0A2FF"><animate attributeName="stop-color" values="#C0A2FF;#7FEFC8;#74D2FB;#C0A2FF" dur="14s" repeatCount="indefinite"/></stop>
   </linearGradient>
   <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0" stop-color="#00FF9C" stop-opacity=".75"/><stop offset="1" stop-color="#22D3EE" stop-opacity=".55"/>
@@ -49,8 +49,8 @@ HEAD = """<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="706" view
   <radialGradient id="glowB"><stop offset="0" stop-color="#22D3EE" stop-opacity=".12"/><stop offset="1" stop-color="#22D3EE" stop-opacity="0"/></radialGradient>
   <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#7fffd4" fill-opacity=".03"/></pattern>
   <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse"><path d="M34 0H0V34" fill="none" stroke="#00FF9C" stroke-opacity=".04"/></pattern>
-  <rect id="d" width="1.25" height="1.25" fill="#CFF3FF"/>
-  <rect id="e" width="1.9" height="1.9" fill="#9BE7C4"/>
+  <rect id="d" width="1.25" height="1.25"/>
+  <rect id="e" width="2" height="2" fill-opacity=".45"/>
   <clipPath id="pan"><rect x="39" y="89" width="440" height="580" rx="8"/></clipPath>
 </defs>
 <style>.rv { opacity: 1 }</style>
@@ -247,9 +247,11 @@ def mask_points(im):
 
 
 # ----------------------------------------------------------------- symbols
-# The run of the working day: settle the screen, open the terminal, write it,
-# build it with a framework, bundle it, commit it, automate round it, put the
-# data somewhere, ship it.  Every mark has to survive being redrawn as 1550
+# The run of the working day: open the terminal, write it, build it with a
+# framework, check it against the design, bundle it, commit it, automate round
+# it, put the data somewhere, ship it.  Figma sits mid-set rather than first
+# because the avatar hands straight over to whatever opens the loop, and that
+# wants to be the work itself.  Every mark has to survive being redrawn as 1550
 # dots, and that test shapes how each one is drawn.  Fine detail does not
 # survive it - the Octocat loses its silhouette, so GitHub is the branch
 # glyph.  Nor does a mark that only works in colour, which is why the Figma
@@ -388,18 +390,26 @@ def sym_ship():
 # screen, so TOOLCHAIN.SCAN reads as a caption rather than an unrelated
 # ticker.  It is also where the tools with no usable mark get named outright:
 # the gear is n8n, WAHA and Railway, and the triangle is both hosts.
+#
+# The third field is the colour the whole dot cloud takes while that mark is
+# up.  Each is its tool's own, lifted toward the light end - a brand colour
+# picked for white backgrounds goes muddy on a near-black panel, and Postgres
+# navy in particular disappears into it.  They are also ordered so no two
+# neighbours land on the same part of the wheel, which is why GitHub is the
+# near-white break between Vite's amber and n8n's pink rather than git orange.
 SYMBOLS = [
-    (sym_figma, "figma"),
-    (sym_term, "claude code · codex"),
-    (sym_code, "html · css · javascript"),
-    (sym_react, "react · typescript"),
-    (sym_vite, "vite"),
-    (sym_git, "git · github"),
-    (sym_gear, "n8n · waha · railway"),
-    (sym_data, "postgres · indexeddb"),
-    (sym_ship, "vercel · netlify"),
+    (sym_term, "claude code · codex", "#E8865F"),      # Claude coral
+    (sym_code, "html · css · javascript", "#F7DF1E"),  # JavaScript yellow
+    (sym_react, "react · typescript", "#61DAFB"),      # React cyan
+    (sym_figma, "figma", "#A259FF"),                        # Figma purple
+    (sym_vite, "vite", "#FFC016"),                          # Vite amber
+    (sym_git, "git · github", "#E6EDF3"),              # GitHub near-white
+    (sym_gear, "n8n · waha · railway", "#EA4B71"),  # n8n pink
+    (sym_data, "postgres · indexeddb", "#6BA6E8"),     # Postgres blue, lifted
+    (sym_ship, "vercel · netlify", "#00E5C7"),         # Netlify teal
 ]
 IDLE = "standby"                # shown while the avatar, not a symbol, is up
+HOME = "#CFF3FF"                # the cloud's colour while it is her face
 
 
 # ---------------------------------------------------------------- sampling
@@ -603,6 +613,14 @@ def particles_svg(home, shapes):
     return out
 
 
+def tints():
+    """The cloud's colour at each stop: home, each mark twice, home again."""
+    out = [HOME, HOME]
+    for _, _, colour in SYMBOLS:
+        out += [colour, colour]
+    return ";".join(out + [HOME, HOME])
+
+
 def ticker_svg():
     """The TOOLCHAIN.SCAN line, cut to the same clock as the symbols.
 
@@ -615,11 +633,13 @@ def ticker_svg():
            f'<animate attributeName="opacity" values="1;1;0;0;1;1"'
            f' keyTimes="{ktimes([0, F_REST, F_SYM1, F_BACK, F_BACK + 0.4 / LOOP, 1])}"'
            f' dur="{LOOP}s" begin="{BEGIN}s" repeatCount="indefinite"/></text>']
-    for i, (_, label) in enumerate(SYMBOLS):
+    for i, (_, label, colour) in enumerate(SYMBOLS):
         on, off = K[2 + 2 * i], K[3 + 2 * i]
         kt = [0, on - lead, on + 0.10 / LOOP, off, off + tail, 1]
+        # The caption takes the mark's colour too, so the line under the panel
+        # and the cloud above it are visibly the same thing.
         out.append(
-            f'<text x="60" y="650" font-size="13" fill="#00FF9C" opacity="0">'
+            f'<text x="60" y="650" font-size="13" fill="{colour}" opacity="0">'
             f'&#9656; {label}<animate attributeName="opacity" values="0;0;1;1;0;0"'
             f' keyTimes="{ktimes(kt)}" dur="{LOOP}s" begin="{BEGIN}s"'
             f' repeatCount="indefinite"/></text>')
@@ -633,7 +653,7 @@ def main():
     cy = sum(p[1] for p in pts) / len(pts)
 
     home = sample_tone(pts, N_PARTICLES)
-    shapes = [place(fn(), N_PARTICLES) for fn, _ in SYMBOLS]
+    shapes = [place(fn(), N_PARTICLES) for fn, _, _ in SYMBOLS]
 
     kt_p = [0, F_REST, F_SYM1, F_HOME - 0.22 * RETURN / LOOP, F_HOME,
             F_HOME + 0.28 * SETTLE / LOOP, 1]
@@ -646,10 +666,17 @@ def main():
         '</g>',
         '',
         '<g transform="translate(44.0 115.1) scale(1.604)" shape-rendering="crispEdges"'
-        ' opacity="0">'
+        f' opacity="0" fill="{HOME}">'
         f'<animate attributeName="opacity" values="0;0;1;1;1;0;0" keyTimes="{ktimes(kt_p)}"'
         f' dur="{LOOP}s" begin="{BEGIN}s" repeatCount="indefinite"'
-        f' calcMode="spline" keySplines="{splines(kt_p)}"/>',
+        f' calcMode="spline" keySplines="{splines(kt_p)}"/>'
+        # One fill animation on the group recolours all of the dots at once,
+        # because #d and #e declare no fill of their own and inherit it.  It
+        # runs on the same stops as the movement, so a mark's colour arrives
+        # exactly as its shape does.
+        f'<animate attributeName="fill" values="{tints()}" keyTimes="{ktimes(K)}"'
+        f' dur="{LOOP}s" begin="{BEGIN}s" repeatCount="indefinite"'
+        f' calcMode="spline" keySplines="{splines(K)}"/>',
         *particles_svg(home, shapes),
         '</g>',
         '</g>',
