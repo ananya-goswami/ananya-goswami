@@ -420,7 +420,19 @@ def sheet():
             cx0, cy0 = x0 - SHEET_PAD, y0 - SHEET_PAD
             crop = src.crop((cx0, cy0, x1 + SHEET_PAD, y1 + SHEET_PAD))
             a = np.array(crop).astype(float)
-            alpha = _silhouette(np.linalg.norm(a - bg, axis=2), np, cut=10.0)
+            d = np.linalg.norm(a - bg, axis=2)
+            alpha = _silhouette(d, np, cut=10.0)
+            # Two things used to leave the sheet's own backdrop on screen. The
+            # feather inside _silhouette blurs the mask outwards as well as in,
+            # so pure background pixels came out up to 60% opaque and painted a
+            # teal fringe round every sprite; and background trapped inside a
+            # shape - the hollow of the snake's tail, the gap under her shoe -
+            # is unreachable by a flood that starts at the border, so it stayed
+            # solid. Capping the alpha by how far the pixel actually is from the
+            # backdrop colour clears both: on this sheet the backdrop reaches
+            # d=10 and the nearest real sprite pixel is d=32, so the cut lands
+            # in open space and takes nothing with it.
+            alpha = np.minimum(alpha, np.clip((d - 12.0) / 14.0, 0.0, 1.0) * 255.0)
             img = Image.fromarray(np.dstack([a, alpha]).astype(np.uint8), "RGBA")
             buf = io.BytesIO()
             flat = img.convert("RGB").quantize(colors=96, method=Image.FASTOCTREE).convert("RGBA")
@@ -492,6 +504,22 @@ def sequence(frames, t0, t1, T, weights=None):
     return out
 
 
+def bob(svg, period, rise):
+    """Lift and drop a walking body on its own clock.
+
+    A gait is not only legs. The body rises as the back leg pushes off and
+    drops onto the next footfall, and without that a character slides along a
+    rail however good its frames are. One period is one step, so a cycle of two
+    steps gets two lifts.
+    """
+    if not svg or period <= 0:
+        return svg
+    return (f'<g><animateTransform attributeName="transform" type="translate"'
+            f' dur="{period:.3f}s" repeatCount="indefinite" calcMode="spline"'
+            f' values="0 0;0 {-rise:.1f};0 0" keyTimes="0;0.7;1"'
+            f' keySplines="0.35 0 0.65 1;0.35 0 0.65 1"/>{svg}</g>')
+
+
 def gate(svg, windows, T):
     """Show svg the whole time except inside the given windows.
 
@@ -550,7 +578,10 @@ LEAF_GAP = 39.0                      # smaller leaf halts with its edge at the m
 # the 0.60 it used to run, her legs churned half again too fast for the ground
 # and she skated along instead of walking.
 RUN_CYCLE = 0.92                     # 8 frames: contact, pass, contact, pass
-WALK_CYCLE = 1.04                    # slow enough for alternating legs to read
+# Its four legs are planted 43 units apart, so a step moves it about half that
+# and two steps take 42/34 of a second at its walking speed.
+WALK_CYCLE = 1.24
+TURTLE_BOB = 2.5                     # it is 53 tall; a plod lifts about 5%
 SLITHER_CYCLE = 3.30                 # body wave, then a clearly held tongue-flick hiss
 
 # HUD star. The old one was a crop from the reference art, so it came out
@@ -797,7 +828,8 @@ def build_runner_panel(weeks, total=None):
         pops.append(moving(leaf, lpts, t1, leaf_end, fade=0.06))
 
     if e2:
-        walk = flipbook(sheet_row("twalk", TURTLE_S), WALK_CYCLE)
+        walk = bob(flipbook(sheet_row("twalk", TURTLE_S), WALK_CYCLE),
+                   WALK_CYCLE / 2.0, TURTLE_BOB)
         pts = [(turtle_in, e2["x"], e2["y"] + GCELL / 2),
                (turtle_in + 0.55, e2["x"] - 14.0, e2["y"] - 66.0),
                (t_land2, tx0, BASE),
@@ -1038,6 +1070,16 @@ def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
 # the three landing frames; the run cycle takes over again the moment she lands.
 JUMP_W = [3.0, 3.0, 3.0, 3.0] + [1.3, 1.3, 1.3] + [2.7, 2.7, 2.7]
 
+# The sheet's eight run frames are not in gait order: taken as drawn, the foot
+# carrying her weight goes rear, front, front, rear, rear, rear, rear, front,
+# so she never reads as taking alternate steps. Measured off the sprites, the
+# frames sort into two clean steps - one on each foot - either side of the one
+# frame where both shoes overlap under her, which is the passing pose:
+#   front foot down: 8 (widest), 2, 3 (closing) -> 7 (passing)
+#   rear  foot down: 4 (widest), 6, 5 (closing) -> 7 (passing)
+RUN_ORDER = (7, 1, 2, 6, 3, 5, 4, 6)
+RUN_BOB = 7.0                        # she is 128 tall; a run lifts about 5%
+
 
 def girl_runner(jump_windows, T, baseline=6.0):
     """Her whole flipbook: an eight-frame run that alternates legs properly,
@@ -1050,7 +1092,8 @@ def girl_runner(jump_windows, T, baseline=6.0):
         if wins and t0 < wins[-1][1]:
             wins[-1] = (wins[-1][0], t0)
         wins.append((t0, t1))
-    run = flipbook(sheet_row("run", GIRL_S, dy=baseline), RUN_CYCLE)
+    run = bob(flipbook(sheet_row("run", GIRL_S, dy=baseline, only=RUN_ORDER),
+                       RUN_CYCLE), RUN_CYCLE / 2.0, RUN_BOB)
     air = ""
     for t0, t1 in wins:
         air += sequence(sheet_row("jump", GIRL_S, dy=baseline)
