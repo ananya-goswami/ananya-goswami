@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Builds the hero panel: the avatar, and the particle morph that carries it
-through four symbols and back.
+through the toolchain and back.
 
 The VISUAL.MAP panel has two layers that hand off to each other:
 
   tiles      the avatar itself, cut into a grid of fragments.  Each fragment
              is one <path> of stipple pixels, so the resting portrait is the
              full-density image, not a thinned-out cloud of dots.
-  particles  ~1700 dots that live at avatar pixels, then travel through
-             </>, the React mark, a gamepad and the Vercel triangle -
-             write it, build it, play it, ship it.
+  particles  ~1700 dots that live at avatar pixels, then travel through the
+             eight marks in SYMBOLS - the run of a working day, from the
+             terminal the morning starts in to the deploy it ends with.
 
 The handoff is the whole point.  The fragments fly apart along the vector
 from the centre of the face while the particles light up on the pixels they
@@ -126,18 +126,19 @@ OUT = os.path.join(ROOT, "assets", "hero-v13.svg")
 RNG = random.Random(7)
 
 # ---------------------------------------------------------------- timeline
-# One loop, as fractions of LOOP.  The panel rests on the avatar for the
-# first 14% and the last 12%; everything between is the morph.
-LOOP = 30.0                     # seconds for the whole avatar -> symbols -> avatar cycle
+# Seconds, in the order they happen.  The loop length and every key time fall
+# out of these, so adding or dropping a symbol needs no other edit - which is
+# the point, because the set is the part most likely to change.
 BEGIN = 4.6                     # the loop starts after the intro has drawn the avatar
-K = [0.000,                     # rest
-     0.140, 0.205,              # come apart -> first symbol
-     0.300, 0.365,              # -> second
-     0.460, 0.525,              # -> third
-     0.620, 0.685,              # -> fourth
-     0.790, 0.880,              # -> back to the avatar
-     1.000]
-EASE = ".42 0 .18 1"            # one ease-in-out, reused on every segment
+REST = 4.5                      # the avatar sits, whole, at the top of the loop
+DISSOLVE = 1.6                  # it comes apart and the dots take the first symbol
+HOLD = 2.15                     # each symbol is held this long
+MORPH = 1.15                    # and takes this long to become the next
+RETURN = 1.8                    # the dots fly home to their own pixels
+SETTLE = 1.5                    # the avatar is whole again before the loop repeats
+EASE = ".4 0 .2 1"              # one ease-in-out, reused on every segment; it is
+                                # repeated once per segment per element, so the
+                                # short spelling is worth ~100KB on the file
 
 N_PARTICLES = 1700
 TILE_COLS, TILE_ROWS = 12, 15
@@ -208,12 +209,29 @@ def ellipse_path(cx, cy, rx, ry, tilt, steps=260):
     return out
 
 
+def bez(p0, p1, p2, p3, steps=90):
+    """A cubic, for the one curve in the set - the git branch."""
+    out = []
+    for i in range(steps + 1):
+        t = i / steps
+        u = 1 - t
+        out.append((u ** 3 * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t ** 3 * p3[0],
+                    u ** 3 * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t ** 3 * p3[1]))
+    return out
+
+
 def ring(d, cx, cy, r, w):
     stroke(d, arc(cx, cy, r), w, closed=True)
 
 
 def poly(d, pts):
     d.polygon(to_px(pts), fill=255)
+
+
+def punch(d, cx, cy, r):
+    """Erase a disc - how the gear gets its bore."""
+    (x, y), rr = to_px([(cx, cy)])[0], r * UP
+    d.ellipse([x - rr, y - rr, x + rr, y + rr], fill=0)
 
 
 def rrect(x, y, w, h, r):
@@ -234,17 +252,30 @@ def mask_points(im):
 
 
 # ----------------------------------------------------------------- symbols
-# Write it, build it, play it, ship it - the four marks are the shortest true
-# account of the work, and each one has to survive being redrawn as 1700 dots.
-# That rules out anything that leans on colour to be read (the Figma mark) or
-# on fine detail (the Octocat), and it rules out a symbol nobody would place
-# out of context, which is what sank the mortarboard and the node graph.
-# Three of the four are stroked, which holds their weight even.  The Vercel
-# mark is the exception: it is a solid triangle and drawing it as an outline
-# turns it into a generic delta, so it is filled.  It gets away with it
-# because a triangle covers only half its box, which keeps the 1700 dots
-# close enough together to still read as a solid.  A larger fill would thin
-# out to a haze at this count.
+# The run of the working day: open the terminal, write it, build it with a
+# framework, bundle it, commit it, automate round it, put the data somewhere,
+# ship it.  Every mark has to survive being redrawn as 1700 dots, and that
+# test decides the set more than preference does.  It rules out anything that
+# leans on colour (the Figma mark is five coloured shapes and collapses into
+# one grey stack here), anything that leans on fine detail (the Octocat), and
+# anything with no mark people read out of context - which is the honest
+# position for WAHA, Railway and n8n, so automation is the gear and the tools
+# themselves stay in the TOOLCHAIN.SCAN ticker below the panel.
+#
+# Most of these are stroked, which holds their weight even.  The two solids -
+# the Vite bolt and the Vercel triangle - are shapes that lose their identity
+# as outlines: an outlined triangle is a generic delta, not the Vercel mark.
+# Both are small enough that 1700 dots still read as a solid; a fill across
+# the whole box would thin out to a haze.
+def sym_term():
+    """>_ - Claude Code and Codex, where most of the day actually starts."""
+    im, d = raster()
+    stroke(d, rrect(8, 20, 84, 60, 9), 3.6, closed=True)
+    stroke(d, [(28, 40), (44, 53), (28, 66)], 5.0)
+    stroke(d, [(52, 66), (74, 66)], 5.0)
+    return im
+
+
 def sym_code():
     """</> - the games are hand-written HTML, CSS and JavaScript."""
     im, d = raster()
@@ -263,14 +294,53 @@ def sym_react():
     return im
 
 
-def sym_gamepad():
-    """15+ browser games running in classrooms - the day job."""
+def sym_vite():
+    """Vite's bolt: the build step under every one of those games."""
     im, d = raster()
-    stroke(d, rrect(13, 31, 74, 38, 18), 4.6, closed=True)
-    stroke(d, [(26, 50), (40, 50)], 4.2)              # d-pad, across
-    stroke(d, [(33, 43), (33, 57)], 4.2)              # d-pad, down
-    disc(d, 64, 44, 4.8)
-    disc(d, 75, 55, 4.8)
+    poly(d, [(62, 8), (30, 54), (46, 54), (38, 92), (72, 44), (54, 44)])
+    return im
+
+
+def sym_git():
+    """The branch glyph: git, and the GitHub the whole README lives on."""
+    im, d = raster()
+    stroke(d, [(33, 30), (33, 74)], 4.2)                      # the trunk
+    stroke(d, bez((33, 58), (33, 42), (52, 34), (67, 34)), 4.2)  # and the branch
+    for c in ((33, 22), (33, 82), (75, 34)):
+        disc(d, c[0], c[1], 8.0)
+    return im
+
+
+def sym_gear():
+    """Automation: the n8n and WAHA flows, and the CI that runs the rest."""
+    im, d = raster()
+    teeth, r_out, r_in = 8, 40.0, 30.0
+    pts = []
+    for i in range(teeth):
+        a = 360.0 * i / teeth
+        pts += arc(50, 50, r_out, a - 13, a + 13, 10)
+        pts += arc(50, 50, r_in, a + 19, a + 360.0 / teeth - 19, 10)
+    poly(d, pts)
+    punch(d, 50, 50, 14.0)
+    return im
+
+
+def sym_data():
+    """Postgres behind the automations, IndexedDB inside the games."""
+    im, d = raster()
+    rx, ry = 29.0, 10.5
+
+    def front(y):
+        """The near half of the ellipse at this height - the visible curve."""
+        return [(50 + rx * math.cos(math.radians(a)), y + ry * math.sin(math.radians(a)))
+                for a in range(0, 181, 3)]
+
+    stroke(d, ellipse_path(50, 27, rx, ry, 0), 3.8, closed=True)   # the lid
+    for y in (45, 62):
+        stroke(d, front(y), 3.8)                                   # the courses
+    stroke(d, front(73), 3.8)                                      # and the base
+    stroke(d, [(50 - rx, 27), (50 - rx, 73)], 3.8)                 # the sides
+    stroke(d, [(50 + rx, 27), (50 + rx, 73)], 3.8)
     return im
 
 
@@ -281,7 +351,8 @@ def sym_ship():
     return im
 
 
-SYMBOLS = [sym_code, sym_react, sym_gamepad, sym_ship]
+SYMBOLS = [sym_term, sym_code, sym_react, sym_vite,
+           sym_git, sym_gear, sym_data, sym_ship]
 
 
 # ---------------------------------------------------------------- sampling
@@ -365,8 +436,35 @@ def ktimes(ks):
     return ";".join(f"{k:.4f}".rstrip("0").rstrip(".") for k in ks)
 
 
-def splines(n):
-    return ";".join([EASE] * n)
+def splines(kts):
+    return ";".join([EASE] * (len(kts) - 1))
+
+
+# The loop, laid out once from the durations above.  K is the stop list the
+# particles use - rest, then each symbol twice (arrive, then hold out), then
+# home - and the named fractions are the moments the two layers hand over.
+LOOP = REST + DISSOLVE + len(SYMBOLS) * HOLD + (len(SYMBOLS) - 1) * MORPH + RETURN + SETTLE
+F_REST = REST / LOOP                            # the avatar starts to come apart
+F_SYM1 = (REST + DISSOLVE) / LOOP               # the first symbol is formed
+F_BACK = (LOOP - SETTLE - RETURN) / LOOP        # the dots set off home
+F_HOME = (LOOP - SETTLE) / LOOP                 # and land on their own pixels
+
+
+def _stops():
+    ks, t = [0.0], REST + DISSOLVE
+    ks.append(F_REST)
+    for i in range(len(SYMBOLS)):
+        if i:
+            t += MORPH
+        ks.append(t / LOOP)                     # this symbol is formed
+        t += HOLD
+        ks.append(t / LOOP)                     # and has been held
+    ks.append(F_HOME)
+    ks.append(1.0)
+    return ks
+
+
+K = _stops()
 
 
 def tiles_svg(pts, cx, cy):
@@ -402,9 +500,13 @@ def tiles_svg(pts, cx, cy):
 
         # A little per-fragment slack on the timing keeps the break-up from
         # happening on one frame, which is what made it read as a cross-fade.
-        j = RNG.uniform(-0.011, 0.011)
-        kt_t = [0, K[1] + j, K[2] + j, 0.820 + j, K[10] + j, 1]
-        kt_o = [0, K[1] + j, 0.200 + j, 0.868 + j, 0.912 + j, 1]
+        j = RNG.uniform(-0.009, 0.009)
+        kt_t = [0, F_REST + j, F_SYM1 + j, F_BACK + j, F_HOME + j, 1]
+        # A fragment is all but gone before it has finished travelling, and on
+        # the way back it is lit again as it arrives, so the crossfade with the
+        # particles happens where both are in the same place.
+        kt_o = [0, F_REST + j, F_REST + 0.75 * DISSOLVE / LOOP + j,
+                F_HOME - 0.30 * RETURN / LOOP + j, F_HOME + 0.30 * SETTLE / LOOP + j, 1]
 
         begin_in = 0.25 + i * 0.012
         out.append(
@@ -416,11 +518,11 @@ def tiles_svg(pts, cx, cy):
             f' fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="{EASE}"/>'
             f'<animate attributeName="opacity" values="1;1;0;0;1;1" keyTimes="{ktimes(kt_o)}"'
             f' dur="{LOOP}s" begin="{BEGIN}s" repeatCount="indefinite"'
-            f' calcMode="spline" keySplines="{splines(5)}"/>'
+            f' calcMode="spline" keySplines="{splines(kt_o)}"/>'
             f'<animateTransform attributeName="transform" type="translate"'
             f' values="0 0;0 0;{fmt(ox)} {fmt(oy)};{fmt(ox)} {fmt(oy)};0 0;0 0"'
             f' keyTimes="{ktimes(kt_t)}" dur="{LOOP}s" begin="{BEGIN}s" repeatCount="indefinite"'
-            f' calcMode="spline" keySplines="{splines(5)}"/>'
+            f' calcMode="spline" keySplines="{splines(kt_t)}"/>'
             f'<path d="{d}" fill="url(#ink)"/></g>')
     return out
 
@@ -437,20 +539,20 @@ def particles_svg(home, shapes):
         for s, rk in zip(shapes, rank_sym):
             q = s[rk[r]]
             stops.append(q)
-            # The second copy of each symbol drifts a hair off the first, so a
-            # three-second hold breathes instead of freezing dead still.
+            # The second copy of each symbol drifts a hair off the first, so
+            # the hold breathes instead of freezing dead still.
             stops.append((q[0] + RNG.uniform(-1.1, 1.1), q[1] + RNG.uniform(-1.1, 1.1)))
         stops += [p, p]
 
         j = RNG.uniform(-0.009, 0.009)
-        ks = [K[0]] + [k + j for k in K[1:-1]] + [K[11]]
+        ks = [K[0]] + [k + j for k in K[1:-1]] + [K[-1]]
         vals = ";".join(f"{fmt(x)} {fmt(y)}" for x, y in stops)
         href = "#e" if RNG.random() < 0.085 else "#d"
         out.append(
             f'<use href="{href}"><animateTransform attributeName="transform"'
             f' type="translate" values="{vals}" keyTimes="{ktimes(ks)}" dur="{LOOP}s"'
             f' begin="{BEGIN}s" repeatCount="indefinite" calcMode="spline"'
-            f' keySplines="{splines(11)}"/></use>')
+            f' keySplines="{splines(ks)}"/></use>')
     return out
 
 
@@ -463,7 +565,8 @@ def main():
     home = sample_tone(pts, N_PARTICLES)
     shapes = [place(fn(), N_PARTICLES) for fn in SYMBOLS]
 
-    kt_p = [0, K[1], 0.205, 0.855, K[10], 0.910, 1]
+    kt_p = [0, F_REST, F_SYM1, F_HOME - 0.22 * RETURN / LOOP, F_HOME,
+            F_HOME + 0.28 * SETTLE / LOOP, 1]
     # Fragments travel far enough to clear the face; the clip keeps the ones
     # that overshoot from spilling onto the SYSTEM.INFO column next door.
     body = [
@@ -476,7 +579,7 @@ def main():
         ' opacity="0">'
         f'<animate attributeName="opacity" values="0;0;1;1;1;0;0" keyTimes="{ktimes(kt_p)}"'
         f' dur="{LOOP}s" begin="{BEGIN}s" repeatCount="indefinite"'
-        f' calcMode="spline" keySplines="{splines(6)}"/>',
+        f' calcMode="spline" keySplines="{splines(kt_p)}"/>',
         *particles_svg(home, shapes),
         '</g>',
         '</g>',
@@ -488,7 +591,8 @@ def main():
         f.write("\n")
         f.write(TAIL)
     print(f"{OUT}  {os.path.getsize(OUT) / 1024:.0f} KB  "
-          f"{len(pts)} avatar px, {N_PARTICLES} particles, {TILE_COLS * TILE_ROWS} fragments")
+          f"{len(pts)} avatar px, {N_PARTICLES} particles, "
+          f"{len(SYMBOLS)} symbols, {LOOP:.1f}s loop")
 
 
 if __name__ == "__main__":
