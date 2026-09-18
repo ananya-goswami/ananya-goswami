@@ -8,7 +8,8 @@ The VISUAL.MAP panel has two layers that hand off to each other:
              is one <path> of stipple pixels, so the resting portrait is the
              full-density image, not a thinned-out cloud of dots.
   particles  ~1700 dots that live at avatar pixels, then travel through
-             </>, a gamepad, a mortarboard and an automation graph.
+             </>, the React mark, a gamepad and the Vercel triangle -
+             write it, build it, play it, ship it.
 
 The handoff is the whole point.  The fragments fly apart along the vector
 from the centre of the face while the particles light up on the pixels they
@@ -143,43 +144,72 @@ TILE_COLS, TILE_ROWS = 12, 15
 
 # The symbols are drawn in a 0..100 box and then mapped into the avatar's own
 # coordinate space, so a particle's trip from face to symbol stays short.
-SYM_CX, SYM_CY = 134.0, 158.0
-SYM_W, SYM_H = 232.0, 196.0
+SYM_CX, SYM_CY = 134.0, 146.0
+SYM_W, SYM_H = 196.0, 166.0
 
 
 # ------------------------------------------------------------------ raster
+# Symbols are drawn eight times up and the points are picked off the result, so
+# a diagonal edge lands on a smooth line of dots rather than a visible stair.
+UP = 8.0
+CANVAS = int(100 * UP)
+
+
 def raster():
-    """A 400x400 canvas to draw a symbol on, plus its drawing context."""
-    im = Image.new("L", (400, 400), 0)
+    """A canvas to draw one symbol on, plus its drawing context."""
+    im = Image.new("L", (CANVAS, CANVAS), 0)
     return im, ImageDraw.Draw(im)
 
 
 def to_px(pts):
-    """0..100 design units -> pixels on the 400x400 canvas."""
-    return [(x * 4.0, y * 4.0) for x, y in pts]
+    """0..100 design units -> pixels on the canvas."""
+    return [(x * UP, y * UP) for x, y in pts]
 
 
 def stroke(d, pts, w, closed=False):
+    """A round-capped, round-joined stroke, laid down as a run of discs.
+
+    Pillow's `line` gives square ends and mitres that notch where two thick
+    strokes meet, and both show up badly once the shape is only 1700 dots.
+    Stamping a disc along the path costs nothing here and leaves every end and
+    corner clean.
+    """
     p = to_px(pts)
     if closed:
         p = p + [p[0]]
-    d.line(p, fill=255, width=int(round(w * 4.0)), joint="curve")
-    # `joint="curve"` rounds the corners but leaves the ends square; a disc at
-    # every vertex keeps thick strokes from notching where they meet.
-    r = w * 2.0
-    for x, y in p:
-        d.ellipse([x - r, y - r, x + r, y + r], fill=255)
+    r = w * UP / 2.0
+    for (x0, y0), (x1, y1) in zip(p, p[1:]):
+        n = max(2, int(math.hypot(x1 - x0, y1 - y0) / (r * 0.35) + 1))
+        for i in range(n + 1):
+            t = i / n
+            x, y = x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
+            d.ellipse([x - r, y - r, x + r, y + r], fill=255)
 
 
 def disc(d, cx, cy, r):
-    (x, y), rr = to_px([(cx, cy)])[0], r * 4.0
+    (x, y), rr = to_px([(cx, cy)])[0], r * UP
     d.ellipse([x - rr, y - rr, x + rr, y + rr], fill=255)
 
 
+def arc(cx, cy, r, a0=0, a1=360, steps=240):
+    return [(cx + r * math.cos(math.radians(a0 + (a1 - a0) * i / steps)),
+             cy + r * math.sin(math.radians(a0 + (a1 - a0) * i / steps)))
+            for i in range(steps + 1)]
+
+
+def ellipse_path(cx, cy, rx, ry, tilt, steps=260):
+    """One tilted ellipse - the orbit in the React mark."""
+    ca, sa = math.cos(math.radians(tilt)), math.sin(math.radians(tilt))
+    out = []
+    for i in range(steps + 1):
+        t = 2 * math.pi * i / steps
+        x, y = rx * math.cos(t), ry * math.sin(t)
+        out.append((cx + x * ca - y * sa, cy + x * sa + y * ca))
+    return out
+
+
 def ring(d, cx, cy, r, w):
-    pts = [(cx + r * math.cos(t / 90.0 * math.pi), cy + r * math.sin(t / 90.0 * math.pi))
-           for t in range(180)]
-    stroke(d, pts, w, closed=True)
+    stroke(d, arc(cx, cy, r), w, closed=True)
 
 
 def poly(d, pts):
@@ -204,59 +234,54 @@ def mask_points(im):
 
 
 # ----------------------------------------------------------------- symbols
+# Write it, build it, play it, ship it - the four marks are the shortest true
+# account of the work, and each one has to survive being redrawn as 1700 dots.
+# That rules out anything that leans on colour to be read (the Figma mark) or
+# on fine detail (the Octocat), and it rules out a symbol nobody would place
+# out of context, which is what sank the mortarboard and the node graph.
+# Three of the four are stroked, which holds their weight even.  The Vercel
+# mark is the exception: it is a solid triangle and drawing it as an outline
+# turns it into a generic delta, so it is filled.  It gets away with it
+# because a triangle covers only half its box, which keeps the 1700 dots
+# close enough together to still read as a solid.  A larger fill would thin
+# out to a haze at this count.
 def sym_code():
-    """</> - the games and tools are all hand-written browser code."""
+    """</> - the games are hand-written HTML, CSS and JavaScript."""
     im, d = raster()
-    stroke(d, [(36, 25), (13, 50), (36, 75)], 6.4)
-    stroke(d, [(57, 16), (43, 84)], 6.4)
-    stroke(d, [(64, 25), (87, 50), (64, 75)], 6.4)
+    stroke(d, [(35, 27), (15, 50), (35, 73)], 5.6)
+    stroke(d, [(58, 19), (42, 81)], 5.6)
+    stroke(d, [(65, 27), (85, 50), (65, 73)], 5.6)
+    return im
+
+
+def sym_react():
+    """The React mark: what the bigger builds are put together with."""
+    im, d = raster()
+    for tilt in (0, 60, 120):
+        stroke(d, ellipse_path(50, 50, 42, 16, tilt), 3.4, closed=True)
+    disc(d, 50, 50, 6.4)
     return im
 
 
 def sym_gamepad():
-    """15+ browser games, so the panel says so."""
+    """15+ browser games running in classrooms - the day job."""
     im, d = raster()
-    stroke(d, rrect(10, 30, 80, 41, 19), 5.0, closed=True)
-    stroke(d, [(24, 50.5), (40, 50.5)], 4.6)          # d-pad, across
-    stroke(d, [(32, 42.5), (32, 58.5)], 4.6)          # d-pad, down
-    disc(d, 64, 44, 5.2)
-    disc(d, 76, 56, 5.2)
+    stroke(d, rrect(13, 31, 74, 38, 18), 4.6, closed=True)
+    stroke(d, [(26, 50), (40, 50)], 4.2)              # d-pad, across
+    stroke(d, [(33, 43), (33, 57)], 4.2)              # d-pad, down
+    disc(d, 64, 44, 4.8)
+    disc(d, 75, 55, 4.8)
     return im
 
 
-def sym_cap():
-    """A mortarboard: every one of those games is built for a classroom."""
+def sym_ship():
+    """The Vercel triangle: nearly every game in the README ships there."""
     im, d = raster()
-    poly(d, [(50, 22), (93, 39), (50, 56), (7, 39)])   # the board
-    stroke(d, [(24, 45), (24, 65)], 4.4)               # the cap, left side
-    stroke(d, [(76, 45), (76, 65)], 4.4)               # right side
-    stroke(d, [(24, 65), (50, 73), (76, 65)], 4.4)     # and its base
-    stroke(d, [(88, 42), (88, 62)], 3.4)               # tassel cord
-    disc(d, 88, 65, 3.6)                               # and its knot
+    poly(d, [(50, 19), (89, 77), (11, 77)])
     return im
 
 
-def sym_flow():
-    """The automation side: one hub, three things hanging off it."""
-    im, d = raster()
-    hub, hub_r, node_r = (50, 50), 13.0, 10.0
-    nodes = [(16, 26), (84, 26), (50, 84)]
-    # Run each link between the two rings rather than centre to centre, so no
-    # stray dots end up floating inside a node.
-    for n in nodes:
-        ux, uy = n[0] - hub[0], n[1] - hub[1]
-        L = math.hypot(ux, uy)
-        ux, uy = ux / L, uy / L
-        stroke(d, [(hub[0] + ux * hub_r, hub[1] + uy * hub_r),
-                   (n[0] - ux * node_r, n[1] - uy * node_r)], 3.8)
-    ring(d, hub[0], hub[1], hub_r, 3.6)
-    for n in nodes:
-        ring(d, n[0], n[1], node_r, 3.4)
-    disc(d, hub[0], hub[1], 4.2)
-    return im
-
-
-SYMBOLS = [sym_code, sym_gamepad, sym_cap, sym_flow]
+SYMBOLS = [sym_code, sym_react, sym_gamepad, sym_ship]
 
 
 # ---------------------------------------------------------------- sampling
@@ -272,7 +297,7 @@ def scatter(pts, n):
     grid, out = {}, []
     for _ in range(n):
         best, best_d = None, -1.0
-        for _ in range(9):
+        for _ in range(16):
             c = pts[RNG.randrange(len(pts))]
             gx, gy = int(c[0] / cell), int(c[1] / cell)
             near = 1e9
@@ -420,7 +445,7 @@ def particles_svg(home, shapes):
         j = RNG.uniform(-0.009, 0.009)
         ks = [K[0]] + [k + j for k in K[1:-1]] + [K[11]]
         vals = ";".join(f"{fmt(x)} {fmt(y)}" for x, y in stops)
-        href = "#e" if RNG.random() < 0.13 else "#d"
+        href = "#e" if RNG.random() < 0.085 else "#d"
         out.append(
             f'<use href="{href}"><animateTransform attributeName="transform"'
             f' type="translate" values="{vals}" keyTimes="{ktimes(ks)}" dur="{LOOP}s"'
