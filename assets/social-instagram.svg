@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="150" height="44" viewBox="0 0 150 44" role="img" aria-label="INSTAGRAM">
+<defs>
+  <linearGradient id="ink" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#D8F5E8"/><stop offset="1" stop-color="#BFE6FA"/>
+  </linearGradient>
+</defs>
+<style>
+  .mono { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }
+  .rule { animation: glow 5s ease-in-out infinite; }
+  @keyframes glow { 0%,100% { opacity: .30 } 50% { opacity: .85 } }
+</style>
+<rect x="0" y="0" width="150" height="44" rx="10" fill="#0b1219"/>
+<g transform="translate(14 12)"><rect x="0.9" y="0.9" width="18.2" height="18.2" rx="5.4" fill="none" stroke="#B9A7FA" stroke-width="1.9"/><circle cx="10" cy="10" r="4.1" fill="none" stroke="#B9A7FA" stroke-width="1.9"/><circle cx="15.1" cy="4.9" r="1.3" fill="#B9A7FA"/></g>
+<text class="mono" x="46" y="27" font-size="13" font-weight="700" fill="url(#ink)" letter-spacing="1.8">INSTAGRAM</text>
+<rect class="rule" x="46" y="33" width="90" height="1.6" rx="1" fill="#B9A7FA"/>
+</svg>
