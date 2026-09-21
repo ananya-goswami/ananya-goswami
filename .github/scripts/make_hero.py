@@ -117,7 +117,7 @@ TAIL = """
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MASK = os.path.join(ROOT, "assets", "portrait-mask.png")
 REF = os.path.join(ROOT, "assets", "portrait-colour.png")
-OUT = os.path.join(ROOT, "assets", "hero-v21.svg")
+OUT = os.path.join(ROOT, "assets", "hero-v22.svg")
 
 RNG = random.Random(7)
 
@@ -672,8 +672,13 @@ def _stops():
 K = _stops()
 
 
+# The comets draw from their own stream.  They are emitted before the
+# fragments, so taking numbers off the shared one would shift every
+# fragment's shatter the moment the comet count changed - invisible, but it
+# would mean a change here could not be shown to have left the rest alone.
+CRNG = random.Random(19)
 COMET_PERIOD = 30.0             # the whole procession repeats on this
-COMET_GAP = 3.0                 # and one sets off every this many seconds
+COMET_GAP = 3.75                # and one sets off every this many seconds
 COMET_TINTS = ("ice", "mint", "iris")
 
 
@@ -736,7 +741,7 @@ def comets_svg():
             scale, alpha, cross = 1.75, 1.0, 5.5
         else:
             # most sit far back; a couple come closer
-            z = RNG.choice([0.34, 0.40, 0.46, 0.52, 0.60, 0.72, 0.95, 1.20])
+            z = CRNG.choice([0.34, 0.40, 0.46, 0.52, 0.60, 0.72, 0.95, 1.20])
             scale, alpha = z, min(0.95, 0.30 + 0.62 * z)
             # The far ones take longest to cross.  That is the parallax: they
             # are the same distance across the panel either way, so the only
@@ -747,14 +752,14 @@ def comets_svg():
         # degrees, which is left-and-down for half of them and left-and-up for
         # the other half - two directions, however narrow the band.  A meteor
         # shower is parallel; these are too, give or take three degrees.
-        ang = math.radians(RNG.uniform(165, 171))
+        ang = math.radians(CRNG.uniform(165, 171))
         dx, dy = math.cos(ang), math.sin(ang)
-        off = RNG.uniform(-250, 250)
+        off = CRNG.uniform(-250, 250)
         px, py = -dy * off, dx * off
         x0, y0 = cx + px - dx * reach, cy + py - dy * reach
         x1, y1 = cx + px + dx * reach, cy + py + dy * reach
 
-        begin = i * COMET_GAP + RNG.uniform(-0.25, 0.25)
+        begin = i * COMET_GAP + CRNG.uniform(-0.25, 0.25)
         a = cross / COMET_PERIOD
         tint = COMET_TINTS[i % len(COMET_TINTS)]
         out.append(
