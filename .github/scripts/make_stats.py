@@ -448,13 +448,11 @@ def _tile(x, y, repo, tint):
     photo = ICON_PHOTO.get(repo)
     uri = _photo_uri(photo) if photo else ""
     if uri:
-        # slice, not fit: the crop is already square, and slice guarantees the
-        # rounded corner is covered even if a future crop is not.
-        cid = "tile%d-%d" % (x, y)
-        return (f'<defs><clipPath id="{cid}">'
-                f'<rect x="{x}" y="{y}" width="46" height="46" rx="12"/></clipPath></defs>'
-                f'<image xlink:href="{uri}" x="{x}" y="{y}" width="46" height="46"'
-                f' preserveAspectRatio="xMidYMid slice" clip-path="url(#{cid})"/>'
+        # The rounded corner is baked into the file's alpha, so this needs no
+        # clipPath and no second <defs> halfway down the document.  One <image>
+        # and a hairline is the whole tile - fewer things for anything between
+        # here and the page to object to.
+        return (f'<image xlink:href="{uri}" x="{x}" y="{y}" width="46" height="46"/>'
                 f'<rect x="{x}" y="{y}" width="46" height="46" rx="12" fill="none"'
                 f' stroke="#FFFFFF" stroke-opacity=".18"/>')
     art = ICONS.get(repo)
@@ -476,7 +474,7 @@ CW, CH = 566, 152
 # change but whose name does not keeps serving whatever was fetched first, no
 # matter how many times CI rebuilds it.  Renaming the file is the only thing
 # that actually reaches anyone who has already loaded the page.
-CARD_REV = "b"
+CARD_REV = "c"
 
 
 def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
