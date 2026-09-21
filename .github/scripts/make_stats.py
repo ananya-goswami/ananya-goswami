@@ -4,6 +4,7 @@ import json
 import math
 import os
 import urllib.request
+from datetime import datetime, timezone
 
 USER = "ananya-goswami"
 OUT = os.environ.get("STATS_OUT", "dist/highscores-v2.svg")
@@ -29,18 +30,23 @@ def collect():
             break
         page += 1
     own = [r for r in repos if not r.get("fork")]
-    langs, repo_langs = {}, {}
+    langs, repo_langs, repo_bytes = {}, {}, {}
     for r in own:
         try:
             got = api(r["languages_url"])
             repo_langs[r["name"]] = sorted(got, key=lambda k: -got[k])
+            repo_bytes[r["name"]] = got
             for lang, b in got.items():
                 langs[lang] = langs.get(lang, 0) + b
         except Exception:
             pass
     deployed = [r for r in own if (r.get("homepage") or "").strip()]
+    # Everything a project card shows, so the panel ages with the repos.
     index = {r["name"]: {"homepage": r.get("homepage"),
-                         "langs": [l.lower() for l in (repo_langs.get(r["name"]) or [])]}
+                         "langs": [l.lower() for l in (repo_langs.get(r["name"]) or [])],
+                         "bytes": repo_bytes.get(r["name"], {}),
+                         "stars": r.get("stargazers_count", 0),
+                         "pushed": r.get("pushed_at", "")}
              for r in own}
     return {
         "index": index,
@@ -227,44 +233,169 @@ def build(d, g=None):
 
 
 
+# Her pick, newest work first.  The order is hers, not the API's - pushed_at
+# would put calm-or-react above real-or-fake-sender and Portfolio above
+# Competition Zone, and neither is how she ranks them.
 FEATURED = [
-    ("Competition-Zone", "Competition Zone", "PROTOTYPE",
-     "contest platform: entries, results, trophy room, XP"),
-    ("fln-animation-toolkit", "FLN Animation Kit", "TOOLKIT",
-     "7 drop-in animations for learning apps, fully tunable"),
-    ("Keyword-class9", "Spot the Scam", "CLASS 9 / CYBER",
-     "find the bait, then stop, verify, report. helpline 1930"),
-    ("think-ask-act", "Think Ask Act", "CYBER SAFETY",
-     "sequence the response: think, ask an adult, act after"),
-    ("calm-or-react", "Calm or React", "CYBER SAFETY",
-     "sort the message, name the emotion the scam leans on"),
-    ("feeling-wheel-tap", "Feeling Wheel Tap", "SEL",
-     "pause, notice, name the feeling, take back control"),
+    ("fln-animation-toolkit", "FLN Animation Kit", "TOOLKIT", "FL",
+     "7 drop-in animations, fully tunable"),
+    ("aaru_ki_cheenk", "Aaru Ki Cheenk", "STORY GAME", "AK",
+     "a story told one choice at a time"),
+    ("Keyword-class9", "Spot the Scam", "CLASS 9 / CYBER", "SS",
+     "find the bait, then stop and verify"),
+    ("feeling-wheel-tap", "Feeling Wheel Tap", "SEL", "FW",
+     "pause, notice, name the feeling"),
+    ("think-ask-act", "Think Ask Act", "CYBER SAFETY", "TA",
+     "think, ask an adult, then act"),
+    ("real-or-fake-sender", "Real or Fake Sender", "CYBER SAFETY", "RF",
+     "check who is really writing"),
+    ("calm-or-react", "Calm or React", "CYBER SAFETY", "CR",
+     "name the emotion the scam leans on"),
+    ("Competition-Zone", "Competition Zone", "PROTOTYPE", "CZ",
+     "entries, results, trophy room, XP"),
+    ("Portfolio", "Portfolio", "SITE", "PF",
+     "the rest of the work, in one place"),
 ]
+
+# GitHub's own linguist colours, so the dots and the ring mean the same thing
+# here as they do on the repo pages.
+LANG_HUE = {
+    "html": "#E34C26", "css": "#563D7C", "javascript": "#F1E05A",
+    "typescript": "#3178C6", "python": "#3572A5", "shell": "#89E051",
+    "scss": "#C6538C", "java": "#B07219", "c++": "#F34B7D",
+    "dart": "#00B4AB", "cmake": "#DA3434", "vue": "#41B883",
+}
+LANG_REST = "#2A4A46"                    # everything past the top three
+TILE_TINT = ["#14544A", "#1A4A63", "#39356A", "#57384C", "#1F5240",
+             "#16405F", "#48386B", "#26564E", "#563B3B"]
+
+
+def _ago(iso, now=None):
+    """'10d ago' / '4mo ago', the way GitHub writes it on a repo card."""
+    if not iso:
+        return ""
+    t = datetime.strptime(iso[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+    days = ((now or datetime.now(timezone.utc)) - t).days
+    if days < 1:
+        return "updated today"
+    if days < 30:
+        return f"updated {days}d ago"
+    if days < 365:
+        return f"updated {days // 30}mo ago"
+    return f"updated {days // 365}y ago"
+
+
+def _pill(x, y, text):
+    """One outlined tech chip.  Returns the markup and how wide it came out."""
+    w = 13.0 + len(text) * 6.5
+    return (f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="19" rx="9.5"'
+            f' fill="#0A1F1C" stroke="#22D3EE" stroke-opacity=".34"/>'
+            f'<text class="mono" x="{x + w / 2:.1f}" y="{y + 13.4:.1f}" font-size="10.5"'
+            f' text-anchor="middle" fill="#7FD8EE">{esc(text)}</text>'), w
+
+
+def _donut(cx, cy, r, slices, delay):
+    """The language ring: one arc per language, drawn in on load.
+
+    stroke-dasharray places each arc and stroke-dashoffset walks it round, so
+    the whole ring is one circle element per slice and no path maths.
+    """
+    circ = 2 * math.pi * r
+    out = [f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="#0C221E" stroke-width="8"/>']
+    off = 0.0
+    for frac, col in slices:
+        arc = circ * frac
+        out.append(
+            f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{col}" stroke-width="8"'
+            f' stroke-dasharray="{arc:.2f} {circ - arc:.2f}" stroke-dashoffset="{-off:.2f}"'
+            f' transform="rotate(-90 {cx} {cy})">'
+            f'<animate attributeName="stroke-dasharray" values="0 {circ:.2f};{arc:.2f} {circ - arc:.2f}"'
+            f' dur="0.9s" begin="{delay:.2f}s" fill="freeze" calcMode="spline"'
+            f' keyTimes="0;1" keySplines=".4 0 .2 1"/></circle>')
+        off += arc
+    return "".join(out)
+
+
+# The blurb column runs from the icon to the language list; at 11.5px mono
+# that is about 38 characters, and anything longer lands on top of them.
+def _clip_text(s, n):
+    return s if len(s) <= n else s[:n - 1].rstrip(" ,.") + "…"
 
 
 def build_projects(index):
-    W, H = 1200, 452
-    CW, CH, GX, GY = 566, 104, 22, 16
+    """The projects panel: one card per featured repo, GitHub-card shaped.
+
+    Everything on a card except the title, blurb and tag comes off the API -
+    the languages and their split, the star count, when it was last pushed and
+    whether it is deployed - so the panel ages with the repos instead of with
+    the list.
+    """
+    CW, CH, GX, GY = 566, 152, 22, 14
+    rows = (len(FEATURED) + 1) // 2
+    W, H = 1200, 96 + rows * CH + (rows - 1) * GY + 22
+
     cards = ""
-    for i, (repo, title, tag, blurb) in enumerate(FEATURED):
+    for i, (repo, title, tag, mono, blurb) in enumerate(FEATURED):
         col, row = i % 2, i // 2
         x = 26 + col * (CW + GX)
         y = 96 + row * (CH + GY)
         meta = index.get(repo, {})
         live = bool((meta.get("homepage") or "").strip())
-        langs = " / ".join(meta.get("langs", [])[:3]) or "html / css / js"
+        by = meta.get("bytes") or {}
+        total = sum(by.values()) or 1
+        top = sorted(by.items(), key=lambda kv: -kv[1])[:3]
+
+        rowsL, slices = "", []
+        for j, (lang, b) in enumerate(top):
+            pct = 100.0 * b / total
+            hue = LANG_HUE.get(lang.lower(), "#6E8A99")
+            ly = y + 52 + j * 18
+            rowsL += (f'<circle cx="{x + CW - 214}" cy="{ly - 4}" r="3.4" fill="{hue}"/>'
+                      f'<text class="mono" x="{x + CW - 202}" y="{ly}" font-size="10.5"'
+                      f' fill="#9FBDB6">{esc(lang)} {pct:.0f}%</text>')
+            slices.append((b / total, hue))
+        rest = 1.0 - sum(f for f, _ in slices)
+        if rest > 0.005:
+            slices.append((rest, LANG_REST))
+
+        px, pw = x + 76, y + 102
+        pills = ""
+        for lang, _ in top:
+            chip, w = _pill(px, pw, lang.lower())
+            pills += chip
+            px += w + 7
+
+        head = f"{USER}/{repo}"
         cards += f'''
   <g>
-    <rect x="{x}" y="{y}" width="{CW}" height="{CH}" rx="9" fill="#050d0b" stroke="#00FF9C" stroke-opacity=".20"/>
-    <text class="mono" x="{x + 16}" y="{y + 22}" font-size="11" fill="#3f5f58">~/{esc(repo)}</text>
-    <text class="mono" x="{x + CW - 16}" y="{y + 22}" font-size="10.5" text-anchor="end" letter-spacing="1.3"
-          fill="{'#00FF9C' if live else '#3f5f58'}">{'● LIVE' if live else '○ REPO'}</text>
-    <text class="mono" x="{x + 16}" y="{y + 48}" font-size="16" font-weight="700" fill="#E8FFF6">{esc(title)}</text>
-    <text class="mono" x="{x + 16}" y="{y + 70}" font-size="12.5" fill="#7f9c96">{esc(blurb)}</text>
-    <text class="mono" x="{x + 16}" y="{y + 90}" font-size="11" fill="#22D3EE" fill-opacity=".85">{esc(langs)}</text>
-    <text class="mono" x="{x + CW - 16}" y="{y + 90}" font-size="10.5" text-anchor="end" letter-spacing="1.4"
-          fill="#3ddc97" fill-opacity=".8">{esc(tag)}</text>
+    <rect x="{x}" y="{y}" width="{CW}" height="{CH}" rx="10" fill="#050f0d"
+          stroke="#00FF9C" stroke-opacity=".17"/>
+    <path d="M{x} {y + 27}h{CW}" stroke="#00FF9C" stroke-opacity=".12"/>
+    <circle cx="{x + 15}" cy="{y + 14}" r="3" fill="{'#00FF9C' if live else '#33534e'}"/>
+    <text class="mono" x="{x + 26}" y="{y + 18}" font-size="10.5" fill="#557a73">{esc(head)}</text>
+    <text class="mono" x="{x + CW - 15}" y="{y + 18}" font-size="9.5" text-anchor="end"
+          letter-spacing="1.2" fill="{'#00FF9C' if live else '#3f5f58'}"
+          fill-opacity=".85">{'LIVE' if live else 'REPO'}</text>
+
+    <rect x="{x + 16}" y="{y + 44}" width="46" height="46" rx="12"
+          fill="{TILE_TINT[i % len(TILE_TINT)]}" stroke="#FFFFFF" stroke-opacity=".10"/>
+    <text class="mono" x="{x + 39}" y="{y + 74}" font-size="17" font-weight="700"
+          text-anchor="middle" fill="#DFF6EE" fill-opacity=".92">{mono}</text>
+
+    <text class="mono" x="{x + 76}" y="{y + 60}" font-size="16.5" font-weight="700"
+          fill="#E8FFF6">{esc(title)}<tspan fill="#00FF9C" fill-opacity=".75">_</tspan></text>
+    <text class="mono" x="{x + 76}" y="{y + 82}" font-size="11.5"
+          fill="#7f9c96">{esc(_clip_text(blurb, 38))}</text>
+    {pills}
+    <text class="mono" x="{x + 76}" y="{y + 140}" font-size="10.5" fill="#557a73"
+          xml:space="preserve">★ {meta.get('stars', 0)}   {esc(_ago(meta.get('pushed')))}</text>
+    <text class="mono" x="{x + CW - 15}" y="{y + 140}" font-size="9.5" text-anchor="end"
+          letter-spacing="1.3" fill="#3ddc97" fill-opacity=".75">{esc(tag)}</text>
+
+    {rowsL}
+    {_donut(x + CW - 62, y + 74, 26, slices, 0.25 + i * 0.09)}
+    <text class="mono" x="{x + CW - 62}" y="{y + 79}" font-size="13" font-weight="700"
+          text-anchor="middle" fill="#E8FFF6">{(100.0 * top[0][1] / total) if top else 0:.0f}%</text>
   </g>'''
 
     return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="featured projects">
@@ -282,9 +413,10 @@ def build_projects(index):
   @keyframes blink {{ 0%,48% {{ opacity: 1 }} 49%,100% {{ opacity: 0 }} }}
 </style>
 <rect width="{W}" height="{H}" rx="14" fill="url(#bgG)"/>
-<ellipse cx="1000" cy="380" rx="360" ry="240" fill="url(#glowB)"/>
+<ellipse cx="1000" cy="{H - 80}" rx="360" ry="240" fill="url(#glowB)"/>
 <rect x="1" y="1" width="{W - 2}" height="32" rx="14" fill="#0a1114"/><rect x="1" y="22" width="{W - 2}" height="11" fill="#0a1114"/>
 <text class="mono" x="30" y="22" font-size="12" fill="#4e6b66">~/projects</text>
+<text class="mono" x="{W - 30}" y="22" font-size="11" text-anchor="end" letter-spacing="1.6" fill="#31514c">PROJECTS.LIST</text>
 <line x1="1" y1="33" x2="{W - 1}" y2="33" stroke="#00FF9C" stroke-opacity=".18"/>
 <text class="mono" x="26" y="68" font-size="14" fill="#3ddc97" fill-opacity=".8" xml:space="preserve">$ ls ~/projects --featured</text>
 <rect class="car" x="232" y="56" width="8" height="15" fill="#00FF9C" fill-opacity=".8"/>
@@ -1317,7 +1449,9 @@ if __name__ == "__main__":
     out_dir = os.path.dirname(OUT) or "."
     os.makedirs(out_dir, exist_ok=True)
     open(OUT, "w").write(build(data, g))
-    open(os.path.join(out_dir, "projects-v2.svg"), "w").write(build_projects(data["index"]))
+    # Bumped from v2: camo caches README images by URL, so a redesign published
+    # to the old path would keep serving the old panel however often CI reran.
+    open(os.path.join(out_dir, "projects-v3.svg"), "w").write(build_projects(data["index"]))
     if g.get("weeks"):
         open(os.path.join(out_dir, "runner-v2.svg"), "w").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))

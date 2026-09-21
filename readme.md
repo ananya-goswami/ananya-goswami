@@ -22,7 +22,7 @@
 
 <br/>
 
-<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/projects-v2.svg" width="100%" alt="featured projects" />
+<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/projects-v3.svg" width="100%" alt="featured projects" />
 
 </div>
 
