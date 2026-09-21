@@ -53,6 +53,20 @@
 
 <div align="center">
 
+<a href="https://www.linkedin.com/in/ananyagos/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/social-linkedin.svg" alt="LinkedIn" /></a>
+&nbsp;
+<a href="https://github.com/ananya-goswami"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/social-github.svg" alt="GitHub" /></a>
+&nbsp;
+<a href="https://g-ananya.netlify.app/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/social-portfolio.svg" alt="Portfolio" /></a>
+&nbsp;
+<a href="mailto:goswamiananya54@gmail.com"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/social-email.svg" alt="Email" /></a>
+
+</div>
+
+<br/>
+
+<div align="center">
+
 `$ cat ~/builds/README`
 
 </div>
