@@ -443,11 +443,18 @@ SKY = (("0", "#5cc0f7"), ("0.55", "#8fd6fb"), ("1", "#c4e9fd"))
 # here - so the proportions are rebuilt for the tile: fewer lanes so it is not
 # white noise, bigger stars, and a duration matched to the shorter trip rather
 # than copied, or it would crawl.
-SKY_LANES = 8
-SKY_LAYERS = ((0.0, 1.00), (22.5, 0.62))     # angle offset, size scale
-SKY_R0, SKY_R1 = 3.0, 22.0                   # stars fade out before the corner
-SKY_DUR = (3.4, 5.8)
-SKY_SIZE = (3.6, 6.4)
+# Its own numbers are lanes=16 in two layers, r 40->260, 8-15s, size 5-15px.
+# None of that survives the move to 46px.  Sixteen stars all leaving one point
+# in a space this small read as a burst rather than a sky, and they pile up
+# near the middle where the rays converge; so there are ten, the rays are
+# jittered off the even fan that made it look mechanical, and they start
+# further out where there is already room between them.
+SKY_LANES = 5
+SKY_LAYERS = ((0.0, 1.00), (36.0, 0.66))     # angle offset, size scale
+SKY_JITTER = 13.0                            # degrees, so the fan is not a wheel
+SKY_R0, SKY_R1 = 5.5, 23.0                   # stars fade out before the corner
+SKY_DUR = (3.6, 6.0)
+SKY_SIZE = (3.4, 6.0)
 
 # The five shapes it cycles, lifted from the sheet's own data-URI sprites.
 _S_STAR = ("M32 5.5c1.6 0 3 .9 3.7 2.4l6.1 12.4 13.7 2c1.6.2 3 1.4 3.5 3s.1 3.3-1.1 4.4"
@@ -464,22 +471,22 @@ def _scene_defs_stars():
 
 
 def _sky_shape(kind, s):
-    """One of the five, centred on the origin at `s` pixels across."""
+    """One of its shapes, centred on the origin at `s` pixels across.
+
+    The toolkit cycles five: filled star, outlined star, sparkle, ring, dot.
+    Only three are kept here.  Its outline star is a 4.5 stroke in a 64 unit
+    box, which at six pixels across comes to a third of a pixel, and the ring
+    is no better - both arrive as grey smudge rather than as a shape, and they
+    are most of what made the tile look messy.
+    """
     k = s / 64.0
-    if kind == 0:                                     # filled five-point star
+    if kind == 0:
         return (f'<path d="{_S_STAR}" fill="#FFFFFF"'
                 f' transform="translate({-s / 2:.2f} {-s / 2:.2f}) scale({k:.4f})"/>')
-    if kind == 1:                                     # the same star, outlined
-        return (f'<path d="{_S_STAR}" fill="none" stroke="#FFFFFF" stroke-width="4.5"'
-                f' stroke-linejoin="round"'
-                f' transform="translate({-s / 2:.2f} {-s / 2:.2f}) scale({k:.4f})"/>')
-    if kind == 2:                                     # four-point sparkle
+    if kind == 1:
         return (f'<path d="{_S_SPARK}" fill="#FFFFFF"'
                 f' transform="translate({-s / 2:.2f} {-s / 2:.2f}) scale({k:.4f})"/>')
-    if kind == 3:                                     # ring
-        return (f'<circle r="{s / 2:.2f}" fill="none" stroke="#FFFFFF"'
-                f' stroke-opacity=".92" stroke-width="0.9"/>')
-    return f'<circle r="{s / 2:.2f}" fill="#FFFFFF" fill-opacity=".92"/>'   # dot
+    return f'<circle r="{s / 2.6:.2f}" fill="#FFFFFF" fill-opacity=".92"/>'
 
 
 def _scene_stars(x, y):
@@ -489,7 +496,8 @@ def _scene_stars(x, y):
     out = [f'<rect x="{x}" y="{y}" width="46" height="46" rx="12" fill="url(#flnsky)"/>']
     for li, (rot, scale) in enumerate(SKY_LAYERS):
         for i in range(SKY_LANES):
-            a = math.radians(360.0 / SKY_LANES * i + rot)
+            a = math.radians(360.0 / SKY_LANES * i + rot
+                             + rnd.uniform(-SKY_JITTER, SKY_JITTER))
             ca, sa = math.cos(a), math.sin(a)
             size = (SKY_SIZE[0] + rnd.random() * (SKY_SIZE[1] - SKY_SIZE[0])) * scale
             dur = SKY_DUR[0] + rnd.random() * (SKY_DUR[1] - SKY_DUR[0])
@@ -505,7 +513,7 @@ def _scene_stars(x, y):
                 f' values="{x1:.1f} {y1:.1f};{x2:.1f} {y2:.1f}" dur="{dur:.2f}s"'
                 f' begin="-{rnd.random() * dur:.2f}s" repeatCount="indefinite"'
                 f' calcMode="linear"/>'
-                f'{_sky_shape((i + li) % 5, size)}</g>')
+                f'{_sky_shape((i + li) % 3, size)}</g>')
     out.append(f'<rect x="{x}" y="{y}" width="46" height="46" rx="12" fill="none"'
                f' stroke="#FFFFFF" stroke-opacity=".22"/>')
     return "".join(out)
@@ -574,7 +582,7 @@ CW, CH = 566, 152
 # change but whose name does not keeps serving whatever was fetched first, no
 # matter how many times CI rebuilds it.  Renaming the file is the only thing
 # that actually reaches anyone who has already loaded the page.
-CARD_REV = "f"
+CARD_REV = "g"
 
 
 def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
