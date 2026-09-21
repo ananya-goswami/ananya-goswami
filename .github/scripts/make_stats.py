@@ -419,8 +419,44 @@ ICONS = {
 }
 
 
+# A project with real artwork of its own uses it instead of a drawn mark.  The
+# file is a square crop kept in assets/ rather than fetched at build time: CI
+# would otherwise depend on the game still being deployed, and a 404 there
+# should not be able to empty a tile here.
+ICON_PHOTO = {"aaru_ki_cheenk": "proj-icon-aaru.png"}
+_PHOTO_CACHE = {}
+
+
+def _photo_uri(name):
+    """The artwork, inlined, so the card stays one self-contained file."""
+    if name not in _PHOTO_CACHE:
+        import base64
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "..", "..", "assets", name)
+        try:
+            with open(path, "rb") as fh:
+                _PHOTO_CACHE[name] = ("data:image/png;base64,"
+                                      + base64.b64encode(fh.read()).decode())
+        except Exception as exc:
+            print("project icon skipped:", name, exc)
+            _PHOTO_CACHE[name] = ""
+    return _PHOTO_CACHE[name]
+
+
 def _tile(x, y, repo, tint):
     """The icon on its tinted square, 28px of drawing in a 46px tile."""
+    photo = ICON_PHOTO.get(repo)
+    uri = _photo_uri(photo) if photo else ""
+    if uri:
+        # slice, not fit: the crop is already square, and slice guarantees the
+        # rounded corner is covered even if a future crop is not.
+        cid = "tile%d-%d" % (x, y)
+        return (f'<defs><clipPath id="{cid}">'
+                f'<rect x="{x}" y="{y}" width="46" height="46" rx="12"/></clipPath></defs>'
+                f'<image xlink:href="{uri}" x="{x}" y="{y}" width="46" height="46"'
+                f' preserveAspectRatio="xMidYMid slice" clip-path="url(#{cid})"/>'
+                f'<rect x="{x}" y="{y}" width="46" height="46" rx="12" fill="none"'
+                f' stroke="#FFFFFF" stroke-opacity=".18"/>')
     art = ICONS.get(repo)
     inner = art() if art else ""
     s = 28.0 / 24.0
@@ -510,7 +546,8 @@ def build_project_cards(index):
     out = {}
     for i, (repo, title, tag, blurb) in enumerate(FEATURED):
         out[f"proj-{repo}.svg"] = (
-            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}"'
+            f'<svg xmlns="http://www.w3.org/2000/svg"'
+            f' xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 {W} {H}"'
             f' width="{W}" height="{H}" role="img" aria-label="{esc(title)}">'
             f'<defs><pattern id="sc" width="4" height="4" patternUnits="userSpaceOnUse">'
             f'<rect width="4" height="1" fill="#7fffd4" fill-opacity=".03"/></pattern>'
