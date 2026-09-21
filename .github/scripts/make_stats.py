@@ -1345,9 +1345,11 @@ if __name__ == "__main__":
     # to the old path would keep serving the old panel however often CI reran.
     open(os.path.join(out_dir, "projects-v3.svg"), "w").write(build_projects(data["index"]))
     if g.get("weeks"):
-        open(os.path.join(out_dir, "runner-v2.svg"), "w").write(
+        # Fresh URL so GitHub's image proxy cannot keep serving the retired
+        # block-built avatar after this artwork replacement.
+        open(os.path.join(out_dir, "runner-v3.svg"), "w").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v2.svg")
+        print("wrote runner-v3.svg")
     else:
         print("no calendar data - runner panel skipped")
     print("panels:", data["repos"], "repos,", data["deployed"], "live,", g.get("contributions"), "contributions")
