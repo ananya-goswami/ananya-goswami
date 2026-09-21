@@ -3,6 +3,7 @@
 import json
 import math
 import os
+import random
 import urllib.request
 from datetime import datetime, timezone
 
@@ -423,30 +424,38 @@ ICONS = {
 # file is a square crop kept in assets/ rather than fetched at build time: CI
 # would otherwise depend on the game still being deployed, and a 404 there
 # should not be able to empty a tile here.
-# A project whose whole subject is motion gets a tile that moves.  The toolkit
-# ships a drifting-star start screen; this is that screen at 46px, rebuilt as
-# vector rather than captured, so it animates instead of sitting still.
-#
-# The sky is the toolkit's own gradient, read out of its index.html:
+# A project whose whole subject is motion gets a tile that moves, and it has
+# to move the way the toolkit does - the first two passes invented a drift
+# and neither matched.
+# The sky is the toolkit's own, read out of its index.html rather than guessed:
 #   linear-gradient(180deg,#5cc0f7 0%,#8fd6fb 55%,#c4e9fd 100%)
 #
-# No clipPath.  Every star is placed well inside the rounded corner instead,
-# so nothing needs masking and the tile stays one flat list of shapes.
+# So is the motion, which the first two attempts got wrong.  Its buildSky()
+# lays stars on rays out of the centre and sgFly walks each one straight
+# outward, linearly, from r0 to r1 - it is a field flying past the viewer, not
+# stars bobbing in place.  Each fades up over the first tenth of its trip,
+# holds, and fades out over the last sixth, so nothing pops in or out.  Two
+# layers at different scales, offset in angle, give it depth.
 SKY = (("0", "#5cc0f7"), ("0.55", "#8fd6fb"), ("1", "#c4e9fd"))
 
-# x, y within the 46px tile, size, seconds per float, seconds per twinkle
-# Sized for 46px, not for the demo they came from: at tile scale the source's
-# own proportions vanish into the blue, so a few are deliberately oversized
-# and the dimmest never drops below half opacity.
-STARS = ((12.0, 16.0, 4.2, 3.1, 1.9), (32.5, 12.0, 2.6, 3.9, 1.5),
-         (22.0, 22.0, 1.5, 3.4, 2.3), (36.0, 26.0, 3.4, 4.3, 1.7),
-         (9.5, 30.0, 1.4, 2.9, 2.6), (25.5, 33.0, 4.6, 3.7, 1.6),
-         (16.5, 37.0, 1.3, 4.1, 2.1), (39.0, 36.0, 1.5, 3.3, 2.4))
+# Its own numbers are lanes=16 in two layers, r 40->260, 8-15s, size 5-15px.
+# At 46px those become invisible - a 10px star in a 700px panel is half a pixel
+# here - so the proportions are rebuilt for the tile: fewer lanes so it is not
+# white noise, bigger stars, and a duration matched to the shorter trip rather
+# than copied, or it would crawl.
+SKY_LANES = 8
+SKY_LAYERS = ((0.0, 1.00), (22.5, 0.62))     # angle offset, size scale
+SKY_R0, SKY_R1 = 3.0, 22.0                   # stars fade out before the corner
+SKY_DUR = (3.4, 5.8)
+SKY_SIZE = (3.6, 6.4)
 
-# A four-point sparkle on a unit radius, waisted so it reads as a star and not
-# a diamond at three pixels across.
-_SPARK = ("M0 -1C.13 -.31 .31 -.13 1 0C.31 .13 .13 .31 0 1"
-          "C-.13 .31 -.31 .13 -1 0C-.31 -.13 -.13 -.31 0 -1Z")
+# The five shapes it cycles, lifted from the sheet's own data-URI sprites.
+_S_STAR = ("M32 5.5c1.6 0 3 .9 3.7 2.4l6.1 12.4 13.7 2c1.6.2 3 1.4 3.5 3s.1 3.3-1.1 4.4"
+           "l-9.9 9.6 2.3 13.6c.3 1.6-.4 3.3-1.7 4.2s-3.1 1.1-4.6.3L32 51l-12.2 6.4"
+           "c-1.5.8-3.2.7-4.6-.3s-2-2.6-1.7-4.2l2.3-13.6-9.9-9.6c-1.2-1.1-1.6-2.9-1.1-4.4"
+           "s1.9-2.7 3.5-3l13.7-2 6.1-12.4C29 6.4 30.4 5.5 32 5.5z")
+_S_SPARK = ("M32 2c1.6 12.6 15.4 26.4 30 30-14.6 3.6-28.4 17.4-30 30"
+            "-1.6-12.6-15.4-26.4-30-30C16.6 28.4 30.4 14.6 32 2z")
 
 
 def _scene_defs_stars():
@@ -454,37 +463,49 @@ def _scene_defs_stars():
     return f'<linearGradient id="flnsky" x1="0" y1="0" x2="0" y2="1">{stops}</linearGradient>'
 
 
-def _scene_stars(x, y):
-    """The toolkit's start screen, at tile size and still drifting.
+def _sky_shape(kind, s):
+    """One of the five, centred on the origin at `s` pixels across."""
+    k = s / 64.0
+    if kind == 0:                                     # filled five-point star
+        return (f'<path d="{_S_STAR}" fill="#FFFFFF"'
+                f' transform="translate({-s / 2:.2f} {-s / 2:.2f}) scale({k:.4f})"/>')
+    if kind == 1:                                     # the same star, outlined
+        return (f'<path d="{_S_STAR}" fill="none" stroke="#FFFFFF" stroke-width="4.5"'
+                f' stroke-linejoin="round"'
+                f' transform="translate({-s / 2:.2f} {-s / 2:.2f}) scale({k:.4f})"/>')
+    if kind == 2:                                     # four-point sparkle
+        return (f'<path d="{_S_SPARK}" fill="#FFFFFF"'
+                f' transform="translate({-s / 2:.2f} {-s / 2:.2f}) scale({k:.4f})"/>')
+    if kind == 3:                                     # ring
+        return (f'<circle r="{s / 2:.2f}" fill="none" stroke="#FFFFFF"'
+                f' stroke-opacity=".92" stroke-width="0.9"/>')
+    return f'<circle r="{s / 2:.2f}" fill="#FFFFFF" fill-opacity=".92"/>'   # dot
 
-    Tuned for a 46px tile rather than for the demo.  The first pass moved each
-    star 2.6px over six seconds, which measured as a real animation - about
-    110 pixels of the tile changing - and still read as a static picture,
-    because two screen pixels of drift is not motion anyone notices.  The
-    drift is wider and quicker now, the twinkle goes far darker, and each
-    sparkle pulses in size as well, so the tile is visibly alive at a glance.
-    """
+
+def _scene_stars(x, y):
+    """The toolkit's start screen: a starfield flying out of the middle."""
+    rnd = random.Random(20260921)                     # same sky on every build
+    cx, cy = x + 23.0, y + 23.0
     out = [f'<rect x="{x}" y="{y}" width="46" height="46" rx="12" fill="url(#flnsky)"/>']
-    for i, (sx, sy, r, drift, beat) in enumerate(STARS):
-        cx, cy = x + sx, y + sy
-        dx = 2.2 if i % 2 else -2.2
-        dy = 6.5
-        shape = (f'<circle r="{r:.2f}" fill="#FFFFFF"/>' if r < 1.6 else
-                 f'<path d="{_SPARK}" fill="#FFFFFF" transform="scale({r:.2f})"/>')
-        lo = 0.20 if r < 1.6 else 0.30
-        ph = i / len(STARS)
-        out.append(
-            f'<g transform="translate({cx:.1f} {cy:.1f})" opacity="{lo:.2f}">'
-            f'<animateTransform attributeName="transform" type="translate"'
-            f' values="{cx:.1f} {cy:.1f};{cx + dx:.1f} {cy - dy:.1f};{cx:.1f} {cy:.1f}"'
-            f' dur="{drift}s" begin="-{drift * ph:.2f}s"'
-            f' repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1"'
-            f' keySplines=".45 0 .55 1;.45 0 .55 1"/>'
-            f'<animate attributeName="opacity" values="{lo:.2f};1;{lo:.2f}"'
-            f' dur="{beat}s" begin="-{beat * ph:.2f}s" repeatCount="indefinite"/>'
-            f'<g><animateTransform attributeName="transform" type="scale"'
-            f' values="0.72;1.28;0.72" dur="{beat}s" begin="-{beat * ph:.2f}s"'
-            f' repeatCount="indefinite"/>{shape}</g></g>')
+    for li, (rot, scale) in enumerate(SKY_LAYERS):
+        for i in range(SKY_LANES):
+            a = math.radians(360.0 / SKY_LANES * i + rot)
+            ca, sa = math.cos(a), math.sin(a)
+            size = (SKY_SIZE[0] + rnd.random() * (SKY_SIZE[1] - SKY_SIZE[0])) * scale
+            dur = SKY_DUR[0] + rnd.random() * (SKY_DUR[1] - SKY_DUR[0])
+            o = 0.65 + rnd.random() * 0.30
+            x1, y1 = cx + SKY_R0 * ca, cy + SKY_R0 * sa
+            x2, y2 = cx + SKY_R1 * ca, cy + SKY_R1 * sa
+            out.append(
+                f'<g opacity="0">'
+                f'<animate attributeName="opacity" values="0;{o:.2f};{o:.2f};0"'
+                f' keyTimes="0;0.1;0.84;1" dur="{dur:.2f}s"'
+                f' begin="-{rnd.random() * dur:.2f}s" repeatCount="indefinite"/>'
+                f'<animateTransform attributeName="transform" type="translate"'
+                f' values="{x1:.1f} {y1:.1f};{x2:.1f} {y2:.1f}" dur="{dur:.2f}s"'
+                f' begin="-{rnd.random() * dur:.2f}s" repeatCount="indefinite"'
+                f' calcMode="linear"/>'
+                f'{_sky_shape((i + li) % 5, size)}</g>')
     out.append(f'<rect x="{x}" y="{y}" width="46" height="46" rx="12" fill="none"'
                f' stroke="#FFFFFF" stroke-opacity=".22"/>')
     return "".join(out)
@@ -553,7 +574,7 @@ CW, CH = 566, 152
 # change but whose name does not keeps serving whatever was fetched first, no
 # matter how many times CI rebuilds it.  Renaming the file is the only thing
 # that actually reaches anyone who has already loaded the page.
-CARD_REV = "e"
+CARD_REV = "f"
 
 
 def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
