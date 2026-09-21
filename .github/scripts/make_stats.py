@@ -237,23 +237,23 @@ def build(d, g=None):
 # would put calm-or-react above real-or-fake-sender and Portfolio above
 # Competition Zone, and neither is how she ranks them.
 FEATURED = [
-    ("fln-animation-toolkit", "FLN Animation Kit", "TOOLKIT", "FL",
+    ("fln-animation-toolkit", "FLN Animation Kit", "TOOLKIT",
      "7 drop-in animations, fully tunable"),
-    ("aaru_ki_cheenk", "Aaru Ki Cheenk", "STORY GAME", "AK",
+    ("aaru_ki_cheenk", "Aaru Ki Cheenk", "STORY GAME",
      "a story told one choice at a time"),
-    ("Keyword-class9", "Spot the Scam", "CLASS 9 / CYBER", "SS",
+    ("Keyword-class9", "Spot the Scam", "CLASS 9 / CYBER",
      "find the bait, then stop and verify"),
-    ("feeling-wheel-tap", "Feeling Wheel Tap", "SEL", "FW",
+    ("feeling-wheel-tap", "Feeling Wheel Tap", "SEL",
      "pause, notice, name the feeling"),
-    ("think-ask-act", "Think Ask Act", "CYBER SAFETY", "TA",
+    ("think-ask-act", "Think Ask Act", "CYBER SAFETY",
      "think, ask an adult, then act"),
-    ("real-or-fake-sender", "Real or Fake Sender", "CYBER SAFETY", "RF",
+    ("real-or-fake-sender", "Real or Fake Sender", "CYBER SAFETY",
      "check who is really writing"),
-    ("calm-or-react", "Calm or React", "CYBER SAFETY", "CR",
+    ("calm-or-react", "Calm or React", "CYBER SAFETY",
      "name the emotion the scam leans on"),
-    ("Competition-Zone", "Competition Zone", "PROTOTYPE", "CZ",
+    ("Competition-Zone", "Competition Zone", "PROTOTYPE",
      "entries, results, trophy room, XP"),
-    ("Portfolio", "Portfolio", "SITE", "PF",
+    ("Portfolio", "Portfolio", "SITE",
      "the rest of the work, in one place"),
 ]
 
@@ -318,6 +318,117 @@ def _donut(cx, cy, r, slices, delay):
 
 # The blurb column runs from the icon to the language list; at 11.5px mono
 # that is about 38 characters, and anything longer lands on top of them.
+# One drawn mark per project, each about what the project is rather than what
+# it is called.  They are vector rather than bitmap because the panel is built,
+# not designed: there is nowhere to keep nine logo files that CI would have to
+# fetch, and at 28px a drawn glyph beats a downscaled screenshot anyway.
+# All are built on a 24x24 grid, monoline at 1.9, so they sit at one weight.
+def _ic(body, stroke="#CFF3FF", fill="none"):
+    return (f'<g fill="{fill}" stroke="{stroke}" stroke-width="1.9"'
+            f' stroke-linecap="round" stroke-linejoin="round">{body}</g>')
+
+
+def _icon_frames():
+    """Three onion-skinned frames: a flipbook, which is what the kit makes."""
+    return _ic('<rect x="2.5" y="6.5" width="12" height="12" rx="2.6" opacity=".38"/>'
+               '<rect x="6" y="4.5" width="12" height="12" rx="2.6" opacity=".66"/>'
+               '<rect x="9.5" y="2.5" width="12" height="12" rx="2.6"/>'
+               '<path d="M14 8.5v3.6l3-1.8z" fill="#7FE9C4" stroke="none"/>', "#7FE9C4")
+
+
+def _icon_book():
+    """An open book: the story runs one page, one choice, at a time."""
+    return _ic('<path d="M12 6.4C10.2 4.7 7.6 4.2 4 4.6v13c3.6-.4 6.2.1 8 1.8"/>'
+               '<path d="M12 6.4c1.8-1.7 4.4-2.2 8-1.8v13c-3.6-.4-6.2.1-8 1.8z"/>'
+               '<path d="M12 6.4v13"/>', "#F2C98A")
+
+
+def _icon_hook():
+    """A message on a hook - the bait the game teaches them to spot."""
+    return _ic('<path d="M3.5 5.5h11a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H8l-3.5 3v-3H3.5a2 2 0'
+               ' 0 1-2-2v-5a2 2 0 0 1 2-2z" transform="translate(1.2 1)"/>'
+               '<path d="M20 3.2v7.4a3 3 0 0 1-6 0" stroke="#FF9A6C"/>'
+               '<circle cx="20" cy="2.6" r="1.1" fill="#FF9A6C" stroke="none"/>', "#FFC65C")
+
+
+def _icon_wheel():
+    """The feeling wheel itself, quartered the way the app colours it."""
+    return ('<g stroke="none">'
+            '<path d="M12 12 12 2a10 10 0 0 1 10 10z" fill="#FFC65C" opacity=".92"/>'
+            '<path d="M12 12h10a10 10 0 0 1-10 10z" fill="#7FE9C4" opacity=".92"/>'
+            '<path d="M12 12v10A10 10 0 0 1 2 12z" fill="#8FB8FF" opacity=".92"/>'
+            '<path d="M12 12H2A10 10 0 0 1 12 2z" fill="#FF9AAE" opacity=".92"/>'
+            '<circle cx="12" cy="12" r="3.4" fill="#06140F"/>'
+            '<circle cx="12" cy="12" r="1.5" fill="#EAF6FF"/></g>')
+
+
+def _icon_flow():
+    """Three beats in order: think, ask, act."""
+    return _ic('<circle cx="4" cy="12" r="2.6"/><circle cx="12" cy="12" r="2.6"/>'
+               '<circle cx="20" cy="12" r="2.6"/>'
+               '<path d="M6.8 12h2.4M14.8 12h2.4"/>'
+               '<path d="M12 9.4V5.2" opacity=".55"/>'
+               '<path d="M20 14.6v4.2" opacity=".55"/>', "#6FD8F0")
+
+
+def _icon_sender():
+    """An envelope that will not say who sent it."""
+    return _ic('<rect x="2" y="5" width="20" height="14" rx="2.6"/>'
+               '<path d="M2.8 6.6 12 13.2l9.2-6.6"/>'
+               '<circle cx="19" cy="17.4" r="4.1" fill="#06140F" stroke="#06140F"/>'
+               '<circle cx="19" cy="17.4" r="3.4" stroke="#FFD166"/>'
+               '<path d="M17.9 16.3a1.15 1.15 0 1 1 1.35 1.75v.5" stroke="#FFD166"'
+               ' stroke-width="1.35"/>'
+               '<circle cx="19.2" cy="19.4" r=".5" fill="#FFD166" stroke="none"/>', "#B9A7FA")
+
+
+def _icon_pulse():
+    """Flat, then the spike - calm on the left, reacting on the right."""
+    return _ic('<path d="M1.6 12h5.6l2-4.6 2.6 9.6 2.2-6.2 1.7 3.2h4.7"/>'
+               '<circle cx="7.2" cy="12" r="1.35" fill="#FF8A8A" stroke="none" opacity=".9"/>',
+               "#FF8A8A")
+
+
+def _icon_trophy():
+    """A cup: entries, results, and the room they end up in."""
+    return _ic('<path d="M7 3.5h10v5.2a5 5 0 0 1-10 0z"/>'
+               '<path d="M7 5h-3a3 3 0 0 0 3 3M17 5h3a3 3 0 0 1-3 3"/>'
+               '<path d="M12 13.7v3.1M8.6 20.5h6.8l-.7-3.7H9.3z"/>', "#F5C451")
+
+
+def _icon_window():
+    """A browser with the work laid out in it."""
+    return _ic('<rect x="2" y="4" width="20" height="16" rx="2.4"/>'
+               '<path d="M2 8.4h20"/>'
+               '<circle cx="5" cy="6.2" r=".7" fill="#CFE9F5" stroke="none"/>'
+               '<circle cx="7.4" cy="6.2" r=".7" fill="#CFE9F5" stroke="none"/>'
+               '<rect x="5" y="11" width="6" height="6" rx="1.2" opacity=".55"/>'
+               '<rect x="13" y="11" width="6" height="6" rx="1.2" opacity=".55"/>', "#CFE9F5")
+
+
+ICONS = {
+    "fln-animation-toolkit": _icon_frames,
+    "aaru_ki_cheenk": _icon_book,
+    "Keyword-class9": _icon_hook,
+    "feeling-wheel-tap": _icon_wheel,
+    "think-ask-act": _icon_flow,
+    "real-or-fake-sender": _icon_sender,
+    "calm-or-react": _icon_pulse,
+    "Competition-Zone": _icon_trophy,
+    "Portfolio": _icon_window,
+}
+
+
+def _tile(x, y, repo, tint):
+    """The icon on its tinted square, 28px of drawing in a 46px tile."""
+    art = ICONS.get(repo)
+    inner = art() if art else ""
+    s = 28.0 / 24.0
+    return (f'<rect x="{x}" y="{y}" width="46" height="46" rx="12" fill="{tint}"'
+            f' stroke="#FFFFFF" stroke-opacity=".10"/>'
+            f'<g transform="translate({x + 9:.1f} {y + 9:.1f}) scale({s:.4f})">{inner}</g>')
+
+
 def _clip_text(s, n):
     return s if len(s) <= n else s[:n - 1].rstrip(" ,.") + "…"
 
@@ -335,7 +446,7 @@ def build_projects(index):
     W, H = 1200, 96 + rows * CH + (rows - 1) * GY + 22
 
     cards = ""
-    for i, (repo, title, tag, mono, blurb) in enumerate(FEATURED):
+    for i, (repo, title, tag, blurb) in enumerate(FEATURED):
         col, row = i % 2, i // 2
         x = 26 + col * (CW + GX)
         y = 96 + row * (CH + GY)
@@ -377,10 +488,7 @@ def build_projects(index):
           letter-spacing="1.2" fill="{'#00FF9C' if live else '#3f5f58'}"
           fill-opacity=".85">{'LIVE' if live else 'REPO'}</text>
 
-    <rect x="{x + 16}" y="{y + 44}" width="46" height="46" rx="12"
-          fill="{TILE_TINT[i % len(TILE_TINT)]}" stroke="#FFFFFF" stroke-opacity=".10"/>
-    <text class="mono" x="{x + 39}" y="{y + 74}" font-size="17" font-weight="700"
-          text-anchor="middle" fill="#DFF6EE" fill-opacity=".92">{mono}</text>
+    {_tile(x + 16, y + 44, repo, TILE_TINT[i % len(TILE_TINT)])}
 
     <text class="mono" x="{x + 76}" y="{y + 60}" font-size="16.5" font-weight="700"
           fill="#E8FFF6">{esc(title)}<tspan fill="#00FF9C" fill-opacity=".75">_</tspan></text>
