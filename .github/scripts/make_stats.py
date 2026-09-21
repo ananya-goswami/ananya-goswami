@@ -423,6 +423,66 @@ ICONS = {
 # file is a square crop kept in assets/ rather than fetched at build time: CI
 # would otherwise depend on the game still being deployed, and a 404 there
 # should not be able to empty a tile here.
+# A project whose whole subject is motion gets a tile that moves.  The toolkit
+# ships a drifting-star start screen; this is that screen at 46px, rebuilt as
+# vector rather than captured, so it animates instead of sitting still.
+#
+# The sky is the toolkit's own gradient, read out of its index.html:
+#   linear-gradient(180deg,#5cc0f7 0%,#8fd6fb 55%,#c4e9fd 100%)
+#
+# No clipPath.  Every star is placed well inside the rounded corner instead,
+# so nothing needs masking and the tile stays one flat list of shapes.
+SKY = (("0", "#5cc0f7"), ("0.55", "#8fd6fb"), ("1", "#c4e9fd"))
+
+# x, y within the 46px tile, size, seconds per float, seconds per twinkle
+# Sized for 46px, not for the demo they came from: at tile scale the source's
+# own proportions vanish into the blue, so a few are deliberately oversized
+# and the dimmest never drops below half opacity.
+STARS = ((12.0, 13.0, 4.2, 5.6, 3.1), (32.5, 10.0, 2.6, 7.1, 2.4),
+         (22.0, 21.0, 1.5, 6.3, 3.8), (36.0, 25.0, 3.4, 8.0, 2.9),
+         (9.5, 30.0, 1.4, 5.2, 4.3), (25.5, 34.5, 4.6, 6.8, 2.6),
+         (16.5, 38.5, 1.3, 7.6, 3.4), (39.0, 37.0, 1.5, 5.9, 4.0))
+
+# A four-point sparkle on a unit radius, waisted so it reads as a star and not
+# a diamond at three pixels across.
+_SPARK = ("M0 -1C.13 -.31 .31 -.13 1 0C.31 .13 .13 .31 0 1"
+          "C-.13 .31 -.31 .13 -1 0C-.31 -.13 -.13 -.31 0 -1Z")
+
+
+def _scene_defs_stars():
+    stops = "".join(f'<stop offset="{o}" stop-color="{c}"/>' for o, c in SKY)
+    return f'<linearGradient id="flnsky" x1="0" y1="0" x2="0" y2="1">{stops}</linearGradient>'
+
+
+def _scene_stars(x, y):
+    """The toolkit's start screen, at tile size and still drifting."""
+    out = [f'<rect x="{x}" y="{y}" width="46" height="46" rx="12" fill="url(#flnsky)"/>']
+    for i, (sx, sy, r, drift, beat) in enumerate(STARS):
+        cx, cy = x + sx, y + sy
+        shape = (f'<circle r="{r:.2f}" fill="#FFFFFF"/>' if r < 1.6 else
+                 f'<path d="{_SPARK}" fill="#FFFFFF" transform="scale({r:.2f})"/>')
+        lo = 0.55 if r < 1.6 else 0.72
+        # Each star gets its own period and a negative begin, so they are
+        # already mid-drift on the first frame and never pulse in unison.
+        out.append(
+            f'<g transform="translate({cx:.1f} {cy:.1f})" opacity="{lo:.2f}">'
+            f'<animateTransform attributeName="transform" type="translate"'
+            f' values="{cx:.1f} {cy:.1f};{cx:.1f} {cy - 2.6:.1f};{cx:.1f} {cy:.1f}"'
+            f' dur="{drift}s" begin="-{drift * (i / len(STARS)):.2f}s"'
+            f' repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1"'
+            f' keySplines=".45 0 .55 1;.45 0 .55 1"/>'
+            f'<animate attributeName="opacity" values="{lo:.2f};1;{lo:.2f}"'
+            f' dur="{beat}s" begin="-{beat * (i / len(STARS)):.2f}s"'
+            f' repeatCount="indefinite"/>'
+            f'{shape}</g>')
+    out.append(f'<rect x="{x}" y="{y}" width="46" height="46" rx="12" fill="none"'
+               f' stroke="#FFFFFF" stroke-opacity=".22"/>')
+    return "".join(out)
+
+
+ICON_SCENE = {"fln-animation-toolkit": (_scene_defs_stars, _scene_stars)}
+
+
 ICON_PHOTO = {"aaru_ki_cheenk": "proj-icon-aaru.png"}
 _PHOTO_CACHE = {}
 
@@ -443,8 +503,17 @@ def _photo_uri(name):
     return _PHOTO_CACHE[name]
 
 
+def _tile_defs(repo):
+    """Anything a tile needs in the card's one <defs>, rather than its own."""
+    got = ICON_SCENE.get(repo)
+    return got[0]() if got else ""
+
+
 def _tile(x, y, repo, tint):
     """The icon on its tinted square, 28px of drawing in a 46px tile."""
+    scene = ICON_SCENE.get(repo)
+    if scene:
+        return scene[1](x, y)
     photo = ICON_PHOTO.get(repo)
     uri = _photo_uri(photo) if photo else ""
     if uri:
@@ -474,7 +543,7 @@ CW, CH = 566, 152
 # change but whose name does not keeps serving whatever was fetched first, no
 # matter how many times CI rebuilds it.  Renaming the file is the only thing
 # that actually reaches anyone who has already loaded the page.
-CARD_REV = "c"
+CARD_REV = "d"
 
 
 def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
@@ -557,7 +626,7 @@ def build_project_cards(index):
             f'<defs><pattern id="sc" width="4" height="4" patternUnits="userSpaceOnUse">'
             f'<rect width="4" height="1" fill="#7fffd4" fill-opacity=".03"/></pattern>'
             f'<clipPath id="cw"><rect x="2" y="2" width="{CW}" height="{CH}" rx="10"/></clipPath>'
-            f'</defs>{_CARD_CSS}'
+            f'{_tile_defs(repo)}</defs>{_CARD_CSS}'
             f'{_card(i, repo, title, tag, blurb, index.get(repo, {}))}'
             f'<g clip-path="url(#cw)"><rect width="{W}" height="{H}" fill="url(#sc)"/></g>'
             f'</svg>\n')
