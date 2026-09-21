@@ -569,11 +569,11 @@ V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 48.0, 22.0
 EAT = 3.0                            # a readable set of bites, not a rapid flicker
 LEAF_GAP = 39.0                      # smaller leaf halts with its edge at the mouth
 # Flipbook speeds. Each is the time for one full loop of that character's cycle.
-# One cycle is two steps. Her stride is 62 units a step at this scale and she
-# crosses the panel at 134 units a second, so two steps have to take 0.92s; at
-# the 0.60 it used to run, her legs churned half again too fast for the ground
-# and she skated along instead of walking.
-RUN_CYCLE = 0.92                     # 8 frames: contact, pass, contact, pass
+# Her cycle is derived below from the articulated leg geometry and the panel's
+# ground speed, once LEG_H and SWING_LEG have been declared.
+RUN_SPEED = ((VB_W + 120.0) - (-120.0)) / 18.0
+JD_MAX, LIFT_MAX = 1.08, 184.0
+JUMP_SAMPLE_DT = 1.0 / 50.0
 # Its four legs are planted 43 units apart, so a step moves it about half that
 # and two steps take 42/34 of a second at its walking speed.
 WALK_CYCLE = 1.24
@@ -653,33 +653,65 @@ def build_runner_panel(weeks, total=None):
     run_v = f"{X0:.1f},{GROUND};{X1:.1f},{GROUND};{X1:.1f},{GROUND}"
     run_k = f"0;{RUN / T:.5f};1"
 
-    # ---- Mario-style jump: crouch, fast take-off, hang, then a firm landing ----
-    # Use the displayed sprite height instead of a magic head position.  The
-    # peak is timed exactly when her horizontal centre passes under the block.
-    HEAD = GROUND - GIRL_TARGET_H
-    JD_MAX, LIFT_MAX = 1.08, 184.0
-    vals, keys = ["0,0"], [0.0]
-    jump_windows = []
+    # ---- projectile jump: one gravity, interrupted by the block on contact ----
+    # The uninterrupted maximum jump fixes G. Each block then determines its
+    # own launch velocity and flight times from the exact clearance required.
+    G = 2.0 * LIFT_MAX / (JD_MAX / 2.0) ** 2
+    samples = [(0.0, 0.0)]
+    jumps = []
     for e in events:
-        lift = min(LIFT_MAX, max(38.0, HEAD - (e["y"] + GCELL)))
-        # A hop onto a low square is over quickly; only a full-height jump is
-        # worth the whole beat. Time scales with the root of the height, the way
-        # a real fall does, so a small hop stops hanging in the air - and the
-        # shorter window leaves her running for longer between two blocks.
-        jd = max(0.62, JD_MAX * math.sqrt(lift / LIFT_MAX))
-        t0, t1 = e["t"] - jd * 0.54, e["t"] + jd * 0.46
-        jump_windows.append((t0, t1))
-        jump = ((0.00, 0.0), (0.08, -5.0), (0.30, lift * 0.62),
-                (0.54, lift), (0.66, lift * 0.94), (0.84, lift * 0.48),
-                (0.96, -3.0), (1.00, 0.0))
-        for frac, part in jump:
-            keys.append((t0 + frac * (t1 - t0)) / T)
-            vals.append(f"0,{-part:.1f}")
-    keys.append(1.0)
-    vals.append("0,0")
-    for i in range(1, len(keys)):
-        keys[i] = min(max(keys[i], keys[i - 1]), 1.0)
-    jump_v, jump_k = ";".join(vals), ";".join(f"{k:.5f}" for k in keys)
+        clear = min(LIFT_MAX, max(
+            38.0, GROUND - GIRL_TARGET_H - (e["y"] + GCELL)))
+        apex = clear + 10.0
+        v0 = math.sqrt(2.0 * G * apex)
+        v_hit = math.sqrt(v0 * v0 - 2.0 * G * clear)
+        t_up = (v0 - v_hit) / G
+        t_down = math.sqrt(2.0 * clear / G)
+        t0, t1 = e["t"] - t_up, e["t"] + t_down
+
+        # The gait is visible again only on one of its two foot contacts per
+        # cycle. Leave enough time for the landing squash before that hand-off.
+        step_time = RUN_CYCLE / 2.0
+        resume = math.ceil((t1 + 0.14) / step_time) * step_time
+        jumps.append({"t0": t0, "hit": e["t"], "t1": t1,
+                      "t_up": t_up, "t_down": t_down, "resume": resume})
+
+        if samples[-1][0] > t0:
+            raise ValueError("jump windows overlap; projectile path is ambiguous")
+        samples.append((t0, 0.0))
+        rise_steps = max(1, math.ceil(t_up / JUMP_SAMPLE_DT))
+        for i in range(1, rise_steps + 1):
+            dt = t_up * i / rise_steps
+            samples.append((t0 + dt, v0 * dt - 0.5 * G * dt * dt))
+        fall_steps = max(1, math.ceil(t_down / JUMP_SAMPLE_DT))
+        for i in range(1, fall_steps + 1):
+            dt = t_down * i / fall_steps
+            samples.append((e["t"] + dt, clear - 0.5 * G * dt * dt))
+    samples.append((T, 0.0))
+    jump_v, jump_k = _keys(
+        [f"0,{-height:.3f}" for _, height in samples],
+        [t for t, _ in samples], T)
+
+    # Anticipation and landing deformation are deliberately independent of the
+    # projectile translate: scaling can sell force without changing the path.
+    squash = [(0.0, "1 1")]
+    for jump in jumps:
+        t0, hit, t1, resume = (jump[k] for k in ("t0", "hit", "t1", "resume"))
+        squash += [(t0 - 0.12, "1 1"), (t0 - 0.045, "1.08 .90"),
+                   (t0, ".97 1.05"), (t0 + 0.07, "1 1"),
+                   (hit, "1 1"), (t1, "1 1"),
+                   (t1 + 0.04, "1.10 .88"),
+                   (t1 + 0.12, ".98 1.03"), (resume, "1 1")]
+    squash.append((T, "1 1"))
+    squash_v, squash_k = _keys([v for _, v in squash],
+                                [t for t, _ in squash], T)
+
+    # It remains on the ground; only its footprint and density respond to lift.
+    shadow_ratio = [min(max(h / LIFT_MAX, 0.0), 1.0) for _, h in samples]
+    shadow_rx = ";".join(f"{34.0 * (1.0 - 0.42 * r):.2f}" for r in shadow_ratio)
+    shadow_ry = ";".join(f"{7.0 * (1.0 - 0.35 * r):.2f}" for r in shadow_ratio)
+    shadow_opacity = ";".join(f"{0.35 * (1.0 - 0.65 * r):.3f}"
+                              for r in shadow_ratio)
 
     # ---- the grid; the three squares she hits are mystery blocks ----
     hit = {(e["col"], e["row"]): e for e in events}
@@ -888,10 +920,18 @@ def build_runner_panel(weeks, total=None):
     # ---- her ----
     girl = (f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
             f' repeatCount="indefinite" calcMode="linear" values="{run_v}" keyTimes="{run_k}"/>'
+            f'<ellipse cx="0" cy="-4" rx="34" ry="7" fill="#000" fill-opacity=".35">'
+            f'<animate attributeName="rx" dur="{T}s" repeatCount="indefinite" calcMode="linear"'
+            f' values="{shadow_rx}" keyTimes="{jump_k}"/>'
+            f'<animate attributeName="ry" dur="{T}s" repeatCount="indefinite" calcMode="linear"'
+            f' values="{shadow_ry}" keyTimes="{jump_k}"/>'
+            f'<animate attributeName="fill-opacity" dur="{T}s" repeatCount="indefinite"'
+            f' calcMode="linear" values="{shadow_opacity}" keyTimes="{jump_k}"/></ellipse>'
             f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
             f' repeatCount="indefinite" calcMode="linear" values="{jump_v}" keyTimes="{jump_k}"/>'
-            f'<ellipse cx="0" cy="-4" rx="34" ry="7" fill="#000" fill-opacity=".35"/>'
-            f'{girl_runner(jump_windows, T)}</g></g>')
+            f'<g><animateTransform attributeName="transform" type="scale" dur="{T}s"'
+            f' repeatCount="indefinite" calcMode="linear" values="{squash_v}"'
+            f' keyTimes="{squash_k}"/>{girl_runner(jumps, T)}</g></g></g>')
 
     # ---- scenery ----
     # Bare skyline on purpose: the tiled sign boards and the grass tufts crowded
@@ -904,7 +944,8 @@ def build_runner_panel(weeks, total=None):
         sy = 170 + (k * 137) % 380
         stars += (f'<rect x="{sx}" y="{sy}" width="4" height="4" fill="#9BEFD9"'
                   f' fill-opacity=".5"><animate attributeName="fill-opacity"'
-                  f' values=".12;.6;.12" dur="{2.0 + (k % 5) * 0.6}s" repeatCount="indefinite"/></rect>')
+                  f' values=".12;.6;.12" keyTimes="0;0.5;1"'
+                  f' dur="{2.0 + (k % 5) * 0.6}s" repeatCount="indefinite"/></rect>')
 
     hud = ""
     if total is not None:
@@ -1100,6 +1141,14 @@ HEAD_TOP = BODY_TOP - HEAD_H                # -114
 SHOULDER_Y = BODY_TOP + 7.0
 SWING_LEG, SWING_ARM = 30.0, 20.0           # degrees either side of straight down
 
+# _swing moves one LEG_H-radius foot from -SWING_LEG to +SWING_LEG each
+# step; _a_plant changes only its vertical reach. Thus a step is 44 units, not
+# 62, and a full cycle advances the ground by two such steps.
+RUN_STEP = 2.0 * LEG_H * math.sin(math.radians(SWING_LEG))
+RUN_CYCLE = 2.0 * RUN_STEP / RUN_SPEED
+assert math.isclose(RUN_SPEED * RUN_CYCLE, 2.0 * RUN_STEP,
+                    rel_tol=1e-12, abs_tol=1e-12)
+
 
 def _dim(col, f):
     """A darker shade of a colour, for the limbs on her far side."""
@@ -1185,7 +1234,7 @@ def _a_plant(cycle, amp, steps=12):
         vals.append(f"0 {LEG_H * (1.0 - math.cos(ang)):.2f}")
         keys.append(f"{f:.4f}")
     return (f'<animateTransform attributeName="transform" type="translate"'
-            f' dur="{cycle / 2.0:.3f}s" repeatCount="indefinite" calcMode="linear"'
+            f' dur="{cycle / 2.0:.9f}s" repeatCount="indefinite" calcMode="linear"'
             f' values="{";".join(vals)}" keyTimes="{";".join(keys)}"/>')
 
 
@@ -1195,7 +1244,7 @@ def _swing(inner, cycle, amp, back_first):
     return (f'<g><animateTransform attributeName="transform" type="rotate"'
             f' values="{a:.0f};{b:.0f};{a:.0f}" keyTimes="0;0.5;1"'
             f' calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"'
-            f' dur="{cycle:.3f}s" repeatCount="indefinite"/>{inner}</g>')
+            f' dur="{cycle:.9f}s" repeatCount="indefinite"/>{inner}</g>')
 
 
 def _held(inner, deg):
@@ -1230,30 +1279,31 @@ def avatar_pose(nl, fl, na, fa, baseline):
                      _held(_a_arm(), na), _held(_a_arm(far=True), fa), baseline)
 
 
-# Leg, leg, arm, arm - in degrees, negative swings the limb forward. She gathers,
-# drives up with her arms, reaches over the block, then lands and absorbs it.
-AIR_POSES = [(-26.0, 16.0, 20.0, 28.0),      # gather
-             (-38.0, 24.0, -44.0, -28.0),    # drive off the ground
-             (-32.0, 28.0, -70.0, -54.0),    # reaching the block
-             (-16.0, 20.0, -58.0, -42.0),    # over the top
-             (12.0, -18.0, -18.0, -6.0),     # coming down, legs reaching out
-             (24.0, -24.0, 14.0, 24.0)]      # landed, knees taking it
-AIR_W = [1.1, 1.5, 1.6, 1.5, 1.6, 1.7]
+# Leg, leg, arm, arm - in degrees, negative swings the limb forward. Their
+# timing is attached to the solved flight phases in girl_runner, not divided
+# evenly across an approximate jump window.
+AIR_POSES = [(-38.0, 24.0, -44.0, -28.0),    # drive at take-off
+             (-32.0, 28.0, -70.0, -54.0),    # reach while rising
+             (-16.0, 20.0, -58.0, -42.0),    # block impact
+             (-4.0, 10.0, -38.0, -24.0),     # begin falling
+             (12.0, -18.0, -18.0, -6.0),     # extend for the ground
+             (24.0, -24.0, 14.0, 24.0)]      # absorb on contact
 
 
-def girl_runner(jump_windows, T, baseline=6.0):
+def girl_runner(jumps, T, baseline=6.0):
     """Her whole flipbook, built rather than cut: a walk whose legs genuinely
     alternate, with the jump held over the top of it for each square she opens."""
-    wins = []
-    for t0, t1 in sorted(jump_windows):
-        if wins and t0 < wins[-1][1]:       # two blocks close together
-            wins[-1] = (wins[-1][0], t0)
-        wins.append((t0, t1))
+    wins = [(j["t0"], j["resume"]) for j in jumps]
     run = avatar_run(RUN_CYCLE, baseline)
     air = ""
-    for t0, t1 in wins:
-        air += sequence([avatar_pose(*p, baseline) for p in AIR_POSES],
-                        t0, t1, T, weights=AIR_W)
+    for jump in jumps:
+        t0, hit, t1, resume = (jump[k] for k in ("t0", "hit", "t1", "resume"))
+        rise_reach = t0 + jump["t_up"] * 0.42
+        fall_open = hit + jump["t_down"] * 0.20
+        fall_extend = hit + jump["t_down"] * 0.62
+        edges = [t0, rise_reach, hit, fall_open, fall_extend, t1, resume]
+        for pose, a, b in zip(AIR_POSES, edges, edges[1:]):
+            air += sequence([avatar_pose(*pose, baseline)], a, b, T)
     return gate(run, wins, T) + air
 
 
