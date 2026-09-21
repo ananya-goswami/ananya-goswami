@@ -433,57 +433,42 @@ def _clip_text(s, n):
     return s if len(s) <= n else s[:n - 1].rstrip(" ,.") + "…"
 
 
-def build_projects(index):
-    """The projects panel: one card per featured repo, GitHub-card shaped.
+CW, CH = 566, 152
 
-    Everything on a card except the title, blurb and tag comes off the API -
-    the languages and their split, the star count, when it was last pushed and
-    whether it is deployed - so the panel ages with the repos instead of with
-    the list.
-    """
-    CW, CH, GX, GY = 566, 152, 22, 14
-    rows = (len(FEATURED) + 1) // 2
-    W, H = 1200, 96 + rows * CH + (rows - 1) * GY + 22
 
-    cards = ""
-    for i, (repo, title, tag, blurb) in enumerate(FEATURED):
-        col, row = i % 2, i // 2
-        x = 26 + col * (CW + GX)
-        y = 96 + row * (CH + GY)
-        meta = index.get(repo, {})
-        live = bool((meta.get("homepage") or "").strip())
-        by = meta.get("bytes") or {}
-        total = sum(by.values()) or 1
-        top = sorted(by.items(), key=lambda kv: -kv[1])[:3]
+def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
+    """One project card, drawn with its top-left at (x, y)."""
+    live = bool((meta.get("homepage") or "").strip())
+    by = meta.get("bytes") or {}
+    total = sum(by.values()) or 1
+    top = sorted(by.items(), key=lambda kv: -kv[1])[:3]
 
-        rowsL, slices = "", []
-        for j, (lang, b) in enumerate(top):
-            pct = 100.0 * b / total
-            hue = LANG_HUE.get(lang.lower(), "#6E8A99")
-            ly = y + 52 + j * 18
-            rowsL += (f'<circle cx="{x + CW - 214}" cy="{ly - 4}" r="3.4" fill="{hue}"/>'
-                      f'<text class="mono" x="{x + CW - 202}" y="{ly}" font-size="10.5"'
-                      f' fill="#9FBDB6">{esc(lang)} {pct:.0f}%</text>')
-            slices.append((b / total, hue))
-        rest = 1.0 - sum(f for f, _ in slices)
-        if rest > 0.005:
-            slices.append((rest, LANG_REST))
+    rowsL, slices = "", []
+    for j, (lang, b) in enumerate(top):
+        pct = 100.0 * b / total
+        hue = LANG_HUE.get(lang.lower(), "#6E8A99")
+        ly = y + 52 + j * 18
+        rowsL += (f'<circle cx="{x + CW - 214}" cy="{ly - 4}" r="3.4" fill="{hue}"/>'
+                  f'<text class="mono" x="{x + CW - 202}" y="{ly}" font-size="10.5"'
+                  f' fill="#9FBDB6">{esc(lang)} {pct:.0f}%</text>')
+        slices.append((b / total, hue))
+    rest = 1.0 - sum(f for f, _ in slices)
+    if rest > 0.005:
+        slices.append((rest, LANG_REST))
 
-        px, pw = x + 76, y + 102
-        pills = ""
-        for lang, _ in top:
-            chip, w = _pill(px, pw, lang.lower())
-            pills += chip
-            px += w + 7
+    px, pills = x + 76, ""
+    for lang, _ in top:
+        chip, w = _pill(px, y + 102, lang.lower())
+        pills += chip
+        px += w + 7
 
-        head = f"{USER}/{repo}"
-        cards += f'''
+    return f'''
   <g>
     <rect x="{x}" y="{y}" width="{CW}" height="{CH}" rx="10" fill="#050f0d"
           stroke="#00FF9C" stroke-opacity=".17"/>
     <path d="M{x} {y + 27}h{CW}" stroke="#00FF9C" stroke-opacity=".12"/>
     <circle cx="{x + 15}" cy="{y + 14}" r="3" fill="{'#00FF9C' if live else '#33534e'}"/>
-    <text class="mono" x="{x + 26}" y="{y + 18}" font-size="10.5" fill="#557a73">{esc(head)}</text>
+    <text class="mono" x="{x + 26}" y="{y + 18}" font-size="10.5" fill="#557a73">{esc(USER)}/{esc(repo)}</text>
     <text class="mono" x="{x + CW - 15}" y="{y + 18}" font-size="9.5" text-anchor="end"
           letter-spacing="1.2" fill="{'#00FF9C' if live else '#3f5f58'}"
           fill-opacity=".85">{'LIVE' if live else 'REPO'}</text>
@@ -506,33 +491,35 @@ def build_projects(index):
           text-anchor="middle" fill="#E8FFF6">{(100.0 * top[0][1] / total) if top else 0:.0f}%</text>
   </g>'''
 
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="featured projects">
-<defs>
-  <linearGradient id="bgG" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0%" stop-color="#04070a"/><stop offset="55%" stop-color="#060e11"/><stop offset="100%" stop-color="#04090c"/>
-  </linearGradient>
-  <radialGradient id="glowB"><stop offset="0%" stop-color="#22D3EE" stop-opacity=".12"/><stop offset="100%" stop-color="#22D3EE" stop-opacity="0"/></radialGradient>
-  <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#7fffd4" fill-opacity=".03"/></pattern>
-  <clipPath id="win"><rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="14"/></clipPath>
-</defs>
-<style>
-  .mono {{ font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }}
-  .car {{ animation: blink 1.05s steps(1) infinite; }}
-  @keyframes blink {{ 0%,48% {{ opacity: 1 }} 49%,100% {{ opacity: 0 }} }}
-</style>
-<rect width="{W}" height="{H}" rx="14" fill="url(#bgG)"/>
-<ellipse cx="1000" cy="{H - 80}" rx="360" ry="240" fill="url(#glowB)"/>
-<rect x="1" y="1" width="{W - 2}" height="32" rx="14" fill="#0a1114"/><rect x="1" y="22" width="{W - 2}" height="11" fill="#0a1114"/>
-<text class="mono" x="30" y="22" font-size="12" fill="#4e6b66">~/projects</text>
-<text class="mono" x="{W - 30}" y="22" font-size="11" text-anchor="end" letter-spacing="1.6" fill="#31514c">PROJECTS.LIST</text>
-<line x1="1" y1="33" x2="{W - 1}" y2="33" stroke="#00FF9C" stroke-opacity=".18"/>
-<text class="mono" x="26" y="68" font-size="14" fill="#3ddc97" fill-opacity=".8" xml:space="preserve">$ ls ~/projects --featured</text>
-<rect class="car" x="232" y="56" width="8" height="15" fill="#00FF9C" fill-opacity=".8"/>
-{cards}
-<g clip-path="url(#win)"><rect width="{W}" height="{H}" fill="url(#scan)"/></g>
-<rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="14" fill="none" stroke="#00FF9C" stroke-opacity=".26"/>
-</svg>
-'''
+
+_CARD_CSS = '''<style>
+  .mono { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }
+</style>'''
+
+
+def build_project_cards(index):
+    """Each project as its own image, so the README can put a link round it.
+
+    A README image is served as <img>, and SVG inside an <img> is inert in
+    every browser - no scripts, no hover, and crucially no working <a>.  So a
+    single panel can never have nine different click targets no matter how the
+    links are written inside it.  Nine images, each wrapped in its own anchor
+    in the README, is the only arrangement that actually clicks through.
+    """
+    W, H = CW + 4, CH + 4
+    out = {}
+    for i, (repo, title, tag, blurb) in enumerate(FEATURED):
+        out[f"proj-{repo}.svg"] = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}"'
+            f' width="{W}" height="{H}" role="img" aria-label="{esc(title)}">'
+            f'<defs><pattern id="sc" width="4" height="4" patternUnits="userSpaceOnUse">'
+            f'<rect width="4" height="1" fill="#7fffd4" fill-opacity=".03"/></pattern>'
+            f'<clipPath id="cw"><rect x="2" y="2" width="{CW}" height="{CH}" rx="10"/></clipPath>'
+            f'</defs>{_CARD_CSS}'
+            f'{_card(i, repo, title, tag, blurb, index.get(repo, {}))}'
+            f'<g clip-path="url(#cw)"><rect width="{W}" height="{H}" fill="url(#sc)"/></g>'
+            f'</svg>\n')
+    return out
 
 
 # ------------------------------------------------------------------ alpha keying
@@ -1449,9 +1436,9 @@ if __name__ == "__main__":
     out_dir = os.path.dirname(OUT) or "."
     os.makedirs(out_dir, exist_ok=True)
     open(OUT, "w").write(build(data, g))
-    # Bumped from v2: camo caches README images by URL, so a redesign published
-    # to the old path would keep serving the old panel however often CI reran.
-    open(os.path.join(out_dir, "projects-v3.svg"), "w").write(build_projects(data["index"]))
+    # One file per project, because the README wraps each in its own link.
+    for name, svg in build_project_cards(data["index"]).items():
+        open(os.path.join(out_dir, name), "w").write(svg)
     if g.get("weeks"):
         # Fresh URL so GitHub's image proxy cannot keep serving the retired
         # block-built avatar after this artwork replacement.
