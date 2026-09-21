@@ -577,11 +577,16 @@ def _clip_text(s, n):
 
 CW, CH = 566, 152
 
-# Bump on any change to how a card looks.  The filenames are what the README
-# points at, and camo caches README images by URL - so a card whose contents
-# change but whose name does not keeps serving whatever was fetched first, no
-# matter how many times CI rebuilds it.  Renaming the file is the only thing
-# that actually reaches anyone who has already loaded the page.
+# Leave this alone unless a stale image is genuinely stuck.
+#
+# It exists because renaming a card is the one certain way past a cached copy.
+# But the readme lives on main and the cards are built onto the output branch,
+# so a bump points the page at files that will not exist for another ninety
+# seconds, and every card on the profile is a broken link until CI catches up.
+# That happened twice.  A visibly broken page for a minute and a half is worse
+# than an image that takes a few minutes to turn over on its own - raw.github
+# serves these with max-age=300, so a plain content change gets there by
+# itself.  Change the contents and wait; only bump if something is wedged.
 CARD_REV = "g"
 
 
