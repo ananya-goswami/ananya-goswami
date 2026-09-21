@@ -471,6 +471,13 @@ def _clip_text(s, n):
 
 CW, CH = 566, 152
 
+# Bump on any change to how a card looks.  The filenames are what the README
+# points at, and camo caches README images by URL - so a card whose contents
+# change but whose name does not keeps serving whatever was fetched first, no
+# matter how many times CI rebuilds it.  Renaming the file is the only thing
+# that actually reaches anyone who has already loaded the page.
+CARD_REV = "b"
+
 
 def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
     """One project card, drawn with its top-left at (x, y)."""
@@ -545,7 +552,7 @@ def build_project_cards(index):
     W, H = CW + 4, CH + 4
     out = {}
     for i, (repo, title, tag, blurb) in enumerate(FEATURED):
-        out[f"proj-{repo}.svg"] = (
+        out[f"proj-{CARD_REV}-{repo}.svg"] = (
             f'<svg xmlns="http://www.w3.org/2000/svg"'
             f' xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 {W} {H}"'
             f' width="{W}" height="{H}" role="img" aria-label="{esc(title)}">'
