@@ -14,7 +14,7 @@
 
 <br/><br/>
 
-<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/runner-v3.svg" width="100%" alt="contribution runner" />
+<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/runner-v4.svg" width="100%" alt="contribution runner" />
 
 <br/><br/>
 

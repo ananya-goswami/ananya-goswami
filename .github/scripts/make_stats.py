@@ -1329,7 +1329,7 @@ def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
 
 # ---------------------------------------------------------------- her, from the supplied avatar
 AVATAR_SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                 "..", "..", "assets", "runner-avatar-sheet.png")
+                                 "..", "..", "assets", "runner-avatar-sheet-v2.png")
 AVATAR_COLS, AVATAR_ROWS = 4, 3
 AVATAR_CELL = 362.0
 AVATAR_SCALE = GIRL_TARGET_H / AVATAR_CELL
@@ -1442,9 +1442,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Fresh URL so GitHub's image proxy cannot keep serving the retired
         # block-built avatar after this artwork replacement.
-        open(os.path.join(out_dir, "runner-v3.svg"), "w").write(
+        open(os.path.join(out_dir, "runner-v4.svg"), "w").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v3.svg")
+        print("wrote runner-v4.svg")
     else:
         print("no calendar data - runner panel skipped")
     print("panels:", data["repos"], "repos,", data["deployed"], "live,", g.get("contributions"), "contributions")
