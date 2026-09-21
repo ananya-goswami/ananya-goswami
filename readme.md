@@ -26,7 +26,7 @@
 <td width="50%"><a href="https://aaru-ki-cheenk.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-aaru_ki_cheenk.svg" width="100%" alt="Aaru Ki Cheenk" /></a></td>
 </tr>
 <tr>
-<td width="50%"><a href="https://ch1-keywords-mocha.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-Keyword-class9.svg" width="100%" alt="Spot the Scam" /></a></td>
+<td width="50%"><a href="https://ch1-keywords-mocha.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-Keyword-class9.svg" width="100%" alt="Tactic Decoder" /></a></td>
 <td width="50%"><a href="https://feeling-wheel-tap.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-feeling-wheel-tap.svg" width="100%" alt="Feeling Wheel Tap" /></a></td>
 </tr>
 <tr>

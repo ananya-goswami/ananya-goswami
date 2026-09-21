@@ -242,8 +242,8 @@ FEATURED = [
      "7 drop-in animations, fully tunable"),
     ("aaru_ki_cheenk", "Aaru Ki Cheenk", "STORY GAME",
      "a story told one choice at a time"),
-    ("Keyword-class9", "Spot the Scam", "CLASS 9 / CYBER",
-     "find the bait, then stop and verify"),
+    ("Keyword-class9", "Tactic Decoder", "CLASS 9 / CYBER",
+     "name the tactic behind the message"),
     ("feeling-wheel-tap", "Feeling Wheel Tap", "SEL",
      "pause, notice, name the feeling"),
     ("think-ask-act", "Think Ask Act", "CYBER SAFETY",
@@ -522,7 +522,8 @@ def _scene_stars(x, y):
 ICON_SCENE = {"fln-animation-toolkit": (_scene_defs_stars, _scene_stars)}
 
 
-ICON_PHOTO = {"aaru_ki_cheenk": "proj-icon-aaru.png"}
+ICON_PHOTO = {"aaru_ki_cheenk": "proj-icon-aaru.png",
+              "Keyword-class9": "proj-icon-tactic.png"}
 _PHOTO_CACHE = {}
 
 
