@@ -1232,194 +1232,84 @@ def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
             f' values="{qv}" keyTimes="{qk}"/>?</text></g></g>')
 
 
-# ---------------------------------------------------------------- her, in blocks
-# The sheet could not give her a gait. Measured across its eight run frames her
-# back foot sits between -15.6 and -22.9 units behind her and never travels,
-# while the front one swings about 18; all eighteen avatar poses on it have the
-# same leg forward, so the other half of the cycle is not drawn anywhere and no
-# ordering could invent it. Her high-resolution art has the same one pose.
-#
-# So she is drawn here instead - parts on joints, not a picture. The legs swing
-# in opposition about their hips and the arms answer the opposite leg, which
-# makes the cycle right by construction. Proportions are hers, not Minecraft's:
-# a big chibi head, a small body and short legs, because that is what she looks
-# like.
-A_HAIR = "#232A4A"
-A_HAIR_D = "#171C34"
-A_CAP = "#2A3557"
-A_CAP_D = "#1D2645"
-A_TEAL = "#5EEAD4"
-A_SKIN = "#F6C9A0"
-A_BLUSH = "#E89A8E"
-A_EYE = "#241C2B"
-A_COAT = "#2B3559"
-A_SLEEVE = "#36416B"
-A_COAT_D = "#212A48"
-A_SHOE = "#F4F7FA"
-A_SHOE_D = "#C8D2DC"
-A_DEEP = 0.66                   # the far arm and leg, seen past her, are dimmer
+# ---------------------------------------------------------------- her, from the supplied avatar
+AVATAR_SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 "..", "..", "assets", "runner-avatar-sheet.png")
+AVATAR_COLS, AVATAR_ROWS = 4, 3
+AVATAR_CELL = 362.0
+AVATAR_SCALE = GIRL_TARGET_H / AVATAR_CELL
+_AVATAR = None
 
-# The cap sits 6 above the head, so 6 + head + body + legs is her full height
-# and has to come to GIRL_TARGET_H: the jump solves for how much lift it takes
-# to reach a given square off exactly that number.
-HEAD_W, HEAD_H = 46.0, 44.0
-BODY_W, BODY_H = 27.0, 34.0
-LEG_W, LEG_H = 12.0, 44.0
-assert 6.0 + HEAD_H + BODY_H + LEG_H == GIRL_TARGET_H
-ARM_W, ARM_H = 10.0, 24.0
-HIP_Y = -LEG_H                              # everything measured up from her feet
-BODY_TOP = HIP_Y - BODY_H                   # -72
-HEAD_TOP = BODY_TOP - HEAD_H                # -114
-SHOULDER_Y = BODY_TOP + 7.0
-SWING_LEG, SWING_ARM = 30.0, 20.0           # degrees either side of straight down
-
-# _swing moves one LEG_H-radius foot from -SWING_LEG to +SWING_LEG each
-# step; _a_plant changes only its vertical reach. Thus a step is 44 units, not
-# 62, and a full cycle advances the ground by two such steps.
-RUN_STEP = 2.0 * LEG_H * math.sin(math.radians(SWING_LEG))
+# The two shoes span 178 source pixels in a full-contact pose. That is the
+# distance one planted foot travels before the opposite contact; two steps are
+# one complete six-frame cycle.
+RUN_STEP = 178.0 * AVATAR_SCALE
 RUN_CYCLE = 2.0 * RUN_STEP / RUN_SPEED
 assert math.isclose(RUN_SPEED * RUN_CYCLE, 2.0 * RUN_STEP,
                     rel_tol=1e-12, abs_tol=1e-12)
 
 
-def _dim(col, f):
-    """A darker shade of a colour, for the limbs on her far side."""
-    r, g, b = (int(col[i:i + 2], 16) for i in (1, 3, 5))
-    return "#%02x%02x%02x" % (int(r * f), int(g * f), int(b * f))
+def avatar_frames():
+    """Cut the supplied-character pose sheet into foot-anchored SVG images."""
+    global _AVATAR
+    if _AVATAR is not None:
+        return _AVATAR
+    _AVATAR = []
+    try:
+        import base64, io
+        from PIL import Image
+        src = Image.open(AVATAR_SHEET_PATH).convert("RGBA")
+    except Exception as exc:
+        print("avatar skipped:", exc)
+        return _AVATAR
+
+    cw, ch = src.width // AVATAR_COLS, src.height // AVATAR_ROWS
+    if cw * AVATAR_COLS != src.width or ch * AVATAR_ROWS != src.height:
+        raise ValueError("runner avatar sheet must contain equal 4x3 cells")
+    if cw != int(AVATAR_CELL) or ch != int(AVATAR_CELL):
+        raise ValueError(f"runner avatar cells must be {int(AVATAR_CELL)}px square")
+    for i in range(AVATAR_COLS * AVATAR_ROWS):
+        col, row = i % AVATAR_COLS, i // AVATAR_COLS
+        cell = src.crop((col * cw, row * ch, (col + 1) * cw, (row + 1) * ch))
+        box = cell.getchannel("A").getbbox()
+        if box is None:
+            raise ValueError(f"runner avatar frame {i} is empty")
+        x0, y0 = max(0, box[0] - 2), max(0, box[1] - 2)
+        x1, y1 = min(cw, box[2] + 2), min(ch, box[3] + 2)
+        crop = cell.crop((x0, y0, x1, y1))
+        flat = crop.convert("RGB").quantize(
+            colors=160, method=Image.Quantize.FASTOCTREE).convert("RGBA")
+        flat.putalpha(crop.getchannel("A"))
+        buf = io.BytesIO()
+        flat.save(buf, "PNG", optimize=True)
+        fid = f"avatar{i}"
+        _USED[fid] = ("data:image/png;base64," +
+                      base64.b64encode(buf.getvalue()).decode(), crop.width, crop.height)
+        centre = ((box[0] + box[2]) / 2.0) - x0
+        feet = box[3] - y0
+        _AVATAR.append((fid, crop.width, crop.height, centre, feet))
+    return _AVATAR
 
 
-def _blk(x, y, w, h, fill, rx=0.0):
-    r = f' rx="{rx:.1f}"' if rx else ""
-    return (f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}"'
-            f'{r} fill="{fill}"/>')
-
-
-def _a_leg(far=False):
-    """A leg hanging from its hip at the origin, trainer on the end."""
-    coat, shoe, trim = A_COAT, A_SHOE, A_TEAL
-    if far:
-        coat, shoe, trim = _dim(A_COAT_D, A_DEEP), _dim(A_SHOE, A_DEEP), _dim(A_TEAL, A_DEEP)
-    sole = 7.0
-    return (_blk(-LEG_W / 2, 0, LEG_W, LEG_H - sole, coat, 3)
-            + _blk(-LEG_W / 2, LEG_H - sole, LEG_W + 7.0, sole, shoe, 3)
-            + _blk(-LEG_W / 2 + 1.0, LEG_H - sole + 2.0, LEG_W + 3.0, 1.6, trim))
-
-
-def _a_arm(far=False):
-    """An arm from its shoulder at the origin, fist on the end."""
-    coat, skin = A_SLEEVE, A_SKIN
-    if far:
-        coat, skin = _dim(A_SLEEVE, A_DEEP), _dim(A_SKIN, A_DEEP)
-    fist = 8.5
-    return (_blk(-ARM_W / 2, 0, ARM_W, ARM_H - fist + 2.0, coat, 5)
-            + _blk(-ARM_W / 2 - 1.0, ARM_H - fist, ARM_W + 2.0, fist, skin, 4))
-
-
-def _a_body():
-    """Hoodie, head, hair and cap - everything that does not swing."""
-    bx = -BODY_W / 2 + 2.0
-    out = _blk(bx - 1.5, BODY_TOP + 4.0, BODY_W + 3.0, BODY_H - 2.0, A_COAT_D, 7)
-    out += _blk(bx, BODY_TOP + 2.0, BODY_W, BODY_H - 2.0, A_COAT, 7)   # hoodie
-    out += _blk(bx + BODY_W - 9.0, BODY_TOP + 9.0, 2.2, BODY_H - 17.0, A_TEAL)  # zip
-    out += _blk(bx + BODY_W - 16.0, BODY_TOP + 12.0, 6.0, 2.0, A_TEAL)         # chest flash
-
-    hx, hy = -HEAD_W / 2 + 3.0, HEAD_TOP
-    out += _blk(bx - 3.0, BODY_TOP + 1.0, BODY_W + 6.0, 11.0, A_COAT_D, 5)   # hood
-    # hair behind her, blowing back as she runs
-    out += _blk(hx - 14.0, hy + 8.0, 24.0, 44.0, A_HAIR_D, 10)
-    out += _blk(hx - 22.0, hy + 15.0, 16.0, 30.0, A_HAIR_D, 8)
-    out += _blk(hx - 27.0, hy + 21.0, 12.0, 18.0, A_HAIR_D, 6)
-    out += _blk(hx - 8.0, hy + 2.0, HEAD_W - 2.0, HEAD_H + 6.0, A_HAIR, 13)
-    # face
-    out += _blk(hx + 4.0, hy + 8.0, HEAD_W - 12.0, HEAD_H - 6.0, A_SKIN, 12)
-    out += _blk(hx + 1.0, hy + 6.0, 12.0, 22.0, A_HAIR, 6)                     # side lock
-    # eyes, with the highlight that makes them read as hers
-    for ex in (hx + 13.0, hx + 26.0):
-        out += _blk(ex, hy + 20.0, 7.0, 9.0, A_EYE, 3)
-        out += _blk(ex + 1.2, hy + 21.5, 2.6, 3.2, "#FFFFFF", 1)
-    out += _blk(hx + 10.0, hy + 31.0, 5.0, 2.6, A_BLUSH, 1)
-    out += _blk(hx + 30.0, hy + 31.0, 5.0, 2.6, A_BLUSH, 1)
-    out += _blk(hx + 19.0, hy + 32.0, 7.0, 4.0, "#B4485A", 2)                  # smile
-    # cap: crown, brim pointing the way she runs, and the diamond
-    out += _blk(hx - 6.0, hy - 6.0, HEAD_W - 2.0, 17.0, A_CAP, 9)
-    out += _blk(hx + HEAD_W - 14.0, hy + 3.5, 21.0, 7.5, A_CAP_D, 4)    # the peak
-    d = 8.0
-    cx, cy = hx + 20.0, hy + 2.0
-    out += (f'<rect x="{cx - d / 2:.1f}" y="{cy - d / 2:.1f}" width="{d:.1f}"'
-            f' height="{d:.1f}" fill="none" stroke="{A_TEAL}" stroke-width="2.4"'
-            f' transform="rotate(45 {cx:.1f} {cy:.1f})"/>')
-    return out
-
-
-def _a_plant(cycle, amp, steps=12):
-    """Drop her by exactly as much as the swung legs shorten her.
-
-    A leg turned `t` off vertical only reaches LEG_H*cos(t) down, so with both
-    legs out she is LEG_H*(1-cos amp) shorter than standing. Lowering her by
-    that much keeps the planted foot on the ground instead of skimming above
-    it, and the rise and fall of a walk comes out of that for free.
-    """
-    vals, keys = [], []
-    for k in range(steps + 1):
-        f = k / steps                  # half a cycle: both legs pass square once
-        ang = math.radians(amp * math.cos(math.pi * f))
-        vals.append(f"0 {LEG_H * (1.0 - math.cos(ang)):.2f}")
-        keys.append(f"{f:.4f}")
-    return (f'<animateTransform attributeName="transform" type="translate"'
-            f' dur="{cycle / 2.0:.9f}s" repeatCount="indefinite" calcMode="linear"'
-            f' values="{";".join(vals)}" keyTimes="{";".join(keys)}"/>')
-
-
-def _swing(inner, cycle, amp, back_first):
-    """Hang a limb off its joint and swing it, one full pass per cycle."""
-    a, b = (amp, -amp) if back_first else (-amp, amp)
-    return (f'<g><animateTransform attributeName="transform" type="rotate"'
-            f' values="{a:.0f};{b:.0f};{a:.0f}" keyTimes="0;0.5;1"'
-            f' calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"'
-            f' dur="{cycle:.9f}s" repeatCount="indefinite"/>{inner}</g>')
-
-
-def _held(inner, deg):
-    return f'<g transform="rotate({deg:.0f})">{inner}</g>'
-
-
-def _a_figure(near_leg, far_leg, near_arm, far_arm, baseline):
-    """Stack the parts back to front, feet on `baseline`."""
-    def at(x, y, part):
-        return f'<g transform="translate({x:.1f} {y + baseline:.1f})">{part}</g>'
-    return (at(-4.0, HIP_Y, far_leg)
-            + at(-7.0, SHOULDER_Y, far_arm)
-            + f'<g transform="translate(0 {baseline:.1f})">{_a_body()}</g>'
-            + at(4.0, HIP_Y, near_leg)
-            + at(7.0, SHOULDER_Y, near_arm))
+def avatar_frame(i, baseline):
+    """One pose centred on x=0 with its lowest visible pixel on the baseline."""
+    got = avatar_frames()
+    if not got:
+        return ""
+    fid, _, _, centre, feet = got[i]
+    return (f'<use xlink:href="#sp-{fid}" style="image-rendering:auto"'
+            f' transform="translate({-centre * AVATAR_SCALE:.3f}'
+            f' {baseline - feet * AVATAR_SCALE:.3f}) scale({AVATAR_SCALE:.6f})"/>')
 
 
 def avatar_run(cycle, baseline):
-    """Her walk cycle: legs opposed, arms answering the opposite leg."""
-    figure = _a_figure(
-        _swing(_a_leg(), cycle, SWING_LEG, True),
-        _swing(_a_leg(far=True), cycle, SWING_LEG, False),
-        _swing(_a_arm(), cycle, SWING_ARM, False),
-        _swing(_a_arm(far=True), cycle, SWING_ARM, True),
-        baseline)
-    return f'<g>{_a_plant(cycle, SWING_LEG)}{figure}</g>'
+    """Six authored poses: alternating contacts, passes and airborne strides."""
+    return flipbook([avatar_frame(i, baseline) for i in range(6)], cycle)
 
 
-def avatar_pose(nl, fl, na, fa, baseline):
-    """The same parts held still, for the jump, the block hit and the landing."""
-    return _a_figure(_held(_a_leg(), nl), _held(_a_leg(far=True), fl),
-                     _held(_a_arm(), na), _held(_a_arm(far=True), fa), baseline)
-
-
-# Leg, leg, arm, arm - in degrees, negative swings the limb forward. Their
-# timing is attached to the solved flight phases in girl_runner, not divided
-# evenly across an approximate jump window.
-AIR_POSES = [(-38.0, 24.0, -44.0, -28.0),    # drive at take-off
-             (-32.0, 28.0, -70.0, -54.0),    # reach while rising
-             (-16.0, 20.0, -58.0, -42.0),    # block impact
-             (-4.0, 10.0, -38.0, -24.0),     # begin falling
-             (12.0, -18.0, -18.0, -6.0),     # extend for the ground
-             (24.0, -24.0, 14.0, 24.0)]      # absorb on contact
+# Drive, reach, impact, three falling poses and the landing absorb. Frame 7 is
+# intentionally held across the instant of impact so the contact reads clearly.
+AIR_POSES = [6, 7, 7, 8, 9, 10, 11]
 
 
 def girl_runner(jumps, T, baseline=6.0):
@@ -1431,11 +1321,13 @@ def girl_runner(jumps, T, baseline=6.0):
     for jump in jumps:
         t0, hit, t1, resume = (jump[k] for k in ("t0", "hit", "t1", "resume"))
         rise_reach = t0 + jump["t_up"] * 0.42
-        fall_open = hit + jump["t_down"] * 0.20
-        fall_extend = hit + jump["t_down"] * 0.62
-        edges = [t0, rise_reach, hit, fall_open, fall_extend, t1, resume]
+        fall_tuck = hit + jump["t_down"] * 0.16
+        fall_open = hit + jump["t_down"] * 0.42
+        fall_extend = hit + jump["t_down"] * 0.72
+        edges = [t0, rise_reach, hit, fall_tuck, fall_open,
+                 fall_extend, t1, resume]
         for pose, a, b in zip(AIR_POSES, edges, edges[1:]):
-            air += sequence([avatar_pose(*pose, baseline)], a, b, T)
+            air += sequence([avatar_frame(pose, baseline)], a, b, T)
     return gate(run, wins, T) + air
 
 
