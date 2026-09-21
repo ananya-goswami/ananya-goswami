@@ -438,10 +438,10 @@ SKY = (("0", "#5cc0f7"), ("0.55", "#8fd6fb"), ("1", "#c4e9fd"))
 # Sized for 46px, not for the demo they came from: at tile scale the source's
 # own proportions vanish into the blue, so a few are deliberately oversized
 # and the dimmest never drops below half opacity.
-STARS = ((12.0, 13.0, 4.2, 5.6, 3.1), (32.5, 10.0, 2.6, 7.1, 2.4),
-         (22.0, 21.0, 1.5, 6.3, 3.8), (36.0, 25.0, 3.4, 8.0, 2.9),
-         (9.5, 30.0, 1.4, 5.2, 4.3), (25.5, 34.5, 4.6, 6.8, 2.6),
-         (16.5, 38.5, 1.3, 7.6, 3.4), (39.0, 37.0, 1.5, 5.9, 4.0))
+STARS = ((12.0, 16.0, 4.2, 3.1, 1.9), (32.5, 12.0, 2.6, 3.9, 1.5),
+         (22.0, 22.0, 1.5, 3.4, 2.3), (36.0, 26.0, 3.4, 4.3, 1.7),
+         (9.5, 30.0, 1.4, 2.9, 2.6), (25.5, 33.0, 4.6, 3.7, 1.6),
+         (16.5, 37.0, 1.3, 4.1, 2.1), (39.0, 36.0, 1.5, 3.3, 2.4))
 
 # A four-point sparkle on a unit radius, waisted so it reads as a star and not
 # a diamond at three pixels across.
@@ -455,26 +455,36 @@ def _scene_defs_stars():
 
 
 def _scene_stars(x, y):
-    """The toolkit's start screen, at tile size and still drifting."""
+    """The toolkit's start screen, at tile size and still drifting.
+
+    Tuned for a 46px tile rather than for the demo.  The first pass moved each
+    star 2.6px over six seconds, which measured as a real animation - about
+    110 pixels of the tile changing - and still read as a static picture,
+    because two screen pixels of drift is not motion anyone notices.  The
+    drift is wider and quicker now, the twinkle goes far darker, and each
+    sparkle pulses in size as well, so the tile is visibly alive at a glance.
+    """
     out = [f'<rect x="{x}" y="{y}" width="46" height="46" rx="12" fill="url(#flnsky)"/>']
     for i, (sx, sy, r, drift, beat) in enumerate(STARS):
         cx, cy = x + sx, y + sy
+        dx = 2.2 if i % 2 else -2.2
+        dy = 6.5
         shape = (f'<circle r="{r:.2f}" fill="#FFFFFF"/>' if r < 1.6 else
                  f'<path d="{_SPARK}" fill="#FFFFFF" transform="scale({r:.2f})"/>')
-        lo = 0.55 if r < 1.6 else 0.72
-        # Each star gets its own period and a negative begin, so they are
-        # already mid-drift on the first frame and never pulse in unison.
+        lo = 0.20 if r < 1.6 else 0.30
+        ph = i / len(STARS)
         out.append(
             f'<g transform="translate({cx:.1f} {cy:.1f})" opacity="{lo:.2f}">'
             f'<animateTransform attributeName="transform" type="translate"'
-            f' values="{cx:.1f} {cy:.1f};{cx:.1f} {cy - 2.6:.1f};{cx:.1f} {cy:.1f}"'
-            f' dur="{drift}s" begin="-{drift * (i / len(STARS)):.2f}s"'
+            f' values="{cx:.1f} {cy:.1f};{cx + dx:.1f} {cy - dy:.1f};{cx:.1f} {cy:.1f}"'
+            f' dur="{drift}s" begin="-{drift * ph:.2f}s"'
             f' repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1"'
             f' keySplines=".45 0 .55 1;.45 0 .55 1"/>'
             f'<animate attributeName="opacity" values="{lo:.2f};1;{lo:.2f}"'
-            f' dur="{beat}s" begin="-{beat * (i / len(STARS)):.2f}s"'
-            f' repeatCount="indefinite"/>'
-            f'{shape}</g>')
+            f' dur="{beat}s" begin="-{beat * ph:.2f}s" repeatCount="indefinite"/>'
+            f'<g><animateTransform attributeName="transform" type="scale"'
+            f' values="0.72;1.28;0.72" dur="{beat}s" begin="-{beat * ph:.2f}s"'
+            f' repeatCount="indefinite"/>{shape}</g></g>')
     out.append(f'<rect x="{x}" y="{y}" width="46" height="46" rx="12" fill="none"'
                f' stroke="#FFFFFF" stroke-opacity=".22"/>')
     return "".join(out)
@@ -543,7 +553,7 @@ CW, CH = 566, 152
 # change but whose name does not keeps serving whatever was fetched first, no
 # matter how many times CI rebuilds it.  Renaming the file is the only thing
 # that actually reaches anyone who has already loaded the page.
-CARD_REV = "d"
+CARD_REV = "e"
 
 
 def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
