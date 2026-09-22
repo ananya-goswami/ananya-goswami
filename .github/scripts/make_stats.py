@@ -788,35 +788,38 @@ def _lang_slices(meta):
     return [(b / total, LANG_HUE.get(lang.lower(), "#6E8A99"), lang) for lang, b in top]
 
 
-def _lang_bar(repo, href, meta):
-    """The hoverable breakdown: one <img> per slice, side by side, no gaps.
+def _lang_bar(href, meta, total):
+    """The hoverable breakdown: one <img> per language, side by side, no gaps.
 
-    Widths are whole percents adjusted to sum to BAR_TOTAL, because a row that
-    adds up past 100% wraps the last slice onto its own line.  The percentage
-    in the tooltip is the true one, not the adjusted width.
+    Widths are whole percents of the page, not of the card, because these are
+    plain inline images with no table around them any more - so they are
+    scaled to match the card's own width and adjusted to sum to it exactly.
+    A row that adds up to more wraps its last segment onto its own line.  The
+    percentage in the tooltip is the true one, not the adjusted width.
     """
     slices = _lang_slices(meta)
     if not slices:
         return ""
-    widths = [max(int(round(f * BAR_TOTAL)), 1) for f, _c, _n in slices]
-    widths[widths.index(max(widths))] += BAR_TOTAL - sum(widths)   # absorb the rounding
+    widths = [max(int(round(f * total)), 1) for f, _c, _n in slices]
+    widths[widths.index(max(widths))] += total - sum(widths)      # absorb the rounding
     parts = []
     for (frac, col, name), w in zip(slices, widths):
         tip = esc(f"{name} {100.0 * frac:.0f}%")
         parts.append(f'<a href="{esc(href)}" title="{tip}">'
                      f'<img src="{RAW}/bar-{col.lstrip("#").lower()}.svg" width="{w}%"'
                      f' height="{BAR_H}" title="{tip}" alt="{tip}" /></a>')
-    return f"<!--langs--><br />{''.join(parts)}<!--/langs-->"
-
-
-def _strip_attr(tag, name):
-    return re.sub(r'\s' + name + r'="[^"]*"', "", tag, count=1)
+    return "".join(parts)
 
 
 def _write_readme_titles(index, path=README):
-    """Put a hoverable language bar under each card, and take the card's own
-    tooltip off - a single tooltip across the whole card could only repeat the
-    same list on every part of it, which is what the bar replaces.
+    """Fill each card's <!--langs:repo--> marker with its language bar.
+
+    The cards are no longer in a table - GitHub draws a border on every table
+    cell from its own stylesheet and strips any author CSS that would turn it
+    off, so the grid could not be removed while a table was drawing it.  They
+    are plain inline images now, two to a line, which is why the bar widths
+    are percentages of the page rather than of a cell, and why each bar sits
+    in a marker rather than being spliced in after its card.
 
     Rewrites in memory and checks the result before opening the file for
     writing, because a half-failed rewrite once truncated this README to
@@ -827,26 +830,24 @@ def _write_readme_titles(index, path=README):
         return
     text = io.open(path, encoding="utf-8").read()
     out, hit = text, 0
-    for repo, title, _tag, _blurb in FEATURED:
-        row = re.compile(r'<a\s+href="([^"]+)"[^>]*>\s*<img\s[^>]*proj-'
+    for repo, _title, _tag, _blurb in FEATURED:
+        card = re.search(r'<a href="([^"]+)"><img src="[^"]*proj-'
                          + re.escape(CARD_REV) + '-' + re.escape(repo)
-                         + r'\.svg[^>]*>\s*</a>(<!--langs-->.*?<!--/langs-->)?')
-        m = row.search(out)
-        if not m:
-            print("readme langs: no card row for", repo)
+                         + r'\.svg"[^>]*width="(\d+)%"', out)
+        slot = re.search("<!--langs:" + re.escape(repo) + "-->.*?<!--/langs:"
+                         + re.escape(repo) + "-->", out, re.S)
+        if not card or not slot:
+            print("readme langs: no card or slot for", repo)
             continue
-        href = m.group(1)
-        a, img = m.group(0).split("<!--langs-->")[0].split("<img", 1)
-        block = (_strip_attr(a.rstrip(), "title")
-                 + _strip_attr("<img" + img, "title")
-                 + _lang_bar(repo, href, index.get(repo, {})))
-        out = out[:m.start()] + block + out[m.end():]
+        bar = _lang_bar(card.group(1), index.get(repo, {}), int(card.group(2)))
+        out = (out[:slot.start()] + f"<!--langs:{repo}-->" + bar
+               + f"<!--/langs:{repo}-->" + out[slot.end():])
         hit += 1
 
     if hit != len(FEATURED):
-        print(f"readme langs: only {hit}/{len(FEATURED)} rows matched, leaving it alone")
+        print(f"readme langs: only {hit}/{len(FEATURED)} slots filled, leaving it alone")
         return
-    if len(out) < len(text) * 0.8 or "<table>" not in out:
+    if len(out) < len(text) * 0.8 or "<!--langs:" not in out:
         print("readme langs: result looks wrong, leaving it alone")
         return
     if out == text:
