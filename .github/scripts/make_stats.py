@@ -296,35 +296,74 @@ def _pill(x, y, text):
 
 
 def _donut(cx, cy, r, slices, delay):
-    """The language ring: one arc per language, drawn in on load.
+    """The language ring: one arc per language, drawn in, then read out.
+
+    The written rows this used to sit beside are gone, so the ring has to
+    carry the names and the percentages itself.  Hover cannot do it - a README
+    image is served as <img>, and SVG in an <img> gets no pointer events at
+    all, so :hover never fires no matter how the CSS is written.  What does
+    work inside an <img> is declarative animation, so the ring cycles instead:
+    each language in turn lights its own arc and names itself in the middle,
+    and the rest dim back.  Same information, no pointer required.
 
     stroke-dasharray places each arc and stroke-dashoffset walks it round, so
     the whole ring is one circle element per slice and no path maths.
     """
     circ = 2 * math.pi * r
-    out = [f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="#0C221E" stroke-width="8"/>']
-    off = 0.0
-    for frac, col in slices:
+    named = [sl for sl in slices if len(sl) > 2]          # the rest slice has no name
+    span = max(len(named), 1) * RING_STEP
+    out = [f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="#0C221E"'
+           f' stroke-width="{RING_W}"/>']
+
+    def _window(i):
+        """opacity keyTimes for the i-th language's turn in the cycle."""
+        a, b = i * RING_STEP / span, (i + 1) * RING_STEP / span
+        fade = min(0.22 * RING_STEP / span, (b - a) / 2.5)
+        ks = [0.0, max(a - fade, 0.0), a + fade, b - fade, min(b + fade, 1.0), 1.0]
+        for j in range(1, len(ks)):                       # keyTimes must not go back
+            ks[j] = max(ks[j], ks[j - 1])
+        return ";".join(f"{k:.4f}" for k in ks)
+
+    off, ni = 0.0, 0
+    for sl in slices:
+        frac, col = sl[0], sl[1]
         arc = circ * frac
+        lit = ""
+        if len(sl) > 2:
+            lit = (f'<animate attributeName="stroke-opacity"'
+                   f' values=".34;.34;1;1;.34;.34" keyTimes="{_window(ni)}"'
+                   f' dur="{span:.2f}s" begin="{delay + 0.9:.2f}s" repeatCount="indefinite"/>')
+            ni += 1
         out.append(
-            f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{col}" stroke-width="8"'
+            f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{col}"'
+            f' stroke-width="{RING_W}" stroke-opacity="{1 if len(sl) < 3 else .34}"'
             f' stroke-dasharray="{arc:.2f} {circ - arc:.2f}" stroke-dashoffset="{-off:.2f}"'
             f' transform="rotate(-90 {cx} {cy})">'
             f'<animate attributeName="stroke-dasharray" values="0 {circ:.2f};{arc:.2f} {circ - arc:.2f}"'
             f' dur="0.9s" begin="{delay:.2f}s" fill="freeze" calcMode="spline"'
-            f' keyTimes="0;1" keySplines=".4 0 .2 1"/></circle>')
+            f' keyTimes="0;1" keySplines=".4 0 .2 1"/>{lit}</circle>')
         off += arc
+
+    # The readout. Two lines, both inside the ring: the name small above the
+    # middle, the share large below it.  A name longer than the ring is wide
+    # gets clipped rather than drawn over the arc.
+    for i, (frac, col, name) in enumerate(named):
+        short = name if len(name) <= 10 else name[:9] + "…"
+        out.append(
+            f'<g opacity="0"><animate attributeName="opacity"'
+            f' values="0;0;1;1;0;0" keyTimes="{_window(i)}" dur="{span:.2f}s"'
+            f' begin="{delay + 0.9:.2f}s" repeatCount="indefinite"/>'
+            f'<text class="mono" x="{cx}" y="{cy - 4}" font-size="7.5"'
+            f' text-anchor="middle" fill="{col}">{esc(short)}</text>'
+            f'<text class="mono" x="{cx}" y="{cy + 13}" font-size="15.5" font-weight="700"'
+            f' text-anchor="middle" fill="#E8FFF6">{100.0 * frac:.0f}%</text></g>')
     return "".join(out)
 
 
-# The blurb column runs from the tile to the language list.  The tile grew to
-# half the card, so that column lost thirty pixels: (CW-214) - TEXT_X - 12 is
-# 234px, which at 11.5px mono is about 33 characters.
-# One drawn mark per project, each about what the project is rather than what
-# it is called.  They are vector rather than bitmap because the panel is built,
-# not designed: there is nowhere to keep nine logo files that CI would have to
-# fetch, and at 28px a drawn glyph beats a downscaled screenshot anyway.
-# All are built on a 24x24 grid, monoline at 1.9, so they sit at one weight.
+# The fallback mark, for a project with no artwork of its own.  Built on a
+# 24x24 grid, monoline at 1.9, so it sits at one weight whatever it is scaled
+# to - which is now most of a 260x188 panel, where it looks thin next to a
+# real screenshot.  Only Portfolio still lands here.
 def _ic(body, stroke="#CFF3FF", fill="none"):
     return (f'<g fill="{fill}" stroke="{stroke}" stroke-width="1.9"'
             f' stroke-linecap="round" stroke-linejoin="round">{body}</g>')
@@ -451,15 +490,15 @@ SKY = (("0", "#5cc0f7"), ("0.55", "#8fd6fb"), ("1", "#c4e9fd"))
 # jittered off the even fan that made it look mechanical, and they start
 # further out where there is already room between them.
 # Five lanes was a 46px compromise: any more and the stars landed on top of
-# each other and the tile read as static noise.  At 130px they have room, so
-# the count goes back up and each star shrinks a little against the tile -
-# nearer the toolkit's own dense sky, which is what it looks like in the app.
-SKY_LANES = 8
-SKY_LAYERS = ((0.0, 1.00), (22.5, 0.62))     # angle offset, size scale
-SKY_JITTER = 9.0                             # degrees, so the fan is not a wheel
-SKY_R0, SKY_R1 = 5.0 / 46, 24.0 / 46         # of the tile; they fade before the corner
-SKY_DUR = (3.6, 6.0)
-SKY_SIZE = (2.6 / 46, 5.0 / 46)              # also of the tile
+# each other and the tile read as static noise.  A full panel has room for the
+# toolkit's own count, and the trip is long enough that they can run off the
+# edge instead of fading out politely short of it - the panel clip catches them.
+SKY_LANES = 18
+SKY_LAYERS = ((0.0, 1.00), (10.0, 0.68), (20.0, 0.46))   # angle offset, size scale
+SKY_JITTER = 6.0                             # degrees, so the fan is not a wheel
+SKY_R0, SKY_R1 = 9.0, 152.0                  # panel units; past the corner, then clipped
+SKY_DUR = (3.2, 5.6)
+SKY_SIZE = (3.5, 8.5)
 
 # The five shapes it cycles, lifted from the sheet's own data-URI sprites.
 _S_STAR = ("M32 5.5c1.6 0 3 .9 3.7 2.4l6.1 12.4 13.7 2c1.6.2 3 1.4 3.5 3s.1 3.3-1.1 4.4"
@@ -497,16 +536,15 @@ def _sky_shape(kind, s):
 def _scene_stars(x, y):
     """The toolkit's start screen: a starfield flying out of the middle."""
     rnd = random.Random(20260921)                     # same sky on every build
-    cx, cy = x + TILE / 2, y + TILE / 2
-    r0, r1 = SKY_R0 * TILE, SKY_R1 * TILE
-    out = [f'<rect x="{x}" y="{y}" width="{TILE}" height="{TILE}" rx="{TILE_R:.1f}"'
-           f' fill="url(#flnsky)"/>']
+    cx, cy = x + ART_W / 2, y + CH / 2
+    r0, r1 = SKY_R0, SKY_R1
+    out = [f'<rect x="{x}" y="{y}" width="{ART_W}" height="{CH}" fill="url(#flnsky)"/>']
     for li, (rot, scale) in enumerate(SKY_LAYERS):
         for i in range(SKY_LANES):
             a = math.radians(360.0 / SKY_LANES * i + rot
                              + rnd.uniform(-SKY_JITTER, SKY_JITTER))
             ca, sa = math.cos(a), math.sin(a)
-            size = (SKY_SIZE[0] + rnd.random() * (SKY_SIZE[1] - SKY_SIZE[0])) * TILE * scale
+            size = (SKY_SIZE[0] + rnd.random() * (SKY_SIZE[1] - SKY_SIZE[0])) * scale
             dur = SKY_DUR[0] + rnd.random() * (SKY_DUR[1] - SKY_DUR[0])
             o = 0.65 + rnd.random() * 0.30
             x1, y1 = cx + r0 * ca, cy + r0 * sa
@@ -514,15 +552,13 @@ def _scene_stars(x, y):
             out.append(
                 f'<g opacity="0">'
                 f'<animate attributeName="opacity" values="0;{o:.2f};{o:.2f};0"'
-                f' keyTimes="0;0.1;0.84;1" dur="{dur:.2f}s"'
+                f' keyTimes="0;0.06;0.80;1" dur="{dur:.2f}s"'
                 f' begin="-{rnd.random() * dur:.2f}s" repeatCount="indefinite"/>'
                 f'<animateTransform attributeName="transform" type="translate"'
                 f' values="{x1:.1f} {y1:.1f};{x2:.1f} {y2:.1f}" dur="{dur:.2f}s"'
                 f' begin="-{rnd.random() * dur:.2f}s" repeatCount="indefinite"'
                 f' calcMode="linear"/>'
                 f'{_sky_shape((i + li) % 3, size)}</g>')
-    out.append(f'<rect x="{x}" y="{y}" width="{TILE}" height="{TILE}" rx="{TILE_R:.1f}"'
-               f' fill="none" stroke="#FFFFFF" stroke-opacity=".22"/>')
     return "".join(out)
 
 
@@ -545,17 +581,16 @@ def _scene_bee(x, y):
     body, wl, wr = (_photo_uri(n) for n in BEE_PARTS)
     if not body:
         return ""
-    k = (TILE * 44.0 / 46.0) / 80.0       # the parts are 80px square
-    ox, oy = x + (TILE - 80 * k) / 2.0, y + (TILE - 80 * k) / 2.0
+    k = (CH * 0.80) / 80.0                # the parts are 80px square
+    ox, oy = x + (ART_W - 80 * k) / 2.0, y + (CH - 80 * k) / 2.0
     wing = ('<g><animateTransform attributeName="transform" type="rotate"'
             ' values="{a} {rx} {ry};{b} {rx} {ry};{a} {rx} {ry}" dur="%s s"'
             ' repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1"'
             ' keySplines=".4 0 .6 1;.4 0 .6 1"/>'
             '<image xlink:href="{u}" x="0" y="0" width="80" height="80"/></g>'
             % BEE_BEAT).replace(" s", "s")
-    return (f'<rect x="{x}" y="{y}" width="{TILE}" height="{TILE}" rx="{TILE_R:.1f}"'
-            f' fill="#F0A92B"/>'
-            f'<circle cx="{x + TILE / 2}" cy="{y + TILE / 2}" r="{TILE * 15.5 / 46:.1f}"'
+    return (f'<rect x="{x}" y="{y}" width="{ART_W}" height="{CH}" fill="#F0A92B"/>'
+            f'<circle cx="{x + ART_W / 2}" cy="{y + CH / 2}" r="{CH * 0.40:.1f}"'
             f' fill="#54309B"/>'
             f'<g transform="translate({ox:.2f} {oy:.2f}) scale({k:.4f})">'
             f'<g><animateTransform attributeName="transform" type="translate"'
@@ -565,9 +600,7 @@ def _scene_bee(x, y):
             + wing.format(a=-13, b=12, rx=BEE_ROOT_L[0], ry=BEE_ROOT_L[1], u=wl)
             + wing.format(a=13, b=-12, rx=BEE_ROOT_R[0], ry=BEE_ROOT_R[1], u=wr)
             + f'<image xlink:href="{body}" x="0" y="0" width="80" height="80"/>'
-            f'</g></g>'
-            f'<rect x="{x}" y="{y}" width="{TILE}" height="{TILE}" rx="{TILE_R:.1f}"'
-            f' fill="none" stroke="#FFFFFF" stroke-opacity=".22"/>')
+            f'</g></g>')
 
 
 ICON_SCENE = {"fln-animation-toolkit": (_scene_defs_stars, _scene_stars),
@@ -577,12 +610,12 @@ ICON_SCENE = {"fln-animation-toolkit": (_scene_defs_stars, _scene_stars),
 # Artwork beats a drawn mark wherever a project already has its own, and the
 # crop matters more than the source: at 46px a whole screen is mush, so each
 # of these is the one element that survives - a face, a lit card, a wheel.
-ICON_PHOTO = {"aaru_ki_cheenk": "proj-icon-aaru.png",
-              "Keyword-class9": "proj-icon-tactic.png",
-              "feeling-wheel-tap": "proj-icon-wheel.png",
-              "real-or-fake-sender": "proj-icon-shield.png",
-              "calm-or-react": "proj-icon-calm.png",
-              "Competition-Zone": "proj-icon-zone.png"}
+ART_PHOTO = {"aaru_ki_cheenk": "proj-art-aaru.png",
+             "Keyword-class9": "proj-art-tactic.png",
+             "feeling-wheel-tap": "proj-art-wheel.png",
+             "real-or-fake-sender": "proj-art-shield.png",
+             "calm-or-react": "proj-art-calm.png",
+             "Competition-Zone": "proj-art-zone.png"}
 _PHOTO_CACHE = {}
 
 
@@ -608,50 +641,58 @@ def _tile_defs(repo):
     return got[0]() if got else ""
 
 
-def _tile(x, y, repo, tint):
-    """The icon on its tinted square, 28px of drawing in a 46px tile."""
+def _art_clip_path(x, y, r=10):
+    """The panel outline: rounded where it meets the card, square where it
+    meets the text.  A plain rx would notch the inner edge instead."""
+    return (f'M{x + ART_W} {y}H{x + r}a{r} {r} 0 0 0 -{r} {r}V{y + CH - r}'
+            f'a{r} {r} 0 0 0 {r} {r}H{x + ART_W}Z')
+
+
+def _art(x, y, repo, tint):
+    """The picture panel: the left 46% of the card, floor to ceiling.
+
+    Everything is drawn inside the panel's own clip rather than fitted to it,
+    so a scene can run its stars off the edge without them appearing in the
+    middle of the blurb.
+    """
     scene = ICON_SCENE.get(repo)
     if scene:
-        return scene[1](x, y)
-    photo = ICON_PHOTO.get(repo)
-    uri = _photo_uri(photo) if photo else ""
-    if uri:
-        # The rounded corner is baked into the file's alpha, so this needs no
-        # clipPath and no second <defs> halfway down the document.  One <image>
-        # and a hairline is the whole tile - fewer things for anything between
-        # here and the page to object to.
-        return (f'<image xlink:href="{uri}" x="{x}" y="{y}"'
-                f' width="{TILE}" height="{TILE}"/>'
-                f'<rect x="{x}" y="{y}" width="{TILE}" height="{TILE}" rx="{TILE_R:.1f}"'
-                f' fill="none" stroke="#FFFFFF" stroke-opacity=".18"/>')
-    art = ICONS.get(repo)
-    inner = art() if art else ""
-    s = (TILE * 28.0 / 46.0) / 24.0
-    return (f'<rect x="{x}" y="{y}" width="{TILE}" height="{TILE}" rx="{TILE_R:.1f}"'
-            f' fill="{tint}" stroke="#FFFFFF" stroke-opacity=".10"/>'
-            f'<g transform="translate({x + TILE * 9 / 46:.1f} {y + TILE * 9 / 46:.1f})'
-            f' scale({s:.4f})">{inner}</g>')
+        inner = scene[1](x, y)
+    else:
+        uri = _photo_uri(ART_PHOTO[repo]) if repo in ART_PHOTO else ""
+        if uri:
+            # slice, not meet: the file is cut to the panel's aspect already,
+            # but this keeps a rounding error from letting the card show through.
+            inner = (f'<image xlink:href="{uri}" x="{x}" y="{y}" width="{ART_W}"'
+                     f' height="{CH}" preserveAspectRatio="xMidYMid slice"/>')
+        else:
+            art = ICONS.get(repo)
+            k = (CH * 0.46) / 24.0
+            inner = (f'<rect x="{x}" y="{y}" width="{ART_W}" height="{CH}" fill="{tint}"/>'
+                     f'<g transform="translate({x + ART_W / 2 - 12 * k:.1f}'
+                     f' {y + CH / 2 - 12 * k:.1f}) scale({k:.3f})">'
+                     f'{art() if art else ""}</g>')
+    return (f'<g clip-path="url(#art)">{inner}</g>'
+            f'<path d="M{x + ART_W} {y}V{y + CH}" stroke="#00FF9C" stroke-opacity=".20"/>')
 
 
 def _clip_text(s, n):
     return s if len(s) <= n else s[:n - 1].rstrip(" ,.") + "…"
 
 
-# The card is 16px taller than it looks like it needs to be, and that is the
-# point: the artwork is meant to fill it top to bottom, and 130px of tile will
-# not fit under a 27px header strip in a 152px card.  Growing the card is the
-# only version of "full height" that does not either crop the art or push it
-# up through the strip.
-CW, CH = 566, 168
-# Full height, near enough: the body below the strip is 141px and the tile
-# takes 130 of it.  Everything that draws a tile works in fractions of this,
-# so changing it here moves the layout, both scenes and the corner radius
-# together - and it costs the text column, which is why the blurbs are short.
-TILE = 130.0
-TILE_R = TILE * 12.0 / 46.0              # the corner, kept in proportion
-TEXT_X = 16 + TILE + 14                  # the text column starts clear of it
-LANG_X = CW - 200                        # ...and ends where the languages begin
-BLURB_CH = 28                            # what fits between the two, at 11.5px
+# The artwork is not an icon on the card, it is half of the card: a landscape
+# panel bleeding to the top, bottom and left edges, with the text panel butted
+# against its right.  That is why there is no header rule any more - a line
+# across the whole card would cut the picture in two.
+CW, CH = 566, 188                        # 3.01:1, the shape the artwork wants
+ART_W = 260                              # 46% of the width, full bleed
+TEXT_X = ART_W + 16                      # the text panel starts here
+BLURB_CH = 27                            # what fits before the ring, at 11.5px
+
+# The ring moved in from the edge and grew, because it is now the only thing
+# carrying the language breakdown - the written rows are gone.
+RING_CX, RING_CY, RING_R, RING_W = CW - 74, 96, 32, 9
+RING_STEP = 2.2                          # seconds each language holds the ring
 
 # Leave this alone unless a stale image is genuinely stuck.
 #
@@ -673,22 +714,19 @@ def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
     total = sum(by.values()) or 1
     top = sorted(by.items(), key=lambda kv: -kv[1])[:3]
 
-    rowsL, slices = "", []
-    for j, (lang, b) in enumerate(top):
-        pct = 100.0 * b / total
-        hue = LANG_HUE.get(lang.lower(), "#6E8A99")
-        ly = y + 58 + j * 18
-        rowsL += (f'<circle cx="{x + LANG_X}" cy="{ly - 4}" r="3.4" fill="{hue}"/>'
-                  f'<text class="mono" x="{x + LANG_X + 12}" y="{ly}" font-size="10.5"'
-                  f' fill="#9FBDB6">{esc(lang)} {pct:.0f}%</text>')
-        slices.append((b / total, hue))
-    rest = 1.0 - sum(f for f, _ in slices)
+    # No written rows any more - the ring says the names and the shares itself,
+    # so each slice carries its language along and the right-hand column is
+    # free for the artwork to push into.
+    slices = [(b / total, LANG_HUE.get(lang.lower(), "#6E8A99"), lang) for lang, b in top]
+    rest = 1.0 - sum(sl[0] for sl in slices)
     if rest > 0.005:
         slices.append((rest, LANG_REST))
 
-    px, pills = x + TEXT_X, ""
+    px, pills, stop = x + TEXT_X, "", x + RING_CX - RING_R - 8
     for lang, _ in top:
-        chip, w = _pill(px, y + 112, lang.lower())
+        chip, w = _pill(px, y + 99, lang.lower())
+        if px + w > stop:
+            break
         pills += chip
         px += w + 7
 
@@ -696,29 +734,27 @@ def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
   <g>
     <rect x="{x}" y="{y}" width="{CW}" height="{CH}" rx="10" fill="#050f0d"
           stroke="#00FF9C" stroke-opacity=".17"/>
-    <path d="M{x} {y + 27}h{CW}" stroke="#00FF9C" stroke-opacity=".12"/>
-    <circle cx="{x + 15}" cy="{y + 14}" r="3" fill="{'#00FF9C' if live else '#33534e'}"/>
-    <text class="mono" x="{x + 26}" y="{y + 18}" font-size="10.5" fill="#557a73">{esc(USER)}/{esc(repo)}</text>
-    <text class="mono" x="{x + CW - 15}" y="{y + 18}" font-size="9.5" text-anchor="end"
+
+    {_art(x, y, repo, TILE_TINT[i % len(TILE_TINT)])}
+
+    <circle cx="{x + TEXT_X + 4}" cy="{y + 16}" r="3" fill="{'#00FF9C' if live else '#33534e'}"/>
+    <text class="mono" x="{x + TEXT_X + 15}" y="{y + 20}" font-size="10.5"
+          fill="#557a73">{esc(USER)}/{esc(repo)}</text>
+    <text class="mono" x="{x + CW - 15}" y="{y + 20}" font-size="9.5" text-anchor="end"
           letter-spacing="1.2" fill="{'#00FF9C' if live else '#3f5f58'}"
           fill-opacity=".85">{'LIVE' if live else 'REPO'}</text>
 
-    {_tile(x + 16, y + 32, repo, TILE_TINT[i % len(TILE_TINT)])}
-
-    <text class="mono" x="{x + TEXT_X}" y="{y + 64}" font-size="15.5" font-weight="700"
+    <text class="mono" x="{x + TEXT_X}" y="{y + 62}" font-size="15.5" font-weight="700"
           fill="#E8FFF6">{esc(title)}<tspan fill="#00FF9C" fill-opacity=".75">_</tspan></text>
-    <text class="mono" x="{x + TEXT_X}" y="{y + 88}" font-size="11.5"
+    <text class="mono" x="{x + TEXT_X}" y="{y + 84}" font-size="11.5"
           fill="#7f9c96">{esc(_clip_text(blurb, BLURB_CH))}</text>
     {pills}
-    <text class="mono" x="{x + TEXT_X}" y="{y + 156}" font-size="10.5" fill="#557a73"
+    <text class="mono" x="{x + TEXT_X}" y="{y + 158}" font-size="10.5" fill="#557a73"
           xml:space="preserve">★ {meta.get('stars', 0)}   {esc(_ago(meta.get('pushed')))}</text>
-    <text class="mono" x="{x + CW - 15}" y="{y + 156}" font-size="9.5" text-anchor="end"
+    <text class="mono" x="{x + CW - 15}" y="{y + 158}" font-size="9.5" text-anchor="end"
           letter-spacing="1.3" fill="#3ddc97" fill-opacity=".75">{esc(tag)}</text>
 
-    {rowsL}
-    {_donut(x + CW - 62, y + 112, 26, slices, 0.25 + i * 0.09)}
-    <text class="mono" x="{x + CW - 62}" y="{y + 117}" font-size="13" font-weight="700"
-          text-anchor="middle" fill="#E8FFF6">{(100.0 * top[0][1] / total) if top else 0:.0f}%</text>
+    {_donut(x + RING_CX, y + RING_CY, RING_R, slices, 0.25 + i * 0.09)}
   </g>'''
 
 
@@ -746,6 +782,7 @@ def build_project_cards(index):
             f'<defs><pattern id="sc" width="4" height="4" patternUnits="userSpaceOnUse">'
             f'<rect width="4" height="1" fill="#7fffd4" fill-opacity=".03"/></pattern>'
             f'<clipPath id="cw"><rect x="2" y="2" width="{CW}" height="{CH}" rx="10"/></clipPath>'
+            f'<clipPath id="art"><path d="{_art_clip_path(2, 2)}"/></clipPath>'
             f'{_tile_defs(repo)}</defs>{_CARD_CSS}'
             f'{_card(i, repo, title, tag, blurb, index.get(repo, {}))}'
             f'<g clip-path="url(#cw)"><rect width="{W}" height="{H}" fill="url(#sc)"/></g>'
