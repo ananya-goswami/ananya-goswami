@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Builds the profile panels - stats, featured projects, and the contribution runner."""
+import io
 import json
 import math
 import os
+import re
 import random
 import urllib.request
 from datetime import datetime, timezone
@@ -302,68 +304,47 @@ def _pill(x, y, text):
 
 
 def _donut(cx, cy, r, slices, delay):
-    """The language ring: one arc per language, drawn in, then read out.
+    """The language ring: one arc per language, drawn in on load, and silent.
 
-    The written rows this used to sit beside are gone, so the ring has to
-    carry the names and the percentages itself.  Hover cannot do it - a README
-    image is served as <img>, and SVG in an <img> gets no pointer events at
-    all, so :hover never fires no matter how the CSS is written.  What does
-    work inside an <img> is declarative animation, so the ring cycles instead:
-    each language in turn lights its own arc and names itself in the middle,
-    and the rest dim back.  Same information, no pointer required.
+    The names and the shares are not in here.  They are only meant to show
+    under the pointer, and nothing inside this file can wait for a pointer:
+    a README image is served as <img>, and SVG in an <img> receives no pointer
+    events at all, so :hover never fires however the CSS is written.  The one
+    thing GitHub's sanitiser does keep is title= on the anchor and the image
+    round the card, which the browser turns into a real hover tooltip.  So the
+    readout lives in the README instead, written by _write_readme_titles below
+    from this same index, and the ring is just the chart.
 
     stroke-dasharray places each arc and stroke-dashoffset walks it round, so
     the whole ring is one circle element per slice and no path maths.
     """
     circ = 2 * math.pi * r
-    named = [sl for sl in slices if len(sl) > 2]          # the rest slice has no name
-    span = max(len(named), 1) * RING_STEP
     out = [f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="#0C221E"'
            f' stroke-width="{RING_W}"/>']
-
-    def _window(i):
-        """opacity keyTimes for the i-th language's turn in the cycle."""
-        a, b = i * RING_STEP / span, (i + 1) * RING_STEP / span
-        fade = min(0.22 * RING_STEP / span, (b - a) / 2.5)
-        ks = [0.0, max(a - fade, 0.0), a + fade, b - fade, min(b + fade, 1.0), 1.0]
-        for j in range(1, len(ks)):                       # keyTimes must not go back
-            ks[j] = max(ks[j], ks[j - 1])
-        return ";".join(f"{k:.4f}" for k in ks)
-
-    off, ni = 0.0, 0
+    off = 0.0
     for sl in slices:
         frac, col = sl[0], sl[1]
         arc = circ * frac
-        lit = ""
-        if len(sl) > 2:
-            lit = (f'<animate attributeName="stroke-opacity"'
-                   f' values=".34;.34;1;1;.34;.34" keyTimes="{_window(ni)}"'
-                   f' dur="{span:.2f}s" begin="{delay + 0.9:.2f}s" repeatCount="indefinite"/>')
-            ni += 1
         out.append(
             f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{col}"'
-            f' stroke-width="{RING_W}" stroke-opacity="{1 if len(sl) < 3 else .34}"'
+            f' stroke-width="{RING_W}"'
             f' stroke-dasharray="{arc:.2f} {circ - arc:.2f}" stroke-dashoffset="{-off:.2f}"'
             f' transform="rotate(-90 {cx} {cy})">'
             f'<animate attributeName="stroke-dasharray" values="0 {circ:.2f};{arc:.2f} {circ - arc:.2f}"'
             f' dur="0.9s" begin="{delay:.2f}s" fill="freeze" calcMode="spline"'
-            f' keyTimes="0;1" keySplines=".4 0 .2 1"/>{lit}</circle>')
+            f' keyTimes="0;1" keySplines=".4 0 .2 1"/></circle>')
         off += arc
-
-    # The readout. Two lines, both inside the ring: the name small above the
-    # middle, the share large below it.  A name longer than the ring is wide
-    # gets clipped rather than drawn over the arc.
-    for i, (frac, col, name) in enumerate(named):
-        short = name if len(name) <= 10 else name[:9] + "…"
-        out.append(
-            f'<g opacity="0"><animate attributeName="opacity"'
-            f' values="0;0;1;1;0;0" keyTimes="{_window(i)}" dur="{span:.2f}s"'
-            f' begin="{delay + 0.9:.2f}s" repeatCount="indefinite"/>'
-            f'<text class="mono" x="{cx}" y="{cy - 4}" font-size="7.5"'
-            f' text-anchor="middle" fill="{col}">{esc(short)}</text>'
-            f'<text class="mono" x="{cx}" y="{cy + 13}" font-size="15.5" font-weight="700"'
-            f' text-anchor="middle" fill="#E8FFF6">{100.0 * frac:.0f}%</text></g>')
     return "".join(out)
+
+
+def _lang_summary(meta):
+    """"JavaScript 67% - CSS 16% - Python 15%", or "" with nothing to say."""
+    by = meta.get("bytes") or {}
+    total = sum(by.values())
+    if not total:
+        return ""
+    top = sorted(by.items(), key=lambda kv: -kv[1])[:3]
+    return "  ·  ".join(f"{lang} {100.0 * b / total:.0f}%" for lang, b in top)
 
 
 # The fallback mark, for a project with no artwork of its own.  Built on a
@@ -698,7 +679,6 @@ BLURB_CH = 27                            # what fits before the ring, at 11.5px
 # The ring moved in from the edge and grew, because it is now the only thing
 # carrying the language breakdown - the written rows are gone.
 RING_CX, RING_CY, RING_R, RING_W = CW - 74, 96, 32, 9
-RING_STEP = 2.2                          # seconds each language holds the ring
 
 # Leave this alone unless a stale image is genuinely stuck.
 #
@@ -762,6 +742,69 @@ def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
 
     {_donut(x + RING_CX, y + RING_CY, RING_R, slices, 0.25 + i * 0.09)}
   </g>'''
+
+
+# ------------------------------------------------------------ the hover readout
+# The percentages have to sit in the README, not in the card, because only the
+# README gets a pointer.  Everything else that could carry a hover is stripped
+# by GitHub's sanitiser - inline <svg>, <object>, <iframe>, <embed>, <style>,
+# usemap, even title= on <abbr>.  What survives, checked against the markdown
+# API, is title= on the <a> and on the <img>, which the browser shows as an
+# ordinary tooltip.  So CI rewrites those two attributes on every run and the
+# numbers stay as fresh as the cards do.
+README = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__)))), "readme.md")
+
+
+def _set_attr(tag, name, value):
+    """Replace name="..." in one tag, or add it after the tag's first attribute."""
+    pat = re.compile(r'\s' + name + r'="[^"]*"')
+    if pat.search(tag):
+        return pat.sub(f' {name}="{value}"', tag, count=1)
+    cut = tag.index('"', tag.index('="') + 2) + 1
+    return tag[:cut] + f' {name}="{value}"' + tag[cut:]
+
+
+def _write_readme_titles(index, path=README):
+    """Put each project's language split in its card's hover tooltip.
+
+    Rewrites in memory and checks the result before opening the file for
+    writing, because a half-failed rewrite once truncated this README to
+    nothing: open(...,"w") empties the file whether or not the write lands.
+    """
+    if not os.path.exists(path):
+        print("readme titles skipped: no", path)
+        return
+    text = io.open(path, encoding="utf-8").read()
+    out, hit = text, 0
+    for repo, title, _tag, _blurb in FEATURED:
+        summary = _lang_summary(index.get(repo, {}))
+        if not summary:
+            continue
+        tip = f"{title}  —  {summary}"
+        row = re.compile(r'<a\s[^>]*>\s*<img\s[^>]*proj-' + re.escape(CARD_REV)
+                         + '-' + re.escape(repo) + r'\.svg[^>]*>')
+        m = row.search(out)
+        if not m:
+            print("readme titles: no card row for", repo)
+            continue
+        a, img = m.group(0).split("<img", 1)
+        fixed = (_set_attr(a.rstrip(), "title", esc(tip))
+                 + _set_attr("<img" + img, "title", esc(tip)))
+        out = out[:m.start()] + fixed + out[m.end():]
+        hit += 1
+
+    if hit != len(FEATURED):
+        print(f"readme titles: only {hit}/{len(FEATURED)} rows matched, leaving it alone")
+        return
+    if len(out) < len(text) * 0.9 or "<table>" not in out:
+        print("readme titles: result looks wrong, leaving it alone")
+        return
+    if out == text:
+        print("readme titles: already current")
+        return
+    io.open(path, "w", encoding="utf-8", newline="\n").write(out)
+    print(f"readme titles: updated {hit} cards")
 
 
 _CARD_CSS = '''<style>
@@ -1728,6 +1771,8 @@ if __name__ == "__main__":
     # One file per project, because the README wraps each in its own link.
     for name, svg in build_project_cards(data["index"]).items():
         open(os.path.join(out_dir, name), "w", encoding="utf-8").write(svg)
+    # The ring is silent, so the languages ride in the README's hover tooltip.
+    _write_readme_titles(data["index"])
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
