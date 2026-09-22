@@ -320,9 +320,14 @@ def _donut(cx, cy, r, slices, delay):
     for sl in slices:
         frac, col = sl[0], sl[1]
         arc = circ * frac
+        # The name and the share ride along as data- attributes.  They do
+        # nothing in the README, where this is a flat <img>, but the live page
+        # inlines the same file and reads them off each arc.
+        tag = (f' class="arc" data-lang="{esc(sl[2])}" data-pct="{100.0 * frac:.0f}"'
+               if len(sl) > 2 else ' data-rest="1"')
         out.append(
             f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{col}"'
-            f' stroke-width="{RING_W}"'
+            f' stroke-width="{RING_W}"{tag}'
             f' stroke-dasharray="{arc:.2f} {circ - arc:.2f}" stroke-dashoffset="{-off:.2f}"'
             f' transform="rotate(-90 {cx} {cy})">'
             f'<animate attributeName="stroke-dasharray" values="0 {circ:.2f};{arc:.2f} {circ - arc:.2f}"'
@@ -809,6 +814,135 @@ def _write_readme_titles(index, path=README):
     print(f"readme titles: updated {hit} cards")
 
 
+# ---------------------------------------------------------------- the live page
+# The one thing a README cannot do: point at one arc of a ring and have that
+# arc answer.  Inside a README the card is an <img>, which is a flat rectangle
+# with no interior.  Here the very same file is inlined into the document, so
+# every arc is a real <circle> again - it takes the pointer, it can highlight,
+# and it can say only its own language.  Nothing is redrawn for this page; it
+# is the same nine cards, given a document to live in.
+PAGES_URL = f"https://{USER}.github.io/{USER}/"
+FULL_NAME = "Ananya Goswami"
+
+
+def _namespace_ids(svg, tag):
+    """Nine cards in one document would otherwise share ids.
+
+    Each card defines its own clip paths and gradients, and url(#art) resolves
+    against the whole document - so without this every card after the first
+    would be clipped by the first one's shape.
+    """
+    for i in sorted(set(re.findall(r'\sid="([A-Za-z][\w-]*)"', svg)), key=len, reverse=True):
+        svg = (svg.replace(f'id="{i}"', f'id="{i}-{tag}"')
+                  .replace(f'url(#{i})', f'url(#{i}-{tag})')
+                  .replace(f'xlink:href="#{i}"', f'xlink:href="#{i}-{tag}"'))
+    return svg
+
+
+PAGE_CSS = """
+:root { --bg:#0d1117; --panel:#050f0d; --edge:#00ff9c; --ink:#e8fff6; --dim:#7f9c96; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); padding:32px 16px 72px;
+       font-family: ui-monospace,"SF Mono","JetBrains Mono",Consolas,monospace; }
+header { max-width:1180px; margin:0 auto 26px; }
+h1 { font-size:20px; margin:0 0 6px; letter-spacing:.5px; }
+header p { margin:0; color:var(--dim); font-size:13px; line-height:1.6; }
+.grid { max-width:1180px; margin:0 auto; display:grid; gap:18px;
+        grid-template-columns:repeat(auto-fit,minmax(430px,1fr)); }
+.card svg { width:100%; height:auto; display:block; }
+.card { position:relative; }
+.card .go { position:absolute; inset:0; }
+.arc { cursor:pointer; transition:stroke-opacity .14s, stroke-width .14s; }
+.ring-on .arc { stroke-opacity:.28; }
+.arc.hot { stroke-opacity:1; stroke-width:13; }
+.open { display:block; margin:8px 2px 0; font-size:11.5px; color:var(--dim);
+        text-decoration:none; }
+.open:hover { color:var(--edge); }
+#tip { position:fixed; z-index:9; pointer-events:none; opacity:0;
+       transform:translate(-50%,-140%); transition:opacity .12s;
+       background:#0b1f1b; color:var(--ink); border:1px solid rgba(0,255,156,.45);
+       border-radius:7px; padding:6px 11px; font-size:13px; white-space:nowrap;
+       box-shadow:0 8px 24px rgba(0,0,0,.55); }
+#tip.on { opacity:1; }
+#tip b { color:var(--edge); font-weight:700; }
+@media (max-width:520px){ .grid{grid-template-columns:1fr} body{padding:20px 10px 48px} }
+"""
+
+PAGE_JS = """
+const tip = document.getElementById('tip');
+let locked = null;
+
+function show(arc, x, y) {
+  tip.innerHTML = arc.dataset.lang + ' <b>' + arc.dataset.pct + '%</b>';
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  tip.classList.add('on');
+}
+function clear(svg) {
+  svg.classList.remove('ring-on');
+  svg.querySelectorAll('.arc.hot').forEach(a => a.classList.remove('hot'));
+}
+
+document.querySelectorAll('.card svg').forEach(svg => {
+  const arcs = svg.querySelectorAll('.arc');
+  if (!arcs.length) return;
+  arcs.forEach(arc => {
+    arc.addEventListener('pointermove', e => {
+      if (locked && locked !== arc) return;
+      svg.classList.add('ring-on');
+      arcs.forEach(a => a.classList.toggle('hot', a === arc));
+      show(arc, e.clientX, e.clientY);
+    });
+    // A click keeps one arc up, so it can be read without holding still.
+    arc.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      if (locked === arc) { locked = null; clear(svg); tip.classList.remove('on'); return; }
+      document.querySelectorAll('.card svg').forEach(clear);
+      locked = arc;
+      svg.classList.add('ring-on'); arc.classList.add('hot');
+      show(arc, e.clientX, e.clientY);
+    });
+  });
+  svg.addEventListener('pointerleave', () => {
+    if (locked && svg.contains(locked)) return;
+    clear(svg); tip.classList.remove('on');
+  });
+});
+
+document.addEventListener('click', () => {
+  if (!locked) return;
+  const svg = locked.ownerSVGElement;
+  locked = null; clear(svg); tip.classList.remove('on');
+});
+"""
+
+
+def build_pages(index, cards):
+    """One page, the nine cards inlined, every arc alive."""
+    blocks = []
+    for repo, title, _tag, _blurb in FEATURED:
+        svg = cards.get(f"proj-{CARD_REV}-{repo}.svg")
+        if not svg:
+            continue
+        svg = _namespace_ids(svg, repo.replace("_", "-").lower())
+        svg = svg.replace('<svg ', '<svg class="live" ', 1)
+        svg = re.sub(r'\swidth="\d+" height="\d+"', "", svg, count=1)
+        home = (index.get(repo, {}).get("homepage") or "").strip()
+        link = (f'<a class="open" href="{esc(home)}" target="_blank" rel="noopener">'
+                f'open {esc(title)} \u2197</a>') if home else ""
+        blocks.append(f'<div class="card">{svg}{link}</div>')
+
+    return (f'<!doctype html><html lang="en"><head><meta charset="utf-8">'
+            f'<meta name="viewport" content="width=device-width,initial-scale=1">'
+            f'<title>{esc(FULL_NAME)} \u2014 projects</title>'
+            f'<style>{PAGE_CSS}</style></head><body>'
+            f'<header><h1>{esc(FULL_NAME)} / projects</h1>'
+            f'<p>The same nine cards as the profile. Here the rings are live: '
+            f'point at one colour to see just that language and its share, '
+            f'click to keep it up.</p></header>'
+            f'<div class="grid">{"".join(blocks)}</div>'
+            f'<div id="tip"></div><script>{PAGE_JS}</script></body></html>\n')
+
+
 _CARD_CSS = '''<style>
   .mono { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }
 </style>'''
@@ -836,7 +970,8 @@ def build_project_cards(index):
             f'<clipPath id="art"><path d="{_art_clip_path(2, 2)}"/></clipPath>'
             f'{_tile_defs(repo)}</defs>{_CARD_CSS}'
             f'{_card(i, repo, title, tag, blurb, index.get(repo, {}))}'
-            f'<g clip-path="url(#cw)"><rect width="{W}" height="{H}" fill="url(#sc)"/></g>'
+            f'<g clip-path="url(#cw)" pointer-events="none">'
+            f'<rect width="{W}" height="{H}" fill="url(#sc)"/></g>'
             f'</svg>\n')
     return out
 
@@ -1771,8 +1906,12 @@ if __name__ == "__main__":
     os.makedirs(out_dir, exist_ok=True)
     open(OUT, "w", encoding="utf-8").write(build(data, g))
     # One file per project, because the README wraps each in its own link.
-    for name, svg in build_project_cards(data["index"]).items():
+    cards = build_project_cards(data["index"])
+    for name, svg in cards.items():
         open(os.path.join(out_dir, name), "w", encoding="utf-8").write(svg)
+    # ...and the same nine inlined into a page, where the arcs are elements.
+    open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8").write(
+        build_pages(data["index"], cards))
     # The ring is silent; the languages ride in the card's own tooltip.
     _write_readme_titles(data["index"])
     if g.get("weeks"):

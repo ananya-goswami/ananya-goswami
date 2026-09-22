@@ -36,6 +36,12 @@
 <a href="https://g-ananya.netlify.app/" title="HTML 100%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-Portfolio.svg" title="HTML 100%" width="49%" alt="Portfolio" /></a>
 </p>
 
+<div align="center">
+
+[`$ open ~/projects --interactive`](https://ananya-goswami.github.io/ananya-goswami/)
+
+</div>
+
 <br/>
 
 <div align="center">
