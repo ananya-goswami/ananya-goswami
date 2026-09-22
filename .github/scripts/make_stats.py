@@ -1027,8 +1027,8 @@ V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 48.0, 22.0
 EAT = 3.0                            # a readable set of bites, not a rapid flicker
 LEAF_GAP = 39.0                      # smaller leaf halts with its edge at the mouth
 # Flipbook speeds. Each is the time for one full loop of that character's cycle.
-# Her cycle is derived below from the articulated leg geometry and the panel's
-# ground speed, once LEG_H and SWING_LEG have been declared.
+# Her cycle is derived below from the avatar's measured contact stride and the
+# panel's ground speed.
 RUN_SPEED = ((VB_W + 120.0) - (-120.0)) / 18.0
 JD_MAX, LIFT_MAX = 1.08, 184.0
 JUMP_SAMPLE_DT = 1.0 / 50.0
@@ -1560,7 +1560,7 @@ def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
 
 # ---------------------------------------------------------------- her, from the supplied avatar
 AVATAR_SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                 "..", "..", "assets", "runner-avatar-sheet-v3.png")
+                                 "..", "..", "assets", "runner-avatar-sheet-v4.png")
 AVATAR_COLS, AVATAR_ROWS = 4, 4
 AVATAR_CELL = 362.0
 AVATAR_SCALE = GIRL_TARGET_H / AVATAR_CELL
@@ -1596,16 +1596,18 @@ def avatar_frames():
     if cw != int(AVATAR_CELL) or ch != int(AVATAR_CELL):
         raise ValueError(f"runner avatar cells must be {int(AVATAR_CELL)}px square")
 
-    # A real cycle changes the planted leg at its midpoint. The second four
-    # frames are required to contain the exact exchanged lower-limb geometry
-    # of the first four; a sheet with one permanently leading leg is rejected.
+    # Each second-half pose must exchange the visible leg, but must not be an
+    # automatic horizontal reflection: reflecting the lower body also turns
+    # both shoes backwards. This guard prevents that exact regression.
     for i in range(4):
         first = src.crop((i * cw, RUN_LIMB_SPLIT_Y,
                           (i + 1) * cw, ch))
         opposite = src.crop((i * cw, ch + RUN_LIMB_SPLIT_Y,
                              (i + 1) * cw, 2 * ch))
-        if ImageChops.difference(ImageOps.mirror(first), opposite).getbbox():
-            raise ValueError(f"runner frame {i + 4} does not exchange both legs")
+        if ImageChops.difference(first, opposite).getbbox() is None:
+            raise ValueError(f"runner frame {i + 4} does not exchange legs")
+        if ImageChops.difference(ImageOps.mirror(first), opposite).getbbox() is None:
+            raise ValueError(f"runner frame {i + 4} mirrors the shoes backwards")
 
     for i in range(AVATAR_COLS * AVATAR_ROWS):
         col, row = i % AVATAR_COLS, i // AVATAR_COLS
@@ -1642,7 +1644,7 @@ def avatar_frame(i, baseline):
 
 
 def avatar_run(cycle, baseline):
-    """Eight poses: contact/down/pass/up, then the exact opposite-leg half."""
+    """Eight poses: contact/down/pass/up, then the opposite-leg half."""
     return flipbook([avatar_frame(i, baseline) for i in range(8)], cycle)
 
 
@@ -1686,9 +1688,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v5.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v6.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v5.svg")
+        print("wrote runner-v6.svg")
     else:
         print("no calendar data - runner panel skipped")
     print("panels:", data["repos"], "repos,", data["deployed"], "live,", g.get("contributions"), "contributions")
