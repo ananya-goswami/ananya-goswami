@@ -8,7 +8,7 @@
 
 <br/><br/>
 
-<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/runner-v6.svg" width="100%" alt="contribution runner" />
+<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/runner-v7.svg" width="100%" alt="contribution runner" />
 
 <br/><br/>
 
