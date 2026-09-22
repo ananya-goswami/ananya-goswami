@@ -21,19 +21,24 @@
 </div>
 
 <p>
-<a href="https://fln-animation-toolkit.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-fln-animation-toolkit.svg" width="49%" alt="FLN Animation Kit" /></a>&nbsp;<a href="https://aaru-ki-cheenk.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-aaru_ki_cheenk.svg" width="49%" alt="Aaru Ki Cheenk" /></a>
+<a href="https://fln-animation-toolkit.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-fln-animation-toolkit.svg" width="49%" alt="FLN Animation Kit" /></a>&nbsp;<a href="https://aaru-ki-cheenk.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-aaru_ki_cheenk.svg" width="49%" alt="Aaru Ki Cheenk" /></a><br />
+<!--langs:fln-animation-toolkit--><!--/langs:fln-animation-toolkit-->&nbsp;<!--langs:aaru_ki_cheenk--><!--/langs:aaru_ki_cheenk-->
 </p>
 <p>
-<a href="https://ch1-keywords-mocha.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-Keyword-class9.svg" width="49%" alt="Tactic Decoder" /></a>&nbsp;<a href="https://feeling-wheel-tap.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-feeling-wheel-tap.svg" width="49%" alt="Feeling Wheel Tap" /></a>
+<a href="https://ch1-keywords-mocha.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-Keyword-class9.svg" width="49%" alt="Tactic Decoder" /></a>&nbsp;<a href="https://feeling-wheel-tap.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-feeling-wheel-tap.svg" width="49%" alt="Feeling Wheel Tap" /></a><br />
+<!--langs:Keyword-class9--><!--/langs:Keyword-class9-->&nbsp;<!--langs:feeling-wheel-tap--><!--/langs:feeling-wheel-tap-->
 </p>
 <p>
-<a href="https://think-ask-act-builder.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-think-ask-act.svg" width="49%" alt="Think Ask Act" /></a>&nbsp;<a href="https://real-or-fake-sender.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-real-or-fake-sender.svg" width="49%" alt="Real or Fake Sender" /></a>
+<a href="https://think-ask-act-builder.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-think-ask-act.svg" width="49%" alt="Think Ask Act" /></a>&nbsp;<a href="https://real-or-fake-sender.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-real-or-fake-sender.svg" width="49%" alt="Real or Fake Sender" /></a><br />
+<!--langs:think-ask-act--><!--/langs:think-ask-act-->&nbsp;<!--langs:real-or-fake-sender--><!--/langs:real-or-fake-sender-->
 </p>
 <p>
-<a href="https://calm-or-react.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-calm-or-react.svg" width="49%" alt="Calm or React" /></a>&nbsp;<a href="https://ananya-goswami.github.io/Competition-Zone/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-Competition-Zone.svg" width="49%" alt="Competition Zone" /></a>
+<a href="https://calm-or-react.vercel.app"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-calm-or-react.svg" width="49%" alt="Calm or React" /></a>&nbsp;<a href="https://ananya-goswami.github.io/Competition-Zone/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-Competition-Zone.svg" width="49%" alt="Competition Zone" /></a><br />
+<!--langs:calm-or-react--><!--/langs:calm-or-react-->&nbsp;<!--langs:Competition-Zone--><!--/langs:Competition-Zone-->
 </p>
 <p>
-<a href="https://g-ananya.netlify.app/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-Portfolio.svg" width="49%" alt="Portfolio" /></a>
+<a href="https://g-ananya.netlify.app/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-Portfolio.svg" width="49%" alt="Portfolio" /></a><br />
+<!--langs:Portfolio--><!--/langs:Portfolio-->
 </p>
 
 <br/>
