@@ -731,110 +731,82 @@ def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
   </g>'''
 
 
-# ------------------------------------------------------------- the hover dots
-# Hovering one arc of the ring is not possible.  The ring is drawn inside the
-# card image, a README image is served as <img>, and an <img> exposes no
-# regions - the whole picture is a single hover target.  Everything that could
-# scope a tooltip to part of it is removed by GitHub's sanitiser: inline <svg>
-# with a <title> per arc, <object>, <embed>, <iframe>, <map> and <area>, and
-# author CSS.  All seven were checked against the markdown API.
+# ------------------------------------------------------------ the hover readout
+# What is wanted here is per-arc: point at the blue part of the ring, get that
+# language and its share.  That is not available, and it is worth writing down
+# why so it is not attempted a fourth time.
 #
-# One <img> can carry one tooltip, so the languages get one small image each:
-# a row of dots under the card, in the ring's own colours, sitting beneath the
-# ring because the widths are chosen to put them there.  Each dot names only
-# its language and its share.
+# A tooltip attaches to an element.  In a README the only elements are whole
+# images: GitHub serves SVG through <img>, which is one flat rectangle with no
+# interior, so the arcs are pixels rather than shapes.  Every way of getting a
+# live document or a region map in was checked against the markdown API and
+# every one is stripped - inline <svg> with a <title> per arc, <object>,
+# <embed>, <iframe>, <map>, <area>, and author CSS.
+#
+# Giving an arc its own hover therefore means giving it its own image, and an
+# image is visible.  With no visual change allowed, nothing is left to hang it
+# on but the card itself - so the card carries one tooltip naming all of the
+# languages at once.  Less than per-arc, and the most that exists.
 README = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))), "readme.md")
-RAW = f"https://raw.githubusercontent.com/{USER}/{USER}/output"
-DOT_PCT = 3                              # % of the page per dot, so it can be hit
-DOT_H = 10                               # px
 
 
-def _lang_slices(meta):
-    """(fraction, colour, label) for the named languages, widest first.
-
-    The ring's fourth slice - everything past the top three - is left out.  It
-    is usually a percent or two, and "other" is not a language anyway.  The
-    ring keeps it so the circle still adds up.
-    """
+def _lang_summary(meta):
+    """"HTML 92%  .  Python 8%", or "" when there is nothing to say."""
     by = meta.get("bytes") or {}
     total = sum(by.values())
     if not total:
-        return []
-    top = sorted(by.items(), key=lambda kv: -kv[1])[:3]
-    return [(b / total, LANG_HUE.get(lang.lower(), "#6E8A99"), lang) for lang, b in top]
-
-
-def dot_swatches(index):
-    """One tiny file per colour, plus the spacer that positions the row."""
-    out = {"dot-gap.svg": ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"'
-                           ' role="presentation"></svg>\n')}
-    for repo, *_ in FEATURED:
-        for _frac, col, _name in _lang_slices(index.get(repo, {})):
-            out[f"dot-{col.lstrip('#').lower()}.svg"] = (
-                f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" role="img">'
-                f'<circle cx="5" cy="5" r="4.2" fill="{col}"/></svg>\n')
-    return out
-
-
-def _dots(href, meta, card_pct):
-    """The row under one card: a spacer, then one dot per language.
-
-    The dots are percentages rather than pixels so the row adds up to exactly
-    the card's own width and the next card's row starts where its card does.
-    The spacer takes whatever is left, which puts the dots hard against the
-    right-hand end - under the ring, which is where they belong.
-    """
-    slices = _lang_slices(meta)
-    if not slices:
         return ""
-    gap = card_pct - DOT_PCT * len(slices)
-    parts = [f'<img src="{RAW}/dot-gap.svg" width="{gap}%" height="{DOT_H}" alt="" />']
-    for frac, col, name in slices:
-        tip = esc(f"{name} {100.0 * frac:.0f}%")
-        parts.append(f'<a href="{esc(href)}" title="{tip}">'
-                     f'<img src="{RAW}/dot-{col.lstrip("#").lower()}.svg"'
-                     f' width="{DOT_PCT}%" height="{DOT_H}" title="{tip}" alt="{tip}" /></a>')
-    return "".join(parts)
+    top = sorted(by.items(), key=lambda kv: -kv[1])[:3]
+    return "  ·  ".join(f"{lang} {100.0 * b / total:.0f}%" for lang, b in top)
+
+
+def _set_attr(tag, name, value):
+    """Replace name="..." in one tag, or add it after the tag's first attribute."""
+    pat = re.compile(r'\s' + name + r'="[^"]*"')
+    if pat.search(tag):
+        return pat.sub(f' {name}="{value}"', tag, count=1)
+    cut = tag.index('"', tag.index('="') + 2) + 1
+    return tag[:cut] + f' {name}="{value}"' + tag[cut:]
 
 
 def _write_readme_titles(index, path=README):
-    """Fill each card's <!--langs:repo--> marker with its row of dots.
+    """Put each card's language split in its own tooltip, and nothing on screen.
 
     Rewrites in memory and checks the result before opening the file for
     writing, because a half-failed rewrite once truncated this README to
     nothing: open(...,"w") empties the file whether or not the write lands.
     """
     if not os.path.exists(path):
-        print("readme dots skipped: no", path)
+        print("readme titles skipped: no", path)
         return
     text = io.open(path, encoding="utf-8").read()
     out, hit = text, 0
     for repo, _title, _tag, _blurb in FEATURED:
-        card = re.search(r'<a href="([^"]+)"><img src="[^"]*proj-'
-                         + re.escape(CARD_REV) + '-' + re.escape(repo)
-                         + r'\.svg"[^>]*width="(\d+)%"', out)
-        slot = re.search("<!--langs:" + re.escape(repo) + "-->.*?<!--/langs:"
-                         + re.escape(repo) + "-->", out, re.S)
-        if not card or not slot:
-            print("readme dots: no card or slot for", repo)
+        tip = esc(_lang_summary(index.get(repo, {})))
+        row = re.compile(r'<a\s+href="[^"]+"[^>]*>\s*<img\s[^>]*proj-'
+                         + re.escape(CARD_REV) + '-' + re.escape(repo) + r'\.svg"[^>]*>')
+        m = row.search(out)
+        if not m or not tip:
+            print("readme titles: nothing to do for", repo)
             continue
-        row = _dots(card.group(1), index.get(repo, {}), int(card.group(2)))
-        out = (out[:slot.start()] + f"<!--langs:{repo}-->" + row
-               + f"<!--/langs:{repo}-->" + out[slot.end():])
+        a, img = m.group(0).split("<img", 1)
+        fixed = (_set_attr(a.rstrip(), "title", tip)
+                 + _set_attr("<img" + img, "title", tip))
+        out = out[:m.start()] + fixed + out[m.end():]
         hit += 1
 
     if hit != len(FEATURED):
-        print(f"readme dots: only {hit}/{len(FEATURED)} slots filled, leaving it alone")
+        print(f"readme titles: only {hit}/{len(FEATURED)} cards matched, leaving it alone")
         return
-    if len(out) < len(text) * 0.8 or "<!--langs:" not in out:
-        print("readme dots: result looks wrong, leaving it alone")
+    if len(out) < len(text) * 0.8 or "proj-" + CARD_REV not in out:
+        print("readme titles: result looks wrong, leaving it alone")
         return
     if out == text:
-        print("readme dots: already current")
+        print("readme titles: already current")
         return
     io.open(path, "w", encoding="utf-8", newline="\n").write(out)
-    print(f"readme dots: updated {hit} cards")
+    print(f"readme titles: updated {hit} cards")
 
 
 _CARD_CSS = '''<style>
@@ -1801,9 +1773,7 @@ if __name__ == "__main__":
     # One file per project, because the README wraps each in its own link.
     for name, svg in build_project_cards(data["index"]).items():
         open(os.path.join(out_dir, name), "w", encoding="utf-8").write(svg)
-    # The ring is silent; the languages are named by the dots under the card.
-    for name, svg in dot_swatches(data["index"]).items():
-        open(os.path.join(out_dir, name), "w", encoding="utf-8").write(svg)
+    # The ring is silent; the languages ride in the card's own tooltip.
     _write_readme_titles(data["index"])
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
