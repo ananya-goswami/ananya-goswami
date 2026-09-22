@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="robots" content="noindex,nofollow" />
+<title>opening…</title>
+<style>
+  html,body { height:100%; margin:0; }
+  body {
+    background:#0b1219; color:#9BE7C4; display:flex; align-items:center; justify-content:center;
+    font:600 14px/1.6 ui-monospace,"SF Mono","JetBrains Mono",Consolas,monospace; letter-spacing:1px;
+  }
+  a { color:#8FD4F5; }
+  .dot { animation:blink 1.1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity:0 } }
+  #manual { display:none; margin-top:14px; font-weight:500; letter-spacing:.4px; }
+</style>
+</head>
+<body>
+<div style="text-align:center">
+  <div>opening project<span class="dot">_</span></div>
+  <div id="manual"><a id="link" href="#">open it here</a></div>
+</div>
+<script>
+(function () {
+  // Only ever forward to Ananya's own deployments. Keeps this from being an open
+  // redirect that someone else could point at a phishing page.
+  var ALLOWED = [
+    /^([a-z0-9-]+\.)*vercel\.app$/i,
+    /^([a-z0-9-]+\.)*netlify\.app$/i,
+    /^ananya-goswami\.github\.io$/i
+  ];
+
+  var raw = new URLSearchParams(location.search).get('to') || '';
+  var url = null;
+  try { url = new URL(raw); } catch (e) {}
+
+  var ok = url
+    && (url.protocol === 'https:' || url.protocol === 'http:')
+    && ALLOWED.some(function (re) { return re.test(url.hostname); });
+
+  if (!ok) { location.replace('https://github.com/ananya-goswami'); return; }
+
+  var target = url.href;
+
+  // The click on GitHub carries user activation through this navigation, so the
+  // browser lets us open a real tab here. Then we step this tab back to the
+  // profile, which comes out of bfcache exactly where they left it.
+  var opened = null;
+  try { opened = window.open(target, '_blank'); } catch (e) {}
+
+  if (opened) {
+    try { opened.opener = null; } catch (e) {}
+    if (history.length > 1) { history.back(); }
+    else { document.title = 'opened'; showManual(target); }
+    // If back didn't take (no referrer history), leave them a way through.
+    setTimeout(function () { showManual(target); }, 600);
+  } else {
+    // Popup blocked, or a browser that drops activation across navigation:
+    // behave exactly like a normal link and use this tab.
+    location.replace(target);
+  }
+
+  function showManual(href) {
+    var a = document.getElementById('link');
+    a.href = href;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    document.getElementById('manual').style.display = 'block';
+  }
+})();
+</script>
+<noscript>
+  <p>JavaScript is off. <a id="ns" href="https://github.com/ananya-goswami">Back to the profile</a></p>
+</noscript>
+</body>
+</html>
