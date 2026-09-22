@@ -1570,17 +1570,17 @@ def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
 
 # ---------------------------------------------------------------- her, from the supplied avatar
 AVATAR_SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                 "..", "..", "assets", "runner-avatar-sheet-v4.png")
+                                 "..", "..", "assets", "runner-avatar-sheet-v5.png")
 AVATAR_COLS, AVATAR_ROWS = 4, 4
 AVATAR_CELL = 362.0
 AVATAR_SCALE = GIRL_TARGET_H / AVATAR_CELL
 RUN_LIMB_SPLIT_Y = 270
 _AVATAR = None
 
-# The two shoes span 178 source pixels in a full-contact pose. That is the
-# distance one planted foot travels before the opposite contact; two steps are
-# one complete six-frame cycle.
-RUN_STEP = 178.0 * AVATAR_SCALE
+# The shoe centres are 181.38 source pixels apart in a full-contact pose. That
+# is the distance one planted foot travels before the opposite contact; two
+# steps are one complete eight-frame cycle.
+RUN_STEP = 181.38 * AVATAR_SCALE
 RUN_CYCLE = 2.0 * RUN_STEP / RUN_SPEED
 assert math.isclose(RUN_SPEED * RUN_CYCLE, 2.0 * RUN_STEP,
                     rel_tol=1e-12, abs_tol=1e-12)
@@ -1698,9 +1698,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v6.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v7.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v6.svg")
+        print("wrote runner-v7.svg")
     else:
         print("no calendar data - runner panel skipped")
     print("panels:", data["repos"], "repos,", data["deployed"], "live,", g.get("contributions"), "contributions")
