@@ -239,11 +239,11 @@ def build(d, g=None):
 # Competition Zone, and neither is how she ranks them.
 FEATURED = [
     ("fln-animation-toolkit", "FLN Animation Kit", "TOOLKIT",
-     "7 drop-in animations, fully tunable"),
+     "7 drop-in animations, tunable"),
     ("aaru_ki_cheenk", "Aaru Ki Cheenk", "STORY GAME",
      "a story told one choice at a time"),
     ("Keyword-class9", "Tactic Decoder", "CLASS 9 / CYBER",
-     "name the tactic behind the message"),
+     "name the tactic behind a message"),
     ("feeling-wheel-tap", "Feeling Wheel Tap", "SEL",
      "pause, notice, name the feeling"),
     ("think-ask-act", "Think Ask Act", "CYBER SAFETY",
@@ -251,11 +251,11 @@ FEATURED = [
     ("real-or-fake-sender", "Real or Fake Sender", "CYBER SAFETY",
      "check who is really writing"),
     ("calm-or-react", "Calm or React", "CYBER SAFETY",
-     "name the emotion the scam leans on"),
+     "name the emotion a scam leans on"),
     ("Competition-Zone", "Competition Zone", "PROTOTYPE",
      "entries, results, trophy room, XP"),
     ("Portfolio", "Portfolio", "SITE",
-     "the rest of the work, in one place"),
+     "the rest of the work in one place"),
 ]
 
 # GitHub's own linguist colours, so the dots and the ring mean the same thing
@@ -317,8 +317,9 @@ def _donut(cx, cy, r, slices, delay):
     return "".join(out)
 
 
-# The blurb column runs from the icon to the language list; at 11.5px mono
-# that is about 38 characters, and anything longer lands on top of them.
+# The blurb column runs from the tile to the language list.  The tile grew to
+# half the card, so that column lost thirty pixels: (CW-214) - TEXT_X - 12 is
+# 234px, which at 11.5px mono is about 33 characters.
 # One drawn mark per project, each about what the project is rather than what
 # it is called.  They are vector rather than bitmap because the panel is built,
 # not designed: there is nowhere to keep nine logo files that CI would have to
@@ -452,9 +453,9 @@ SKY = (("0", "#5cc0f7"), ("0.55", "#8fd6fb"), ("1", "#c4e9fd"))
 SKY_LANES = 5
 SKY_LAYERS = ((0.0, 1.00), (36.0, 0.66))     # angle offset, size scale
 SKY_JITTER = 13.0                            # degrees, so the fan is not a wheel
-SKY_R0, SKY_R1 = 5.5, 23.0                   # stars fade out before the corner
+SKY_R0, SKY_R1 = 5.5 / 46, 23.0 / 46         # of the tile; they fade before the corner
 SKY_DUR = (3.6, 6.0)
-SKY_SIZE = (3.4, 6.0)
+SKY_SIZE = (3.4 / 46, 6.0 / 46)              # also of the tile
 
 # The five shapes it cycles, lifted from the sheet's own data-URI sprites.
 _S_STAR = ("M32 5.5c1.6 0 3 .9 3.7 2.4l6.1 12.4 13.7 2c1.6.2 3 1.4 3.5 3s.1 3.3-1.1 4.4"
@@ -492,18 +493,20 @@ def _sky_shape(kind, s):
 def _scene_stars(x, y):
     """The toolkit's start screen: a starfield flying out of the middle."""
     rnd = random.Random(20260921)                     # same sky on every build
-    cx, cy = x + 23.0, y + 23.0
-    out = [f'<rect x="{x}" y="{y}" width="46" height="46" rx="12" fill="url(#flnsky)"/>']
+    cx, cy = x + TILE / 2, y + TILE / 2
+    r0, r1 = SKY_R0 * TILE, SKY_R1 * TILE
+    out = [f'<rect x="{x}" y="{y}" width="{TILE}" height="{TILE}" rx="{TILE_R:.1f}"'
+           f' fill="url(#flnsky)"/>']
     for li, (rot, scale) in enumerate(SKY_LAYERS):
         for i in range(SKY_LANES):
             a = math.radians(360.0 / SKY_LANES * i + rot
                              + rnd.uniform(-SKY_JITTER, SKY_JITTER))
             ca, sa = math.cos(a), math.sin(a)
-            size = (SKY_SIZE[0] + rnd.random() * (SKY_SIZE[1] - SKY_SIZE[0])) * scale
+            size = (SKY_SIZE[0] + rnd.random() * (SKY_SIZE[1] - SKY_SIZE[0])) * TILE * scale
             dur = SKY_DUR[0] + rnd.random() * (SKY_DUR[1] - SKY_DUR[0])
             o = 0.65 + rnd.random() * 0.30
-            x1, y1 = cx + SKY_R0 * ca, cy + SKY_R0 * sa
-            x2, y2 = cx + SKY_R1 * ca, cy + SKY_R1 * sa
+            x1, y1 = cx + r0 * ca, cy + r0 * sa
+            x2, y2 = cx + r1 * ca, cy + r1 * sa
             out.append(
                 f'<g opacity="0">'
                 f'<animate attributeName="opacity" values="0;{o:.2f};{o:.2f};0"'
@@ -514,16 +517,68 @@ def _scene_stars(x, y):
                 f' begin="-{rnd.random() * dur:.2f}s" repeatCount="indefinite"'
                 f' calcMode="linear"/>'
                 f'{_sky_shape((i + li) % 3, size)}</g>')
-    out.append(f'<rect x="{x}" y="{y}" width="46" height="46" rx="12" fill="none"'
-               f' stroke="#FFFFFF" stroke-opacity=".22"/>')
+    out.append(f'<rect x="{x}" y="{y}" width="{TILE}" height="{TILE}" rx="{TILE_R:.1f}"'
+               f' fill="none" stroke="#FFFFFF" stroke-opacity=".22"/>')
     return "".join(out)
 
 
-ICON_SCENE = {"fln-animation-toolkit": (_scene_defs_stars, _scene_stars)}
+# Think Ask Act's bee is shipped as three registered layers - body and two
+# wings on the same 260px canvas - which is the game saying the wings move.
+# Keeping them separate here keeps that: the wings beat about the point each
+# one joins the body, and the whole bee rides a slow hover under it.
+BEE_PARTS = ("proj-bee-body.png", "proj-bee-wing-l.png", "proj-bee-wing-r.png")
+BEE_ROOT_L = (14.0, 44.0)         # where each wing meets the body, in the
+BEE_ROOT_R = (59.0, 52.0)         # 80px space the parts were saved at
+BEE_BEAT = 0.34                   # seconds for one full up-and-down beat
 
 
+def _scene_defs_bee():
+    return ""
+
+
+def _scene_bee(x, y):
+    """The bee off the envelope, wings beating."""
+    body, wl, wr = (_photo_uri(n) for n in BEE_PARTS)
+    if not body:
+        return ""
+    k = (TILE * 44.0 / 46.0) / 80.0       # the parts are 80px square
+    ox, oy = x + (TILE - 80 * k) / 2.0, y + (TILE - 80 * k) / 2.0
+    wing = ('<g><animateTransform attributeName="transform" type="rotate"'
+            ' values="{a} {rx} {ry};{b} {rx} {ry};{a} {rx} {ry}" dur="%s s"'
+            ' repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1"'
+            ' keySplines=".4 0 .6 1;.4 0 .6 1"/>'
+            '<image xlink:href="{u}" x="0" y="0" width="80" height="80"/></g>'
+            % BEE_BEAT).replace(" s", "s")
+    return (f'<rect x="{x}" y="{y}" width="{TILE}" height="{TILE}" rx="{TILE_R:.1f}"'
+            f' fill="#F0A92B"/>'
+            f'<circle cx="{x + TILE / 2}" cy="{y + TILE / 2}" r="{TILE * 15.5 / 46:.1f}"'
+            f' fill="#54309B"/>'
+            f'<g transform="translate({ox:.2f} {oy:.2f}) scale({k:.4f})">'
+            f'<g><animateTransform attributeName="transform" type="translate"'
+            f' values="0 0;0 -5.6;0 0" dur="2.1s" repeatCount="indefinite"'
+            f' calcMode="spline" keyTimes="0;0.5;1"'
+            f' keySplines=".45 0 .55 1;.45 0 .55 1"/>'
+            + wing.format(a=-13, b=12, rx=BEE_ROOT_L[0], ry=BEE_ROOT_L[1], u=wl)
+            + wing.format(a=13, b=-12, rx=BEE_ROOT_R[0], ry=BEE_ROOT_R[1], u=wr)
+            + f'<image xlink:href="{body}" x="0" y="0" width="80" height="80"/>'
+            f'</g></g>'
+            f'<rect x="{x}" y="{y}" width="{TILE}" height="{TILE}" rx="{TILE_R:.1f}"'
+            f' fill="none" stroke="#FFFFFF" stroke-opacity=".22"/>')
+
+
+ICON_SCENE = {"fln-animation-toolkit": (_scene_defs_stars, _scene_stars),
+              "think-ask-act": (_scene_defs_bee, _scene_bee)}
+
+
+# Artwork beats a drawn mark wherever a project already has its own, and the
+# crop matters more than the source: at 46px a whole screen is mush, so each
+# of these is the one element that survives - a face, a lit card, a wheel.
 ICON_PHOTO = {"aaru_ki_cheenk": "proj-icon-aaru.png",
-              "Keyword-class9": "proj-icon-tactic.png"}
+              "Keyword-class9": "proj-icon-tactic.png",
+              "feeling-wheel-tap": "proj-icon-wheel.png",
+              "real-or-fake-sender": "proj-icon-shield.png",
+              "calm-or-react": "proj-icon-calm.png",
+              "Competition-Zone": "proj-icon-zone.png"}
 _PHOTO_CACHE = {}
 
 
@@ -561,15 +616,17 @@ def _tile(x, y, repo, tint):
         # clipPath and no second <defs> halfway down the document.  One <image>
         # and a hairline is the whole tile - fewer things for anything between
         # here and the page to object to.
-        return (f'<image xlink:href="{uri}" x="{x}" y="{y}" width="46" height="46"/>'
-                f'<rect x="{x}" y="{y}" width="46" height="46" rx="12" fill="none"'
-                f' stroke="#FFFFFF" stroke-opacity=".18"/>')
+        return (f'<image xlink:href="{uri}" x="{x}" y="{y}"'
+                f' width="{TILE}" height="{TILE}"/>'
+                f'<rect x="{x}" y="{y}" width="{TILE}" height="{TILE}" rx="{TILE_R:.1f}"'
+                f' fill="none" stroke="#FFFFFF" stroke-opacity=".18"/>')
     art = ICONS.get(repo)
     inner = art() if art else ""
-    s = 28.0 / 24.0
-    return (f'<rect x="{x}" y="{y}" width="46" height="46" rx="12" fill="{tint}"'
-            f' stroke="#FFFFFF" stroke-opacity=".10"/>'
-            f'<g transform="translate({x + 9:.1f} {y + 9:.1f}) scale({s:.4f})">{inner}</g>')
+    s = (TILE * 28.0 / 46.0) / 24.0
+    return (f'<rect x="{x}" y="{y}" width="{TILE}" height="{TILE}" rx="{TILE_R:.1f}"'
+            f' fill="{tint}" stroke="#FFFFFF" stroke-opacity=".10"/>'
+            f'<g transform="translate({x + TILE * 9 / 46:.1f} {y + TILE * 9 / 46:.1f})'
+            f' scale({s:.4f})">{inner}</g>')
 
 
 def _clip_text(s, n):
@@ -577,6 +634,13 @@ def _clip_text(s, n):
 
 
 CW, CH = 566, 152
+# Half the card's height.  It was 46, which left the artwork too small to see
+# and too small to animate into - a starfield or a beating wing needs room.
+# Everything that draws a tile works in fractions of this, so changing it here
+# moves the layout, both scenes and the corner radius together.
+TILE = 76.0
+TILE_R = TILE * 12.0 / 46.0              # the corner, kept in proportion
+TEXT_X = 16 + TILE + 14                  # the text column starts clear of it
 
 # Leave this alone unless a stale image is genuinely stuck.
 #
@@ -611,9 +675,9 @@ def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
     if rest > 0.005:
         slices.append((rest, LANG_REST))
 
-    px, pills = x + 76, ""
+    px, pills = x + TEXT_X, ""
     for lang, _ in top:
-        chip, w = _pill(px, y + 102, lang.lower())
+        chip, w = _pill(px, y + 104, lang.lower())
         pills += chip
         px += w + 7
 
@@ -628,14 +692,14 @@ def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
           letter-spacing="1.2" fill="{'#00FF9C' if live else '#3f5f58'}"
           fill-opacity=".85">{'LIVE' if live else 'REPO'}</text>
 
-    {_tile(x + 16, y + 44, repo, TILE_TINT[i % len(TILE_TINT)])}
+    {_tile(x + 16, y + 38, repo, TILE_TINT[i % len(TILE_TINT)])}
 
-    <text class="mono" x="{x + 76}" y="{y + 60}" font-size="16.5" font-weight="700"
+    <text class="mono" x="{x + TEXT_X}" y="{y + 62}" font-size="16.5" font-weight="700"
           fill="#E8FFF6">{esc(title)}<tspan fill="#00FF9C" fill-opacity=".75">_</tspan></text>
-    <text class="mono" x="{x + 76}" y="{y + 82}" font-size="11.5"
-          fill="#7f9c96">{esc(_clip_text(blurb, 38))}</text>
+    <text class="mono" x="{x + TEXT_X}" y="{y + 84}" font-size="11.5"
+          fill="#7f9c96">{esc(_clip_text(blurb, 33))}</text>
     {pills}
-    <text class="mono" x="{x + 76}" y="{y + 140}" font-size="10.5" fill="#557a73"
+    <text class="mono" x="{x + TEXT_X}" y="{y + 140}" font-size="10.5" fill="#557a73"
           xml:space="preserve">★ {meta.get('stars', 0)}   {esc(_ago(meta.get('pushed')))}</text>
     <text class="mono" x="{x + CW - 15}" y="{y + 140}" font-size="9.5" text-anchor="end"
           letter-spacing="1.3" fill="#3ddc97" fill-opacity=".75">{esc(tag)}</text>
