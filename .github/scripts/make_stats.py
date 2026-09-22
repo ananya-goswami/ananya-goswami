@@ -1560,10 +1560,11 @@ def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
 
 # ---------------------------------------------------------------- her, from the supplied avatar
 AVATAR_SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                 "..", "..", "assets", "runner-avatar-sheet-v2.png")
-AVATAR_COLS, AVATAR_ROWS = 4, 3
+                                 "..", "..", "assets", "runner-avatar-sheet-v3.png")
+AVATAR_COLS, AVATAR_ROWS = 4, 4
 AVATAR_CELL = 362.0
 AVATAR_SCALE = GIRL_TARGET_H / AVATAR_CELL
+RUN_LIMB_SPLIT_Y = 270
 _AVATAR = None
 
 # The two shoes span 178 source pixels in a full-contact pose. That is the
@@ -1583,7 +1584,7 @@ def avatar_frames():
     _AVATAR = []
     try:
         import base64, io
-        from PIL import Image
+        from PIL import Image, ImageChops, ImageOps
         src = Image.open(AVATAR_SHEET_PATH).convert("RGBA")
     except Exception as exc:
         print("avatar skipped:", exc)
@@ -1591,9 +1592,21 @@ def avatar_frames():
 
     cw, ch = src.width // AVATAR_COLS, src.height // AVATAR_ROWS
     if cw * AVATAR_COLS != src.width or ch * AVATAR_ROWS != src.height:
-        raise ValueError("runner avatar sheet must contain equal 4x3 cells")
+        raise ValueError("runner avatar sheet must contain equal 4x4 cells")
     if cw != int(AVATAR_CELL) or ch != int(AVATAR_CELL):
         raise ValueError(f"runner avatar cells must be {int(AVATAR_CELL)}px square")
+
+    # A real cycle changes the planted leg at its midpoint. The second four
+    # frames are required to contain the exact exchanged lower-limb geometry
+    # of the first four; a sheet with one permanently leading leg is rejected.
+    for i in range(4):
+        first = src.crop((i * cw, RUN_LIMB_SPLIT_Y,
+                          (i + 1) * cw, ch))
+        opposite = src.crop((i * cw, ch + RUN_LIMB_SPLIT_Y,
+                             (i + 1) * cw, 2 * ch))
+        if ImageChops.difference(ImageOps.mirror(first), opposite).getbbox():
+            raise ValueError(f"runner frame {i + 4} does not exchange both legs")
+
     for i in range(AVATAR_COLS * AVATAR_ROWS):
         col, row = i % AVATAR_COLS, i // AVATAR_COLS
         cell = src.crop((col * cw, row * ch, (col + 1) * cw, (row + 1) * ch))
@@ -1629,13 +1642,13 @@ def avatar_frame(i, baseline):
 
 
 def avatar_run(cycle, baseline):
-    """Six authored poses: alternating contacts, passes and airborne strides."""
-    return flipbook([avatar_frame(i, baseline) for i in range(6)], cycle)
+    """Eight poses: contact/down/pass/up, then the exact opposite-leg half."""
+    return flipbook([avatar_frame(i, baseline) for i in range(8)], cycle)
 
 
-# Drive, reach, impact, three falling poses and the landing absorb. Frame 7 is
+# Drive, reach, impact, three falling poses and the landing absorb. Frame 9 is
 # intentionally held across the instant of impact so the contact reads clearly.
-AIR_POSES = [6, 7, 7, 8, 9, 10, 11]
+AIR_POSES = [8, 9, 9, 10, 11, 12, 13]
 
 
 def girl_runner(jumps, T, baseline=6.0):
@@ -1671,11 +1684,11 @@ if __name__ == "__main__":
     for name, svg in build_project_cards(data["index"]).items():
         open(os.path.join(out_dir, name), "w", encoding="utf-8").write(svg)
     if g.get("weeks"):
-        # Fresh URL so GitHub's image proxy cannot keep serving the retired
-        # block-built avatar after this artwork replacement.
-        open(os.path.join(out_dir, "runner-v4.svg"), "w", encoding="utf-8").write(
+        # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
+        # keep serving a superseded gait after the output branch is rebuilt.
+        open(os.path.join(out_dir, "runner-v5.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v4.svg")
+        print("wrote runner-v5.svg")
     else:
         print("no calendar data - runner panel skipped")
     print("panels:", data["repos"], "repos,", data["deployed"], "live,", g.get("contributions"), "contributions")
