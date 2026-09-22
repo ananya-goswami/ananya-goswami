@@ -672,13 +672,15 @@ def _clip_text(s, n):
 # against its right.  That is why there is no header rule any more - a line
 # across the whole card would cut the picture in two.
 CW, CH = 566, 188                        # 3.01:1, the shape the artwork wants
-ART_W = 260                              # 46% of the width, full bleed
+ART_W = CW // 2                          # half the card exactly, full bleed
 TEXT_X = ART_W + 16                      # the text panel starts here
 BLURB_CH = 27                            # what fits before the ring, at 11.5px
 
-# The ring moved in from the edge and grew, because it is now the only thing
-# carrying the language breakdown - the written rows are gone.
-RING_CX, RING_CY, RING_R, RING_W = CW - 74, 96, 32, 9
+# Half the card for the picture leaves 23px less for the words, which the
+# longest title and the longest blurb had both already filled.  The ring gives
+# it back: out towards the edge and a touch smaller, which costs it nothing -
+# it holds no text now, so it only has to read as a chart.
+RING_CX, RING_CY, RING_R, RING_W = CW - 56, 96, 30, 9
 
 # Leave this alone unless a stale image is genuinely stuck.
 #
