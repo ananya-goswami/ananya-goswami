@@ -287,11 +287,17 @@ def _ago(iso, now=None):
 
 
 def _pill(x, y, text):
-    """One outlined tech chip.  Returns the markup and how wide it came out."""
-    w = 13.0 + len(text) * 6.5
-    return (f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="19" rx="9.5"'
+    """One outlined tech chip.  Returns the markup and how wide it came out.
+
+    Trimmed from 10.5px to 9.5 with less padding, because at the old size
+    javascript + css + python came to 190px against the 178 the ring leaves,
+    and the third chip was being dropped on the cards with the longest
+    language names - the ones that most needed all three.
+    """
+    w = 10.0 + len(text) * 6.0
+    return (f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="17" rx="8.5"'
             f' fill="#0A1F1C" stroke="#22D3EE" stroke-opacity=".34"/>'
-            f'<text class="mono" x="{x + w / 2:.1f}" y="{y + 13.4:.1f}" font-size="10.5"'
+            f'<text class="mono" x="{x + w / 2:.1f}" y="{y + 12.1:.1f}" font-size="9.5"'
             f' text-anchor="middle" fill="#7FD8EE">{esc(text)}</text>'), w
 
 
