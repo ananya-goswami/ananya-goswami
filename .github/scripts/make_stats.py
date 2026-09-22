@@ -239,23 +239,23 @@ def build(d, g=None):
 # Competition Zone, and neither is how she ranks them.
 FEATURED = [
     ("fln-animation-toolkit", "FLN Animation Kit", "TOOLKIT",
-     "7 drop-in animations, tunable"),
+     "7 drop-in animations"),
     ("aaru_ki_cheenk", "Aaru Ki Cheenk", "STORY GAME",
-     "a story told one choice at a time"),
+     "one choice at a time"),
     ("Keyword-class9", "Tactic Decoder", "CLASS 9 / CYBER",
-     "name the tactic behind a message"),
+     "name the tactic used"),
     ("feeling-wheel-tap", "Feeling Wheel Tap", "SEL",
-     "pause, notice, name the feeling"),
+     "notice and name it"),
     ("think-ask-act", "Think Ask Act", "CYBER SAFETY",
-     "think, ask an adult, then act"),
+     "think, ask, then act"),
     ("real-or-fake-sender", "Real or Fake Sender", "CYBER SAFETY",
      "check who is really writing"),
     ("calm-or-react", "Calm or React", "CYBER SAFETY",
-     "name the emotion a scam leans on"),
+     "the emotion behind it"),
     ("Competition-Zone", "Competition Zone", "PROTOTYPE",
-     "entries, results, trophy room, XP"),
+     "entries, results, trophies"),
     ("Portfolio", "Portfolio", "SITE",
-     "the rest of the work in one place"),
+     "the rest of the work"),
 ]
 
 # GitHub's own linguist colours, so the dots and the ring mean the same thing
@@ -450,12 +450,16 @@ SKY = (("0", "#5cc0f7"), ("0.55", "#8fd6fb"), ("1", "#c4e9fd"))
 # near the middle where the rays converge; so there are ten, the rays are
 # jittered off the even fan that made it look mechanical, and they start
 # further out where there is already room between them.
-SKY_LANES = 5
-SKY_LAYERS = ((0.0, 1.00), (36.0, 0.66))     # angle offset, size scale
-SKY_JITTER = 13.0                            # degrees, so the fan is not a wheel
-SKY_R0, SKY_R1 = 5.5 / 46, 23.0 / 46         # of the tile; they fade before the corner
+# Five lanes was a 46px compromise: any more and the stars landed on top of
+# each other and the tile read as static noise.  At 130px they have room, so
+# the count goes back up and each star shrinks a little against the tile -
+# nearer the toolkit's own dense sky, which is what it looks like in the app.
+SKY_LANES = 8
+SKY_LAYERS = ((0.0, 1.00), (22.5, 0.62))     # angle offset, size scale
+SKY_JITTER = 9.0                             # degrees, so the fan is not a wheel
+SKY_R0, SKY_R1 = 5.0 / 46, 24.0 / 46         # of the tile; they fade before the corner
 SKY_DUR = (3.6, 6.0)
-SKY_SIZE = (3.4 / 46, 6.0 / 46)              # also of the tile
+SKY_SIZE = (2.6 / 46, 5.0 / 46)              # also of the tile
 
 # The five shapes it cycles, lifted from the sheet's own data-URI sprites.
 _S_STAR = ("M32 5.5c1.6 0 3 .9 3.7 2.4l6.1 12.4 13.7 2c1.6.2 3 1.4 3.5 3s.1 3.3-1.1 4.4"
@@ -633,14 +637,21 @@ def _clip_text(s, n):
     return s if len(s) <= n else s[:n - 1].rstrip(" ,.") + "…"
 
 
-CW, CH = 566, 152
-# Half the card's height.  It was 46, which left the artwork too small to see
-# and too small to animate into - a starfield or a beating wing needs room.
-# Everything that draws a tile works in fractions of this, so changing it here
-# moves the layout, both scenes and the corner radius together.
-TILE = 76.0
+# The card is 16px taller than it looks like it needs to be, and that is the
+# point: the artwork is meant to fill it top to bottom, and 130px of tile will
+# not fit under a 27px header strip in a 152px card.  Growing the card is the
+# only version of "full height" that does not either crop the art or push it
+# up through the strip.
+CW, CH = 566, 168
+# Full height, near enough: the body below the strip is 141px and the tile
+# takes 130 of it.  Everything that draws a tile works in fractions of this,
+# so changing it here moves the layout, both scenes and the corner radius
+# together - and it costs the text column, which is why the blurbs are short.
+TILE = 130.0
 TILE_R = TILE * 12.0 / 46.0              # the corner, kept in proportion
 TEXT_X = 16 + TILE + 14                  # the text column starts clear of it
+LANG_X = CW - 200                        # ...and ends where the languages begin
+BLURB_CH = 28                            # what fits between the two, at 11.5px
 
 # Leave this alone unless a stale image is genuinely stuck.
 #
@@ -666,9 +677,9 @@ def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
     for j, (lang, b) in enumerate(top):
         pct = 100.0 * b / total
         hue = LANG_HUE.get(lang.lower(), "#6E8A99")
-        ly = y + 52 + j * 18
-        rowsL += (f'<circle cx="{x + CW - 214}" cy="{ly - 4}" r="3.4" fill="{hue}"/>'
-                  f'<text class="mono" x="{x + CW - 202}" y="{ly}" font-size="10.5"'
+        ly = y + 58 + j * 18
+        rowsL += (f'<circle cx="{x + LANG_X}" cy="{ly - 4}" r="3.4" fill="{hue}"/>'
+                  f'<text class="mono" x="{x + LANG_X + 12}" y="{ly}" font-size="10.5"'
                   f' fill="#9FBDB6">{esc(lang)} {pct:.0f}%</text>')
         slices.append((b / total, hue))
     rest = 1.0 - sum(f for f, _ in slices)
@@ -677,7 +688,7 @@ def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
 
     px, pills = x + TEXT_X, ""
     for lang, _ in top:
-        chip, w = _pill(px, y + 104, lang.lower())
+        chip, w = _pill(px, y + 112, lang.lower())
         pills += chip
         px += w + 7
 
@@ -692,21 +703,21 @@ def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
           letter-spacing="1.2" fill="{'#00FF9C' if live else '#3f5f58'}"
           fill-opacity=".85">{'LIVE' if live else 'REPO'}</text>
 
-    {_tile(x + 16, y + 38, repo, TILE_TINT[i % len(TILE_TINT)])}
+    {_tile(x + 16, y + 32, repo, TILE_TINT[i % len(TILE_TINT)])}
 
-    <text class="mono" x="{x + TEXT_X}" y="{y + 62}" font-size="16.5" font-weight="700"
+    <text class="mono" x="{x + TEXT_X}" y="{y + 64}" font-size="15.5" font-weight="700"
           fill="#E8FFF6">{esc(title)}<tspan fill="#00FF9C" fill-opacity=".75">_</tspan></text>
-    <text class="mono" x="{x + TEXT_X}" y="{y + 84}" font-size="11.5"
-          fill="#7f9c96">{esc(_clip_text(blurb, 33))}</text>
+    <text class="mono" x="{x + TEXT_X}" y="{y + 88}" font-size="11.5"
+          fill="#7f9c96">{esc(_clip_text(blurb, BLURB_CH))}</text>
     {pills}
-    <text class="mono" x="{x + TEXT_X}" y="{y + 140}" font-size="10.5" fill="#557a73"
+    <text class="mono" x="{x + TEXT_X}" y="{y + 156}" font-size="10.5" fill="#557a73"
           xml:space="preserve">★ {meta.get('stars', 0)}   {esc(_ago(meta.get('pushed')))}</text>
-    <text class="mono" x="{x + CW - 15}" y="{y + 140}" font-size="9.5" text-anchor="end"
+    <text class="mono" x="{x + CW - 15}" y="{y + 156}" font-size="9.5" text-anchor="end"
           letter-spacing="1.3" fill="#3ddc97" fill-opacity=".75">{esc(tag)}</text>
 
     {rowsL}
-    {_donut(x + CW - 62, y + 74, 26, slices, 0.25 + i * 0.09)}
-    <text class="mono" x="{x + CW - 62}" y="{y + 79}" font-size="13" font-weight="700"
+    {_donut(x + CW - 62, y + 112, 26, slices, 0.25 + i * 0.09)}
+    <text class="mono" x="{x + CW - 62}" y="{y + 117}" font-size="13" font-weight="700"
           text-anchor="middle" fill="#E8FFF6">{(100.0 * top[0][1] / total) if top else 0:.0f}%</text>
   </g>'''
 
@@ -1655,14 +1666,14 @@ if __name__ == "__main__":
         g = {}
     out_dir = os.path.dirname(OUT) or "."
     os.makedirs(out_dir, exist_ok=True)
-    open(OUT, "w").write(build(data, g))
+    open(OUT, "w", encoding="utf-8").write(build(data, g))
     # One file per project, because the README wraps each in its own link.
     for name, svg in build_project_cards(data["index"]).items():
-        open(os.path.join(out_dir, name), "w").write(svg)
+        open(os.path.join(out_dir, name), "w", encoding="utf-8").write(svg)
     if g.get("weeks"):
         # Fresh URL so GitHub's image proxy cannot keep serving the retired
         # block-built avatar after this artwork replacement.
-        open(os.path.join(out_dir, "runner-v4.svg"), "w").write(
+        open(os.path.join(out_dir, "runner-v4.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
         print("wrote runner-v4.svg")
     else:
