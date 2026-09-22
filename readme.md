@@ -38,7 +38,7 @@
 <td width="50%"><a href="https://ananya-goswami.github.io/Competition-Zone/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-Competition-Zone.svg" width="100%" alt="Competition Zone" /></a></td>
 </tr>
 <tr>
-<td width="50%"><a href="https://ananya-goswami.github.io/Portfolio/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-Portfolio.svg" width="100%" alt="Portfolio" /></a></td>
+<td width="50%"><a href="https://g-ananya.netlify.app/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-g-Portfolio.svg" width="100%" alt="Portfolio" /></a></td>
 <td width="50%"></td>
 </tr>
 </table>
