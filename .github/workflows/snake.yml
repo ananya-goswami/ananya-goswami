@@ -41,23 +41,3 @@ jobs:
           build_dir: dist
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # The bar under each card is built from swatches that live on the output
-      # branch, so the README has to be committed AFTER that branch is pushed -
-      # the other way round leaves every bar a broken image until CI catches
-      # up, which is a minute and a half of a visibly broken profile.
-      # make_stats.py has already rewritten readme.md in the working tree by
-      # this point; this only commits it.  A push made with GITHUB_TOKEN does
-      # not start another workflow run, so this cannot loop.  The checkout is
-      # detached on a push event, hence HEAD:main; if main has moved on
-      # meanwhile the push is skipped and the next run picks it up.
-      - name: Refresh the README's language bars
-        run: |
-          if [ -z "$(git status --porcelain readme.md)" ]; then
-            echo "readme.md unchanged"; exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add readme.md
-          git commit -m "Refresh the project cards' language bars"
-          git push origin HEAD:main || echo "push skipped; main has moved on"
