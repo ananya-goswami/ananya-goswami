@@ -337,16 +337,6 @@ def _donut(cx, cy, r, slices, delay):
     return "".join(out)
 
 
-def _lang_summary(meta):
-    """"JavaScript 67% - CSS 16% - Python 15%", or "" with nothing to say."""
-    by = meta.get("bytes") or {}
-    total = sum(by.values())
-    if not total:
-        return ""
-    top = sorted(by.items(), key=lambda kv: -kv[1])[:3]
-    return "  ·  ".join(f"{lang} {100.0 * b / total:.0f}%" for lang, b in top)
-
-
 # The fallback mark, for a project with no artwork of its own.  Built on a
 # 24x24 grid, monoline at 1.9, so it sits at one weight whatever it is scaled
 # to - which is now most of a 260x188 panel, where it looks thin next to a
@@ -747,66 +737,123 @@ def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
 
 
 # ------------------------------------------------------------ the hover readout
-# The percentages have to sit in the README, not in the card, because only the
-# README gets a pointer.  Everything else that could carry a hover is stripped
-# by GitHub's sanitiser - inline <svg>, <object>, <iframe>, <embed>, <style>,
-# usemap, even title= on <abbr>.  What survives, checked against the markdown
-# API, is title= on the <a> and on the <img>, which the browser shows as an
-# ordinary tooltip.  So CI rewrites those two attributes on every run and the
-# numbers stay as fresh as the cards do.
+# Each arc of the ring should name itself under the pointer.  It cannot: the
+# ring is drawn inside the card image, a README image is served as <img>, and
+# an <img> exposes no regions - the whole picture is one hover target, so a
+# tooltip on it can only ever say one thing.  Scoping a tooltip to part of an
+# image needs <map> and <area>, which GitHub's sanitiser deletes, or author
+# CSS, which it also deletes; overlapping slice images does not help either,
+# because a transparent pixel in an <img> still takes the pointer, so only the
+# topmost slice would ever answer.
+#
+# What GitHub does allow, checked against the markdown API, is several
+# adjacent images each with its own title=, width= and height=.  So the arcs
+# are unrolled into a bar directly under the card - one image per slice, in
+# the ring's own colour, as wide as its share - and each one is its own hover
+# target naming just its language and percentage.  Same parts, same colours,
+# laid flat so the pointer can tell them apart.
 README = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))), "readme.md")
+RAW = f"https://raw.githubusercontent.com/{USER}/{USER}/output"
+BAR_H = 7                                # px; thin enough to read as a legend
+BAR_TOTAL = 97                           # % of the cell, leaving room for rounding
 
 
-def _set_attr(tag, name, value):
-    """Replace name="..." in one tag, or add it after the tag's first attribute."""
-    pat = re.compile(r'\s' + name + r'="[^"]*"')
-    if pat.search(tag):
-        return pat.sub(f' {name}="{value}"', tag, count=1)
-    cut = tag.index('"', tag.index('="') + 2) + 1
-    return tag[:cut] + f' {name}="{value}"' + tag[cut:]
+def bar_swatches(index):
+    """One flat image per colour the bars use, named after the colour."""
+    out = {}
+    for repo, *_ in FEATURED:
+        for _frac, col, _name in _lang_slices(index.get(repo, {})):
+            key = col.lstrip("#").lower()
+            out[f"bar-{key}.svg"] = (
+                f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 {BAR_H}"'
+                f' preserveAspectRatio="none" role="img">'
+                f'<rect width="100" height="{BAR_H}" fill="{col}"/></svg>\n')
+    return out
+
+
+def _lang_slices(meta):
+    """(fraction, colour, label) for the named languages, widest first.
+
+    The ring's fourth slice - everything past the top three - is deliberately
+    not here.  It is usually a percent or two, which comes out as a segment
+    eight or nine pixels wide: too small to put a pointer on, and "other" is
+    not a language anyway.  The ring keeps it so the circle still adds up.
+    """
+    by = meta.get("bytes") or {}
+    total = sum(by.values())
+    if not total:
+        return []
+    top = sorted(by.items(), key=lambda kv: -kv[1])[:3]
+    return [(b / total, LANG_HUE.get(lang.lower(), "#6E8A99"), lang) for lang, b in top]
+
+
+def _lang_bar(repo, href, meta):
+    """The hoverable breakdown: one <img> per slice, side by side, no gaps.
+
+    Widths are whole percents adjusted to sum to BAR_TOTAL, because a row that
+    adds up past 100% wraps the last slice onto its own line.  The percentage
+    in the tooltip is the true one, not the adjusted width.
+    """
+    slices = _lang_slices(meta)
+    if not slices:
+        return ""
+    widths = [max(int(round(f * BAR_TOTAL)), 1) for f, _c, _n in slices]
+    widths[widths.index(max(widths))] += BAR_TOTAL - sum(widths)   # absorb the rounding
+    parts = []
+    for (frac, col, name), w in zip(slices, widths):
+        tip = esc(f"{name} {100.0 * frac:.0f}%")
+        parts.append(f'<a href="{esc(href)}" title="{tip}">'
+                     f'<img src="{RAW}/bar-{col.lstrip("#").lower()}.svg" width="{w}%"'
+                     f' height="{BAR_H}" title="{tip}" alt="{tip}" /></a>')
+    return f"<!--langs--><br />{''.join(parts)}<!--/langs-->"
+
+
+def _strip_attr(tag, name):
+    return re.sub(r'\s' + name + r'="[^"]*"', "", tag, count=1)
 
 
 def _write_readme_titles(index, path=README):
-    """Put each project's language split in its card's hover tooltip.
+    """Put a hoverable language bar under each card, and take the card's own
+    tooltip off - a single tooltip across the whole card could only repeat the
+    same list on every part of it, which is what the bar replaces.
 
     Rewrites in memory and checks the result before opening the file for
     writing, because a half-failed rewrite once truncated this README to
     nothing: open(...,"w") empties the file whether or not the write lands.
     """
     if not os.path.exists(path):
-        print("readme titles skipped: no", path)
+        print("readme langs skipped: no", path)
         return
     text = io.open(path, encoding="utf-8").read()
     out, hit = text, 0
     for repo, title, _tag, _blurb in FEATURED:
-        summary = _lang_summary(index.get(repo, {}))
-        if not summary:
-            continue
-        tip = f"{title}  —  {summary}"
-        row = re.compile(r'<a\s[^>]*>\s*<img\s[^>]*proj-' + re.escape(CARD_REV)
-                         + '-' + re.escape(repo) + r'\.svg[^>]*>')
+        row = re.compile(r'<a\s+href="([^"]+)"[^>]*>\s*<img\s[^>]*proj-'
+                         + re.escape(CARD_REV) + '-' + re.escape(repo)
+                         + r'\.svg[^>]*>\s*</a>(<!--langs-->.*?<!--/langs-->)?')
         m = row.search(out)
         if not m:
-            print("readme titles: no card row for", repo)
+            print("readme langs: no card row for", repo)
             continue
-        a, img = m.group(0).split("<img", 1)
-        fixed = (_set_attr(a.rstrip(), "title", esc(tip))
-                 + _set_attr("<img" + img, "title", esc(tip)))
-        out = out[:m.start()] + fixed + out[m.end():]
+        href = m.group(1)
+        a, img = m.group(0).split("<!--langs-->")[0].split("<img", 1)
+        block = (_strip_attr(a.rstrip(), "title")
+                 + _strip_attr("<img" + img, "title")
+                 + _lang_bar(repo, href, index.get(repo, {})))
+        out = out[:m.start()] + block + out[m.end():]
         hit += 1
 
     if hit != len(FEATURED):
-        print(f"readme titles: only {hit}/{len(FEATURED)} rows matched, leaving it alone")
+        print(f"readme langs: only {hit}/{len(FEATURED)} rows matched, leaving it alone")
         return
-    if len(out) < len(text) * 0.9 or "<table>" not in out:
-        print("readme titles: result looks wrong, leaving it alone")
+    if len(out) < len(text) * 0.8 or "<table>" not in out:
+        print("readme langs: result looks wrong, leaving it alone")
         return
     if out == text:
-        print("readme titles: already current")
+        print("readme langs: already current")
         return
     io.open(path, "w", encoding="utf-8", newline="\n").write(out)
-    print(f"readme titles: updated {hit} cards")
+    print(f"readme langs: updated {hit} cards")
 
 
 _CARD_CSS = '''<style>
@@ -1773,7 +1820,10 @@ if __name__ == "__main__":
     # One file per project, because the README wraps each in its own link.
     for name, svg in build_project_cards(data["index"]).items():
         open(os.path.join(out_dir, name), "w", encoding="utf-8").write(svg)
-    # The ring is silent, so the languages ride in the README's hover tooltip.
+    # The ring is silent; the languages ride in the README's hoverable bar,
+    # which needs one flat swatch per colour alongside the cards.
+    for name, svg in bar_swatches(data["index"]).items():
+        open(os.path.join(out_dir, name), "w", encoding="utf-8").write(svg)
     _write_readme_titles(data["index"])
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
