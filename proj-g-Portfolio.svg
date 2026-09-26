@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 570 192" width="570" height="192" role="img" aria-label="Portfolio"><defs><pattern id="sc" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#7fffd4" fill-opacity=".03"/></pattern><clipPath id="cw"><rect x="2" y="2" width="566" height="188" rx="10"/></clipPath><clipPath id="art"><path d="M285 2H12a10 10 0 0 0 -10 10V180a10 10 0 0 0 10 10H285Z"/></clipPath></defs><style>
+  .mono { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }
+</style>
+  <g>
+    <rect x="2" y="2" width="566" height="188" rx="10" fill="#050f0d"
+          stroke="#00FF9C" stroke-opacity=".17"/>
+
+    <g clip-path="url(#art)"><rect x="2" y="2" width="283" height="188" fill="#563B3B"/><g transform="translate(109.7 62.2) scale(2.820)"><g fill="none" stroke="#CFE9F5" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2.4"/><path d="M2 8.4h20"/><circle cx="5" cy="6.2" r=".7" fill="#CFE9F5" stroke="none"/><circle cx="7.4" cy="6.2" r=".7" fill="#CFE9F5" stroke="none"/><rect x="5" y="11" width="6" height="6" rx="1.2" opacity=".55"/><rect x="13" y="11" width="6" height="6" rx="1.2" opacity=".55"/></g></g></g><path d="M285 2V190" stroke="#00FF9C" stroke-opacity=".20"/>
+
+    <circle cx="305" cy="18" r="3" fill="#00FF9C"/>
+    <text class="mono" x="316" y="22" font-size="10.5"
+          fill="#557a73">ananya-goswami/Portfolio</text>
+    <text class="mono" x="553" y="22" font-size="9.5" text-anchor="end"
+          letter-spacing="1.2" fill="#00FF9C"
+          fill-opacity=".85">LIVE</text>
+
+    <text class="mono" x="301" y="64" font-size="15.5" font-weight="700"
+          fill="#E8FFF6">Portfolio<tspan fill="#00FF9C" fill-opacity=".75">_</tspan></text>
+    <text class="mono" x="301" y="86" font-size="11.5"
+          fill="#7f9c96">the rest of the work</text>
+    <rect x="301.0" y="101.0" width="34.0" height="17" rx="8.5" fill="#0A1F1C" stroke="#22D3EE" stroke-opacity=".34"/><text class="mono" x="318.0" y="113.1" font-size="9.5" text-anchor="middle" fill="#7FD8EE">html</text>
+    <text class="mono" x="301" y="160" font-size="10.5" fill="#557a73"
+          xml:space="preserve">★ 0   updated 6mo ago</text>
+    <text class="mono" x="553" y="160" font-size="9.5" text-anchor="end"
+          letter-spacing="1.3" fill="#3ddc97" fill-opacity=".75">SITE</text>
+
+    <circle cx="512" cy="98" r="30" fill="none" stroke="#0C221E" stroke-width="9"/><circle cx="512" cy="98" r="30" fill="none" stroke="#E34C26" stroke-width="9" class="arc" data-lang="HTML" data-pct="100" stroke-dasharray="188.50 0.00" stroke-dashoffset="-0.00" transform="rotate(-90 512 98)"><animate attributeName="stroke-dasharray" values="0 188.50;188.50 0.00" dur="0.9s" begin="0.97s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines=".4 0 .2 1"/></circle>
+  </g><g clip-path="url(#cw)" pointer-events="none"><rect width="570" height="192" fill="url(#sc)"/></g></svg>
