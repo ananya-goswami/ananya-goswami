@@ -337,10 +337,10 @@ def _donut(cx, cy, r, slices, delay):
     if slices and len(slices[0]) > 2:
         pct, col, name = 100.0 * slices[0][0], slices[0][1], slices[0][2]
         out.append(
-            f'<text class="mono" x="{cx}" y="{cy + 2}" font-size="12.5" font-weight="700"'
+            f'<text class="mono" x="{cx}" y="{cy + 2}" font-size="11.5" font-weight="700"'
             f' text-anchor="middle" fill="#E8FFF6">{pct:.0f}%</text>'
             f'<text class="mono" x="{cx}" y="{cy + 12}" font-size="6.5" letter-spacing=".6"'
-            f' text-anchor="middle" fill="{col}">{esc({'javascript': 'JS', 'typescript': 'TS'}.get(name.lower(), name.upper()[:6]))}</text>')
+            f' text-anchor="middle" fill="#9FC4BC">{esc({'javascript': 'JS', 'typescript': 'TS'}.get(name.lower(), name.upper()[:6]))}</text>')
     return "".join(out)
 
 
@@ -685,7 +685,7 @@ BLURB_CH = 27                            # what fits before the ring, at 11.5px
 # longest title and the longest blurb had both already filled.  The ring gives
 # it back: out towards the edge and a touch smaller, which costs it nothing -
 # it holds no text now, so it only has to read as a chart.
-RING_CX, RING_CY, RING_R, RING_W = CW - 56, 96, 30, 7
+RING_CX, RING_CY, RING_R, RING_W = CW - 46, 96, 27, 6
 RING_GAP = 2.4                           # px of track between two slices
 
 # Leave this alone unless a stale image is genuinely stuck.
@@ -701,10 +701,26 @@ RING_GAP = 2.4                           # px of track between two slices
 CARD_REV = "g"
 
 
+# The game repos are private, so the API hands back no languages for them.
+# These are their shares (from the README tooltips), used only when the API
+# returns nothing - update a line here if a project's mix changes a lot.
+LANG_FALLBACK = {
+    "fln-animation-toolkit": {"HTML": 92, "Python": 8},
+    "aaru_ki_cheenk": {"JavaScript": 67, "CSS": 16, "Python": 15},
+    "Keyword-class9": {"CSS": 55, "JavaScript": 40, "HTML": 5},
+    "feeling-wheel-tap": {"CSS": 40, "JavaScript": 31, "HTML": 29},
+    "think-ask-act": {"CSS": 46, "HTML": 31, "JavaScript": 23},
+    "real-or-fake-sender": {"CSS": 61, "JavaScript": 28, "HTML": 11},
+    "calm-or-react": {"HTML": 38, "CSS": 33, "JavaScript": 29},
+    "Competition-Zone": {"HTML": 100},
+    "Portfolio": {"HTML": 100},
+}
+
+
 def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
     """One project card, drawn with its top-left at (x, y)."""
     live = bool((meta.get("homepage") or "").strip())
-    by = meta.get("bytes") or {}
+    by = meta.get("bytes") or LANG_FALLBACK.get(repo, {})
     total = sum(by.values()) or 1
     top = sorted(by.items(), key=lambda kv: -kv[1])[:3]
 
@@ -736,7 +752,7 @@ def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
           fill="#557a73">{esc(USER)}/{esc(repo)}</text>
     <text class="mono" x="{x + CW - 15}" y="{y + 20}" font-size="9.5" text-anchor="end"
           letter-spacing="1.2" fill="{'#00FF9C' if live else '#3f5f58'}"
-          fill-opacity=".85">{'LIVE' if live else 'REPO'}</text>
+          fill-opacity=".85">{'LIVE' if live else ''}</text>
 
     <text class="mono" x="{x + TEXT_X}" y="{y + 62}" font-size="15.5" font-weight="700"
           fill="#E8FFF6">{esc(title)}<tspan fill="#00FF9C" fill-opacity=".75">_</tspan></text>
