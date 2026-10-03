@@ -319,7 +319,7 @@ def _donut(cx, cy, r, slices, delay):
     off = 0.0
     for sl in slices:
         frac, col = sl[0], sl[1]
-        arc = circ * frac
+        arc = max(circ * frac - (RING_GAP if len(slices) > 1 else 0), 0.6)
         # The name and the share ride along as data- attributes.  They do
         # nothing in the README, where this is a flat <img>, but the live page
         # inlines the same file and reads them off each arc.
@@ -333,7 +333,14 @@ def _donut(cx, cy, r, slices, delay):
             f'<animate attributeName="stroke-dasharray" values="0 {circ:.2f};{arc:.2f} {circ - arc:.2f}"'
             f' dur="0.9s" begin="{delay:.2f}s" fill="freeze" calcMode="spline"'
             f' keyTimes="0;1" keySplines=".4 0 .2 1"/></circle>')
-        off += arc
+        off += circ * frac
+    if slices and len(slices[0]) > 2:
+        pct, col, name = 100.0 * slices[0][0], slices[0][1], slices[0][2]
+        out.append(
+            f'<text class="mono" x="{cx}" y="{cy + 2}" font-size="12.5" font-weight="700"'
+            f' text-anchor="middle" fill="#E8FFF6">{pct:.0f}%</text>'
+            f'<text class="mono" x="{cx}" y="{cy + 12}" font-size="6.5" letter-spacing=".6"'
+            f' text-anchor="middle" fill="{col}">{esc({'javascript': 'JS', 'typescript': 'TS'}.get(name.lower(), name.upper()[:6]))}</text>')
     return "".join(out)
 
 
@@ -592,7 +599,12 @@ ART_PHOTO = {"aaru_ki_cheenk": "proj-art-aaru.png",
              "feeling-wheel-tap": "proj-art-wheel.png",
              "real-or-fake-sender": "proj-art-shield.png",
              "calm-or-react": "proj-art-calm.png",
-             "Competition-Zone": "proj-art-zone.png"}
+             "Competition-Zone": "proj-art-zone.png",
+             # Optional: drop these files into assets/ and they replace the
+             # drawn star / bee scenes and the plain Portfolio icon.
+             "fln-animation-toolkit": "proj-art-fln.png",
+             "think-ask-act": "proj-art-bee.png",
+             "Portfolio": "proj-art-portfolio.png"}
 _PHOTO_CACHE = {}
 
 
@@ -615,6 +627,8 @@ def _photo_uri(name):
 def _tile_defs(repo):
     """Anything a tile needs in the card's one <defs>, rather than its own."""
     got = ICON_SCENE.get(repo)
+    if repo in ART_PHOTO and _photo_uri(ART_PHOTO[repo]):
+        return ""                        # a real picture replaces the scene
     return got[0]() if got else ""
 
 
@@ -633,10 +647,10 @@ def _art(x, y, repo, tint):
     middle of the blurb.
     """
     scene = ICON_SCENE.get(repo)
-    if scene:
+    uri = _photo_uri(ART_PHOTO[repo]) if repo in ART_PHOTO else ""
+    if scene and not uri:
         inner = scene[1](x, y)
     else:
-        uri = _photo_uri(ART_PHOTO[repo]) if repo in ART_PHOTO else ""
         if uri:
             # slice, not meet: the file is cut to the panel's aspect already,
             # but this keeps a rounding error from letting the card show through.
@@ -649,7 +663,8 @@ def _art(x, y, repo, tint):
                      f'<g transform="translate({x + ART_W / 2 - 12 * k:.1f}'
                      f' {y + CH / 2 - 12 * k:.1f}) scale({k:.3f})">'
                      f'{art() if art else ""}</g>')
-    return (f'<g clip-path="url(#art)">{inner}</g>'
+    return (f'<g clip-path="url(#art)">{inner}'
+            f'<rect x="{x}" y="{y}" width="{ART_W}" height="{CH}" fill="url(#fade)"/></g>'
             f'<path d="M{x + ART_W} {y}V{y + CH}" stroke="#00FF9C" stroke-opacity=".20"/>')
 
 
@@ -670,7 +685,8 @@ BLURB_CH = 27                            # what fits before the ring, at 11.5px
 # longest title and the longest blurb had both already filled.  The ring gives
 # it back: out towards the edge and a touch smaller, which costs it nothing -
 # it holds no text now, so it only has to read as a chart.
-RING_CX, RING_CY, RING_R, RING_W = CW - 56, 96, 30, 9
+RING_CX, RING_CY, RING_R, RING_W = CW - 56, 96, 30, 7
+RING_GAP = 2.4                           # px of track between two slices
 
 # Leave this alone unless a stale image is genuinely stuck.
 #
@@ -728,7 +744,7 @@ def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
           fill="#7f9c96">{esc(_clip_text(blurb, BLURB_CH))}</text>
     {pills}
     <text class="mono" x="{x + TEXT_X}" y="{y + 158}" font-size="10.5" fill="#557a73"
-          xml:space="preserve">★ {meta.get('stars', 0)}   {esc(_ago(meta.get('pushed')))}</text>
+          xml:space="preserve">{('★ ' + str(meta['stars']) + '   ') if meta.get('stars') else ''}{esc(_ago(meta.get('pushed')))}</text>
     <text class="mono" x="{x + CW - 15}" y="{y + 158}" font-size="9.5" text-anchor="end"
           letter-spacing="1.3" fill="#3ddc97" fill-opacity=".75">{esc(tag)}</text>
 
@@ -968,6 +984,9 @@ def build_project_cards(index):
             f'<rect width="4" height="1" fill="#7fffd4" fill-opacity=".03"/></pattern>'
             f'<clipPath id="cw"><rect x="2" y="2" width="{CW}" height="{CH}" rx="10"/></clipPath>'
             f'<clipPath id="art"><path d="{_art_clip_path(2, 2)}"/></clipPath>'
+            f'<linearGradient id="fade" x1="0" x2="1"><stop offset=".72" stop-color="#050f0d"'
+            f' stop-opacity="0"/><stop offset="1" stop-color="#050f0d" stop-opacity=".9"/>'
+            f'</linearGradient>'
             f'{_tile_defs(repo)}</defs>{_CARD_CSS}'
             f'{_card(i, repo, title, tag, blurb, index.get(repo, {}))}'
             f'<g clip-path="url(#cw)" pointer-events="none">'
