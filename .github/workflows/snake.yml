@@ -2,7 +2,8 @@ name: Generate snake animation and high scores
 
 on:
   schedule:
-    - cron: "0 */12 * * *"
+    # hourly, so new commits reach the game within the hour
+    - cron: "0 * * * *"
   workflow_dispatch:
   push:
     branches:
