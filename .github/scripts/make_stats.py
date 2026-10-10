@@ -1319,33 +1319,62 @@ def _keys(vals, times, T):
 def _pick_cells(grid, cols):
     """Three real contribution cells, each on its own row, for the cast to pop out of.
 
-    No mystery blocks: whatever she hits is an actual commit square. They sit in
-    the right half so everyone has room to travel left, and the third is set well
-    back so the snake turns up after the meal rather than during it.
+    No mystery blocks: whatever she hits is an actual commit square. The story
+    reads leaf, turtle, snake, all heading left, so the spacing matters more
+    than the exact spot: the turtle's square a few columns right of the leaf's
+    (so it catches the leaf up soon), and the snake's well back to the right
+    (so it turns up after the meal). Every combination of lit columns is scored
+    and the closest fit wins, so clustered activity still gets a usable trio.
     """
-    start = int(cols * 0.52)
-    picked, used = [], set()
-    for want in (start, start + 5, start + 19):
-        found = None
-        for off in range(cols):
-            for i in (want + off, want - off):
-                if not 0 <= i < cols or any(abs(i - p["col"]) < 3 for p in picked):
+    lit = {i: [r for r in (6, 5, 4, 3, 2, 1, 0) if grid[i][r] > 0] for i in range(cols)}
+    lcols = [i for i in range(cols) if lit[i]]
+    aim = int(cols * 0.52)
+
+    def rows_for(trio):
+        used, out = set(), []
+        for c in trio:
+            r = next((r for r in lit[c] if r not in used), None)
+            if r is None:
+                return None
+            used.add(r)
+            out.append(r)
+        return out
+
+    def penalty(a, b, c):
+        d1, d2 = b - a, c - b
+        return (8.0 * max(0, 4 - d1) + 4.0 * max(0, d1 - 7)
+                + 3.0 * max(0, 12 - d2) + 0.4 * abs(a - aim))
+
+    best = None
+    for ai, a in enumerate(lcols):
+        for bi in range(ai + 1, len(lcols)):
+            b = lcols[bi]
+            if b - a < 3:
+                continue
+            for c in lcols[bi + 1:]:
+                if c - b < 3:
                     continue
-                for r in (6, 5, 4, 3, 2, 1, 0):
-                    if r not in used and grid[i][r] > 0:
-                        found = {"col": i, "row": r, "lv": grid[i][r]}
-                        break
-                if found:
-                    break
-            if found:
-                break
-        if not found:
-            continue
-        found["x"] = GX0 + found["col"] * GPX + GCELL / 2
-        found["y"] = GY0 + found["row"] * GPY
-        picked.append(found)
-        used.add(found["row"])
-    picked.sort(key=lambda p: p["col"])
+                rows = rows_for((a, b, c))
+                if rows is None:
+                    continue
+                score = penalty(a, b, c)
+                if best is None or score < best[0]:
+                    best = (score, (a, b, c), rows)
+    picked = []
+    if best is None:
+        # fewer than three usable squares: take whatever is there, spaced out
+        for c in lcols:
+            if all(abs(c - q["col"]) >= 3 for q in picked) and len(picked) < 3:
+                r = next((r for r in lit[c] if r not in {q["row"] for q in picked}), None)
+                if r is not None:
+                    picked.append({"col": c, "row": r, "lv": grid[c][r]})
+    else:
+        for c, r in zip(best[1], best[2]):
+            picked.append({"col": c, "row": r, "lv": grid[c][r]})
+    for f in picked:
+        f["x"] = GX0 + f["col"] * GPX + GCELL / 2
+        f["y"] = GY0 + f["row"] * GPY
+    picked.sort(key=lambda q: q["col"])
     return picked
 
 
@@ -1444,6 +1473,9 @@ def build_runner_panel(weeks, total=None):
             if e is None:
                 cells.append(base + "/>")
                 continue
+            # the real square sits underneath and shows again once the
+            # spent block has faded, so nothing fake lingers in the grid
+            cells.append(base + "/>")
             cells.append(qblock(x + GCELL / 2, y + GCELL / 2, e["t"], T))
 
     def moving(inner, pts, t_in, t_out, fade=0.45):
@@ -1485,32 +1517,62 @@ def build_runner_panel(weeks, total=None):
         t_land2 = turtle_in + 1.6
         t_walk2 = t_land2 + 0.9
         # solve for the moment its mouth, not its middle, reaches the leaf
-        t_eat = ((tx0 + V_TURTLE * t_walk2 - lx0 - V_LEAF * leaf_land
-                  - LEAF_GAP) / (V_TURTLE - V_LEAF))
-        t_eat = min(max(t_eat, t_walk2 + 1.5), T - 22.0)
-        eat_x = tx0 - V_TURTLE * (t_eat - t_walk2)
+        def meet(vt, vl):
+            return ((tx0 + vt * t_walk2 - lx0 - vl * leaf_land - LEAF_GAP)
+                    / (vt - vl))
+
+        # Normal pace first. If the squares are too far apart for the turtle
+        # to reach the leaf in time, it walks a little faster (always slower
+        # than the snake) and then the leaf slows to a stop. The leaf is never
+        # pulled back to the right to close the gap.
+        cap = T - 22.0
+        tries = [(vt, V_LEAF) for vt in (V_TURTLE, 36.0, 38.0, 40.0)]
+        tries += [(40.0, vl) for vl in (14.0, 9.0, 4.0, 0.0)]
+        vt, vl = tries[-1]
+        for cand in tries:
+            if meet(*cand) <= cap:
+                vt, vl = cand
+                break
+        t_eat = max(meet(vt, vl), t_walk2 + 1.5)
+        eat_x = tx0 - vt * (t_eat - t_walk2)
         t_resume = t_eat + EAT
 
         def turtle_at(t):
             if t <= t_walk2:
                 return tx0
             if t <= t_eat:
-                return tx0 - V_TURTLE * (t - t_walk2)
+                return tx0 - vt * (t - t_walk2)
             if t <= t_resume:
                 return eat_x
-            return eat_x - V_TURTLE * (t - t_resume)
+            return eat_x - vt * (t - t_resume)
 
     if e3:
-        t3 = e3["t"]
         # Land far enough left that the faster snake catches the turtle while
         # both are still clearly visible, not at the edge of the panel.
         sx0 = e3["x"] - 150.0
-        t_land3 = t3 + 1.5
-        t_slith = t_land3 + 0.5
-        t_gone = min(T - 0.5, t_slith + (sx0 + 240.0) / V_SNAKE)
 
         def snake_at(t):
             return sx0 - V_SNAKE * max(0.0, t - t_slith)
+
+        def first_contact():
+            probe = t_slith
+            while probe < T:
+                if snake_at(probe) - turtle_at(probe) <= 115.0:
+                    return probe
+                probe += 0.05
+            return T
+
+        # It must come from behind and only reach the turtle once the meal is
+        # over, so when the squares sit close together it stays in its block a
+        # little longer rather than overtaking a turtle that is still eating.
+        t3 = e3["t"]
+        while True:
+            t_land3 = t3 + 1.5
+            t_slith = t_land3 + 0.5
+            if not e2 or first_contact() >= t_resume + 0.6 or t3 > T - 20.0:
+                break
+            t3 += 0.1
+        t_gone = min(T - 0.5, t_slith + (sx0 + 240.0) / V_SNAKE)
 
         # Never mid-meal: it cannot be chewing and shut in its shell at once.
         t_hide, probe = T - 7.0, max(t_slith, t_resume + 0.2)
@@ -1536,7 +1598,8 @@ def build_runner_panel(weeks, total=None):
     if e1:
         # it drifts along the ground until the turtle catches it up, then it
         # sits still and loses a piece to every bite until there is none
-        leaf_x = eat_x - LEAF_GAP if e2 else lx0 - V_LEAF * (T - leaf_land)
+        leaf_x = (min(lx0, eat_x - LEAF_GAP) if e2
+                  else lx0 - V_LEAF * (T - leaf_land))
         leaf_end = meal_done if e2 else T
         leaf = (sequence(sheet_row("lpop", LEAF_S), t1, t1 + 0.55, T)
                 + sequence(sheet_row("lfall", LEAF_S), t1 + 0.55, leaf_land, T))
@@ -1800,7 +1863,11 @@ def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
         f' width="4.4" height="4.4" rx="1.2" fill="#7A4E16"'
         f' fill-opacity="0.75"/>'
         for dx in (-1, 1) for dy in (-1, 1))
+    ov, ok = _keys(["1", "1", "0", "0", "1"],
+                   [0.0, t + 1.4, t + 2.0, T - 0.6, T], T)
     return (f'<g transform="translate({cx:.1f} {cy:.1f})"><g>'
+            f'<animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
+            f' values="{ov}" keyTimes="{ok}"/>'
             f'<animateTransform attributeName="transform" type="translate"'
             f' dur="{T}s" repeatCount="indefinite" values="{bv}"'
             f' keyTimes="{bk}"/>'
