@@ -1887,17 +1887,16 @@ def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
 
 # ---------------------------------------------------------------- her, from the supplied avatar
 AVATAR_SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                 "..", "..", "assets", "runner-avatar-sheet-v6.png")
+                                 "..", "..", "assets", "runner-avatar-sheet-v7.png")
 AVATAR_COLS, AVATAR_ROWS = 4, 4
 AVATAR_CELL = 362.0
 AVATAR_SCALE = GIRL_TARGET_H / AVATAR_CELL
 RUN_LIMB_SPLIT_Y = 270
 _AVATAR = None
 
-# The v6 sheet plants a foot every second frame, so its eight frames hold four
-# steps (shoes about 215 source px apart at contact). RUN_CYCLE below counts two
-# "steps" per cycle, so each of those is two of these footfalls.
-RUN_STEP = 2.0 * 215.0 * AVATAR_SCALE
+# v7 sheet: the shoes are about 180 source px apart at contact, and the eight
+# frames hold two steps (passing poses at frames 2 and 6).
+RUN_STEP = 180.0 * AVATAR_SCALE
 RUN_CYCLE = 2.0 * RUN_STEP / RUN_SPEED
 assert math.isclose(RUN_SPEED * RUN_CYCLE, 2.0 * RUN_STEP,
                     rel_tol=1e-12, abs_tol=1e-12)
@@ -1975,7 +1974,7 @@ def avatar_run(cycle, baseline):
     return flipbook([avatar_frame(i, baseline) for i in range(8)], cycle)
 
 
-# v6 sheet: 9 rising with an arm up, 10 the head-butt (held across the moment
+# v7 sheet: 9 rising with an arm up, 10 the head-butt (held across the moment
 # of impact so the hit reads clearly), 11 falling, 12 the landing squash.
 AIR_POSES = [9, 10, 10, 11, 11, 11, 12]
 
@@ -2021,9 +2020,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v8.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v9.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v8.svg")
+        print("wrote runner-v9.svg")
     else:
         print("no calendar data - runner panel skipped")
     print("panels:", data["repos"], "repos,", data["deployed"], "live,", g.get("contributions"), "contributions")
