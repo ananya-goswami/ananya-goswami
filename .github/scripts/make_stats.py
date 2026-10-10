@@ -1094,6 +1094,12 @@ SHEET_BG = (0, 26, 28)
 TURTLE_SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
                                  "assets", "turtle-sheet-v1.png")
 TURTLE_CELL = 200
+# The snake's sheet: transparent, 2 rows x 8 cells of 260px, also at twice the
+# size it is drawn (SNAKE_S halves it). Row 1 is the slither; row 2 holds three
+# tongue-flick frames and one with the mouth closed.
+SNAKE_SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
+                                "assets", "snake-sheet-v1.png")
+SNAKE_CELL = 260
 SHEET_PAD = 3
 # The ground line each panel of the sheet is drawn on. Frames keep their own
 # distance from it, so a jump frame really does sit higher than a run frame.
@@ -1162,7 +1168,42 @@ def sheet():
                 "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
                 img.width, img.height, ax - cx0, base_y - cy0)
     _turtle_frames(Image, np, base64, io)
+    _snake_frames(Image, np, base64, io)
     return _SHEET
+
+
+def _snake_frames(Image, np, base64, io):
+    """Swap the snake rows for the frames on its own sheet.
+
+    Anchored on the middle of its body (the tongue left out, so a flick never
+    nudges the snake backwards) and on its lowest pixel, where it meets the
+    ground.
+    """
+    try:
+        src = Image.open(SNAKE_SHEET_PATH).convert("RGBA")
+    except Exception as exc:
+        print("snake sheet skipped:", exc)
+        return
+    rows = {"sslith": [(0, i) for i in range(8)],
+            "stongue": [(1, 0), (1, 1)],
+            "scont": [(1, 3), (1, 3)]}
+    for row, cells in rows.items():
+        for i, (r, c) in enumerate(cells):
+            cell = src.crop((c * SNAKE_CELL, r * SNAKE_CELL,
+                             (c + 1) * SNAKE_CELL, (r + 1) * SNAKE_CELL))
+            box = cell.getbbox()
+            if box is None:
+                continue
+            img = cell.crop(box)
+            a = np.array(img).astype(int)
+            red, green, blue, alpha = a[..., 0], a[..., 1], a[..., 2], a[..., 3]
+            body = (alpha > 128) & ~((red > 150) & (green < 90) & (blue < 90))
+            ox = float(np.nonzero(body)[1].mean()) if body.any() else img.width / 2.0
+            buf = io.BytesIO()
+            img.save(buf, "PNG", optimize=True)
+            _SHEET[(row, i)] = (
+                "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
+                img.width, img.height, ox, float(img.height))
 
 
 def _turtle_frames(Image, np, base64, io):
@@ -1321,7 +1362,7 @@ LEVELS = ["#06313E", "#128070", "#18A088", "#20D898", "#9BEFD9"]
 # character is all that is needed to land it at the size the panel used before.
 GIRL_TARGET_H = 128.0                # her displayed height, unchanged
 GIRL_S = GIRL_TARGET_H / 104.0
-TURTLE_S, LEAF_S, SNAKE_S = 0.50, 0.82, 0.92
+TURTLE_S, LEAF_S, SNAKE_S = 0.50, 0.82, 0.50
 V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 48.0, 22.0
 EAT = 3.0                            # a readable set of bites, not a rapid flicker
 LEAF_GAP = 39.0                      # smaller leaf halts with its edge at the mouth
@@ -2048,9 +2089,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v10.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v11.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v10.svg")
+        print("wrote runner-v11.svg")
     else:
         print("no calendar data - runner panel skipped")
     print("panels:", data["repos"], "repos,", data["deployed"], "live,", g.get("contributions"), "contributions")
