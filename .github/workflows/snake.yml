@@ -32,7 +32,9 @@ jobs:
           python3 -m pip install --quiet --upgrade pillow numpy
           python3 .github/scripts/make_stats.py
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # STATS_TOKEN (classic token, read:user) lets the panels count private
+          # contributions too; without it only public activity shows.
+          GITHUB_TOKEN: ${{ secrets.STATS_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Push generated art to output branch
         uses: crazy-max/ghaction-github-pages@v4
