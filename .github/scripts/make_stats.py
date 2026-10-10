@@ -1088,6 +1088,12 @@ def sprite_defs():
 SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
                           "assets", "sprite-sheet.png")
 SHEET_BG = (0, 26, 28)
+# The turtle has its own sheet: transparent, 3 rows x 6 cells of 200px, drawn
+# at twice the old turtle's size (TURTLE_S halves it back). Rows are walk, eat
+# and hide, already in the order the story uses them.
+TURTLE_SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
+                                 "assets", "turtle-sheet-v1.png")
+TURTLE_CELL = 200
 SHEET_PAD = 3
 # The ground line each panel of the sheet is drawn on. Frames keep their own
 # distance from it, so a jump frame really does sit higher than a run frame.
@@ -1155,7 +1161,40 @@ def sheet():
             _SHEET[(row, i)] = (
                 "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
                 img.width, img.height, ax - cx0, base_y - cy0)
+    _turtle_frames(Image, np, base64, io)
     return _SHEET
+
+
+def _turtle_frames(Image, np, base64, io):
+    """Swap the turtle rows for the frames on its own sheet.
+
+    Each frame is anchored on the middle of its shell (so the head pulling in
+    or a leaf sticking out of its mouth never shoves the body sideways) and on
+    its lowest pixel, which is where its feet meet the ground.
+    """
+    try:
+        src = Image.open(TURTLE_SHEET_PATH).convert("RGBA")
+    except Exception as exc:
+        print("turtle sheet skipped:", exc)
+        return
+    for r, row in enumerate(("twalk", "teat", "thide")):
+        for i in range(6):
+            cell = src.crop((i * TURTLE_CELL, r * TURTLE_CELL,
+                             (i + 1) * TURTLE_CELL, (r + 1) * TURTLE_CELL))
+            box = cell.getbbox()
+            if box is None:
+                continue
+            img = cell.crop(box)
+            a = np.array(img).astype(int)
+            red, green, blue, alpha = a[..., 0], a[..., 1], a[..., 2], a[..., 3]
+            shell = ((alpha > 128) & (green > red + 15) & (green > 50)
+                     & (green < 150) & (blue < 100))
+            ox = float(np.nonzero(shell)[1].mean()) if shell.any() else img.width / 2.0
+            buf = io.BytesIO()
+            img.save(buf, "PNG", optimize=True)
+            _SHEET[(row, i)] = (
+                "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
+                img.width, img.height, ox, float(img.height))
 
 
 def sheet_use(row, i, scale=1.0, dx=0.0, dy=0.0):
@@ -1282,7 +1321,7 @@ LEVELS = ["#06313E", "#128070", "#18A088", "#20D898", "#9BEFD9"]
 # character is all that is needed to land it at the size the panel used before.
 GIRL_TARGET_H = 128.0                # her displayed height, unchanged
 GIRL_S = GIRL_TARGET_H / 104.0
-TURTLE_S, LEAF_S, SNAKE_S = 1.00, 0.82, 0.92
+TURTLE_S, LEAF_S, SNAKE_S = 0.50, 0.82, 0.92
 V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 48.0, 22.0
 EAT = 3.0                            # a readable set of bites, not a rapid flicker
 LEAF_GAP = 39.0                      # smaller leaf halts with its edge at the mouth
@@ -1600,27 +1639,16 @@ def build_runner_panel(weeks, total=None):
         # sits still and loses a piece to every bite until there is none
         leaf_x = (min(lx0, eat_x - LEAF_GAP) if e2
                   else lx0 - V_LEAF * (T - leaf_land))
-        leaf_end = meal_done if e2 else T
+        # The turtle's own bite frames hold the leaf in its mouth, so the leaf
+        # on the ground goes the moment it is picked up.
+        leaf_end = _edge[1] if e2 else T
         leaf = (sequence(sheet_row("lpop", LEAF_S), t1, t1 + 0.55, T)
                 + sequence(sheet_row("lfall", LEAF_S), t1 + 0.55, leaf_land, T))
         # Once it touches the ground, keep one fixed side facing the viewer.
         # Position animation carries this frame left; no flipping or rotation.
         grounded_leaf = sheet_use("lslide", 0, LEAF_S)
         if e2:
-            # The turtle eats from the right, so the side its mouth is on has to
-            # stay put and only the far side may shrink away; scaling about the
-            # centre would make the leaf shuffle backwards out of its mouth.
-            full_w = float(SHEET_ROWS["lslide"][1][0][2] - SHEET_ROWS["lslide"][1][0][0])
-            crumb_w = float(SHEET_ROWS["teat"][1][4][2] - SHEET_ROWS["teat"][1][4][0])
-            mouth = full_w * LEAF_S / 2.0
-            half_s, crumb_s = LEAF_S * 0.66, LEAF_S * 0.62
-            leaf += sequence([grounded_leaf], leaf_land, bite1, T)
-            leaf += sequence([sheet_use("lslide", 0, half_s,
-                                        dx=mouth - full_w * half_s / 2.0)], bite1, bite2, T)
-            # one more bite and only the scrap the sheet draws is left
-            leaf += sequence([sheet_use("teat", 4, crumb_s,
-                                        dx=mouth - crumb_w * crumb_s / 2.0)],
-                             bite2, meal_done, T)
+            leaf += sequence([grounded_leaf], leaf_land, leaf_end, T)
         else:
             leaf += sequence([grounded_leaf], leaf_land, T, T)
         lpts = [(t1, e1["x"], e1["y"] + GCELL / 2),
@@ -2020,9 +2048,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v9.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v10.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v9.svg")
+        print("wrote runner-v10.svg")
     else:
         print("no calendar data - runner panel skipped")
     print("panels:", data["repos"], "repos,", data["deployed"], "live,", g.get("contributions"), "contributions")
