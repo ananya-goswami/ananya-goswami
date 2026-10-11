@@ -169,22 +169,31 @@ function features(col) {
 
 // ---------------------------------------------------------------- state
 const P = { x: 300, y: GROUND, vy: 0, h: 110, w: 46, onGround: true, hold: 0, shield: 0, hurt: 0, rot: 0, plat: null };
-let state = "title", t = 0, speed = 360, dist = 0, coins = 0, fixed = 0, streak = 0, scroll = 0, version = 0;
-let enemies = [], pops = [], leaves = [], parts = [], texts = [], nextEnemy = 1.2, flash = 0, paused = false;
+let state = "title", t = 0, speed = 240, dist = 0, coins = 0, fixed = 0, streak = 0, scroll = 0, version = 0;
+let enemies = [], pops = [], leaves = [], parts = [], texts = [], nextEnemy = 3, flash = 0, paused = false;
 let bonus = 0, shake = 0, banner = null, lit = new Map(), killer = null, overT = 0;
 // surprises: one random event at a time, plus timed power-ups
-let ev = null, nextEv = 18, coinMult = 1, gravMul = 1, caffeine = 0, god = 0, drops = [], keybuf = "";
+let ev = null, nextEv = 35, coinMult = 1, gravMul = 1, caffeine = 0, god = 0, drops = [], keybuf = "";
 const GRAV = 2600, JUMP_V = 980, HOLD_G = 0.45, MAX_HOLD = 0.22;
 const DEPLOY_EVERY = 250;            // metres between releases
 
 function reset() {
   Object.assign(P, { y: GROUND, vy: 0, onGround: true, shield: 0, hurt: 0, hold: 0, rot: 0, plat: null });
-  t = 0; speed = 360; dist = 0; coins = 0; fixed = 0; streak = 0; scroll = 0; version = 0;
-  enemies = []; pops = []; leaves = []; parts = []; texts = []; nextEnemy = 1.2; flash = 0;
+  t = 0; speed = 240; dist = 0; coins = 0; fixed = 0; streak = 0; scroll = 0; version = 0;
+  enemies = []; pops = []; leaves = []; parts = []; texts = []; nextEnemy = 3; flash = 0;
   bonus = 0; shake = 0; banner = null; lit = new Map(); killer = null; feat.clear(); blockCount = 0;
-  ev = null; nextEv = 18; coinMult = 1; gravMul = 1; caffeine = 0; god = 0; drops = [];
+  ev = null; nextEv = 35; coinMult = 1; gravMul = 1; caffeine = 0; god = 0; drops = [];
 }
 const metres = () => Math.floor(dist / 40);
+
+// ---------------------------------------------------------------- difficulty: slow and easy first
+// 0.0 at the start, 1.0 after about three minutes. Speed, how often bugs come,
+// how many of them are fast snakes, and which events can fire all follow it.
+const level = () => Math.min(1, t / 180);
+function pace() {
+  // a gentle warm-up, then steady growth, plus a small step at every release
+  return Math.min(640, 240 + 330 * level() + version * 12);
+}
 const col0 = () => Math.floor((scroll + P.x) / PITCH);
 
 // ---------------------------------------------------------------- random events
@@ -223,7 +232,11 @@ function runEvents(dt) {
     return;
   }
   nextEv -= dt;
-  if (nextEv <= 0) startEvent(["incident", "hackathon", "lowgrav"][Math.floor(Math.random() * 3)]);
+  if (nextEv <= 0) {
+    // the prod incident (three bugs at once) only after the first minute
+    const pool = t > 60 ? ["incident", "hackathon", "lowgrav"] : ["hackathon", "lowgrav"];
+    startEvent(pool[Math.floor(Math.random() * pool.length)]);
+  }
 }
 function score() { return metres() + coins * 10 + fixed * 25 + bonus; }
 
@@ -279,7 +292,8 @@ addEventListener("load", () => { try { window.focus(); cv.focus({ preventScroll:
 const BUGS = { snake: ["bug", "TypeError", "null ref", "race condition", "off-by-one"],
                turtle: ["slow CI", "legacy code", "tech debt", "flaky test"] };
 function spawnEnemy() {
-  const kind = Math.random() < 0.5 ? "turtle" : "snake";
+  // early on it is mostly slow turtles; snakes (faster) join in as she goes
+  const kind = Math.random() < 0.15 + 0.4 * level() ? "snake" : "turtle";
   const h = kind === "turtle" ? 46 : 52;
   // hitbox = the drawn sprite's width, trimmed a little so grazes are forgiven
   const img = kind === "turtle" ? S.turtle[0] : S.snake[0];
@@ -287,7 +301,8 @@ function spawnEnemy() {
   const tags = BUGS[kind];
   enemies.push({ kind, x: W + 80, walk: kind === "turtle" ? 40 : 70, w, h, dead: 0,
                  tag: tags[Math.floor(Math.random() * tags.length)] });
-  nextEnemy = Math.max(0.85, 2.2 - t / 70) + Math.random() * 1.3;
+  // a bug every ~3.5 s at first, down to ~1.2 s at full difficulty
+  nextEnemy = 3.4 - 2.2 * level() + Math.random() * (1.6 - 0.6 * level());
 }
 
 function hitBlock(c, b) {
@@ -334,7 +349,7 @@ function update(dt) {
   if (state !== "play" || paused) return;
 
   // steady ramp, plus a step at every release
-  speed = Math.min(660, 360 + t * 4 + version * 25) * (caffeine > 0 ? 1.35 : 1);
+  speed = pace() * (caffeine > 0 ? 1.35 : 1);
   const dx = speed * dt;
   scroll += dx; dist += dx;
   if (metres() >= (version + 1) * DEPLOY_EVERY) {
