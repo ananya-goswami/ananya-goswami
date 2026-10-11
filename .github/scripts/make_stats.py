@@ -1930,6 +1930,65 @@ def _tumble_leaf(size, row=0):
     return sheet_row("lfall", LEAF_S * size / 60.0)
 
 
+def _planet_designs():
+    """Five small, quiet planets in the panel's palette, centred on 0,0."""
+    ring = lambda c, a: (f'<ellipse rx="150" ry="30" fill="none" stroke="{c}" stroke-opacity="{a}"'
+                         f' stroke-width="5" transform="rotate(-14)"/>')
+    front = lambda c, a: (f'<path d="M -150 0 A 150 30 0 0 0 150 0" fill="none" stroke="{c}"'
+                          f' stroke-opacity="{a}" stroke-width="5" transform="rotate(-14)"/>')
+    grad = lambda gid, a, b, c: (f'<radialGradient id="{gid}" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="{a}"/>'
+                                 f'<stop offset=".6" stop-color="{b}"/><stop offset="1" stop-color="{c}"/></radialGradient>')
+    shade = ('<circle r="74" fill="url(#plShade)"/>')
+    out = []
+    # 1. ringed teal giant
+    out.append(grad("pl1", "#1E6B66", "#0E3A40", "#081420") + ring("#20D898", ".18")
+               + '<circle r="74" fill="url(#pl1)"/>' + front("#20D898", ".3"))
+    # 2. banded violet gas giant
+    bands = "".join(f'<rect x="-80" y="{y}" width="160" height="{h}" fill="{c}" opacity=".55"/>'
+                    for y, h, c in [(-48, 10, "#8E7CF0"), (-22, 14, "#5B4BC4"), (8, 8, "#B3A6FF"), (30, 12, "#5B4BC4")])
+    out.append(grad("pl2", "#6E5FD8", "#3B2F86", "#120E2A")
+               + '<clipPath id="pl2c"><circle r="80"/></clipPath>'
+               + '<circle r="80" fill="url(#pl2)"/>' + f'<g clip-path="url(#pl2c)">{bands}</g>' + '<circle r="80" fill="url(#plShade)"/>')
+    # 3. dusty red planet with craters
+    craters = "".join(f'<circle cx="{x}" cy="{y}" r="{r}" fill="#5A1F1C" opacity=".55"/>'
+                      for x, y, r in [(-24, -18, 12), (20, 10, 9), (-8, 30, 7), (32, -26, 6), (-40, 14, 5)])
+    out.append(grad("pl3", "#C9584A", "#7A2A26", "#1A0A0C") + '<circle r="66" fill="url(#pl3)"/>' + craters
+               + '<circle r="66" fill="url(#plShade)"/>')
+    # 4. ice world with two little moons
+    out.append(grad("pl4", "#BFEFFF", "#4C9FC0", "#0C2433") + '<circle r="70" fill="url(#pl4)"/>'
+               + '<ellipse cx="-10" cy="-20" rx="40" ry="10" fill="#E8FBFF" opacity=".25"/>'
+               + '<circle r="70" fill="url(#plShade)"/>'
+               + '<g><animateTransform attributeName="transform" type="rotate" values="0;360" dur="18s" repeatCount="indefinite"/>'
+               + '<circle cx="118" cy="0" r="9" fill="#9FC9D9"/></g>'
+               + '<g><animateTransform attributeName="transform" type="rotate" values="200;-160" dur="26s" repeatCount="indefinite"/>'
+               + '<circle cx="150" cy="0" r="6" fill="#6E95A6"/></g>')
+    # 5. golden ringed world, rings tilted the other way
+    out.append(grad("pl5", "#FFE08A", "#C08A2E", "#2A1A08")
+               + ring("#FFD24A", ".22").replace("rotate(-14)", "rotate(18)")
+               + '<circle r="60" fill="url(#pl5)"/>' + '<circle r="60" fill="url(#plShade)"/>'
+               + front("#FFD24A", ".35").replace("rotate(-14)", "rotate(18)"))
+    return out
+
+
+def planets(cx, cy, T):
+    """One planet per loop of the panel, in turn; the first one changes daily."""
+    designs = _planet_designs()
+    n = len(designs)
+    start = datetime.now(timezone.utc).timetuple().tm_yday % n
+    order = designs[start:] + designs[:start]
+    span = n * T
+    out = ('<defs><radialGradient id="plShade" cx=".75" cy=".75" r=".75">'
+           '<stop offset=".55" stop-color="#081420" stop-opacity="0"/>'
+           '<stop offset="1" stop-color="#081420" stop-opacity=".75"/></radialGradient></defs>')
+    for k, d in enumerate(order):
+        vals, keys = _keys(["0", "1", "0", "0"] if k else ["1", "0", "0", "0"],
+                           [0.0, k * T, (k + 1) * T, span] if k else [0.0, T, span, span], span)
+        out += (f'<g opacity="0"><animate attributeName="opacity" dur="{span:.1f}s" repeatCount="indefinite"'
+                f' calcMode="discrete" values="{vals}" keyTimes="{keys}"/>'
+                f'<g transform="translate({cx:.0f} {cy:.0f})">{d}</g></g>')
+    return out
+
+
 def story_outro(t_cut, T):
     px0, py0, px1, py1 = PANEL
     W, H = px1 - px0, py1 - py0
@@ -2015,14 +2074,8 @@ def story_outro(t_cut, T):
            f'<stop offset="1" stop-color="#CFEAE3" stop-opacity=".9"/></linearGradient></defs>'
            f'<ellipse cx="{px0 + W * 0.28}" cy="{py0 + 150}" rx="520" ry="210" fill="url(#neb2)"/>'
            f'<ellipse cx="{px0 + W * 0.72}" cy="{py0 + 260}" rx="560" ry="230" fill="url(#neb1)"/>'
-           + stars +
-           # the planet, partly below the horizon line of the panel
-           f'<g transform="translate({px0 + W * 0.86:.0f} {py0 + 175})">'
-           f'<ellipse rx="150" ry="30" fill="none" stroke="#20D898" stroke-opacity=".18" stroke-width="5"'
-           f' transform="rotate(-14)"/>'
-           f'<circle r="74" fill="url(#planet)"/>'
-           f'<path d="M -150 0 A 150 30 0 0 0 150 0" fill="none" stroke="#20D898" stroke-opacity=".3"'
-           f' stroke-width="5" transform="rotate(-14)"/></g>'
+           + stars
+           + planets(px0 + W * 0.86, py0 + 175, T) +
            # a small moon on the left
            f'<circle cx="{px0 + W * 0.12:.0f}" cy="{py0 + 110}" r="16" fill="#12404A"/>'
            f'<circle cx="{px0 + W * 0.12 - 5:.0f}" cy="{py0 + 105}" r="16" fill="#081420" opacity=".55"/>')
