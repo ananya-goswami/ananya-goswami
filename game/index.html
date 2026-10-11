@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Commit Runner</title>
+<meta name="description" content="An endless runner built from Ananya Goswami's GitHub contributions.">
+<style>
+  :root { --bg:#081420; --ink:#CFEAE3; --mint:#9BE7C4; --teal:#20D898; --dim:#4e6b66; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font:600 14px/1.5 ui-monospace,"SF Mono","JetBrains Mono",Consolas,monospace; }
+  body { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px;
+    padding:16px; box-sizing:border-box; }
+  #wrap { width:min(1200px,100%); }
+  canvas { display:block; width:100%; height:auto; image-rendering:pixelated;
+    border-radius:12px; background:#081420; touch-action:manipulation; cursor:pointer;
+    box-shadow:0 0 0 1px #13302c, 0 18px 50px rgba(0,0,0,.45); }
+  .bar { width:min(1200px,100%); display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;
+    color:var(--dim); font-size:12px; }
+  a { color:var(--mint); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c" width="1200" height="570" aria-label="Commit Runner game"></canvas></div>
+<div class="bar">
+  <span>Space / ↑ / tap: jump (hold for higher) · P: pause · stomp turtles and snakes, head-butt &lt;/&gt; blocks</span>
+  <a href="https://github.com/ananya-goswami">← back to GitHub</a>
+</div>
+<script>
+(() => {
+"use strict";
+const W = 1200, H = 570, GROUND = 530, GY0 = 64, PITCH = 44, CELL = 34;
+const LEVELS = ["#06313E", "#128070", "#18A088", "#20D898", "#9BEFD9"];
+const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+ctx.imageSmoothingEnabled = false;
+
+// ---------------------------------------------------------------- storage (best score)
+let best = 0;
+try { best = +localStorage.getItem("commitRunnerBest") || 0; } catch (e) {}
+function saveBest() { try { localStorage.setItem("commitRunnerBest", String(best)); } catch (e) {} }
+
+// ---------------------------------------------------------------- sprites
+function load(src) {
+  return new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+}
+// cut a cell, trim it to its visible pixels; anchor = bottom centre
+function cut(img, x, y, w, h) {
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const g = c.getContext("2d"); g.drawImage(img, x, y, w, h, 0, 0, w, h);
+  const d = g.getImageData(0, 0, w, h).data;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+    if (d[(yy * w + xx) * 4 + 3] > 20) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; }
+  }
+  if (x1 < 0) return null;
+  const o = document.createElement("canvas"); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
+  o.getContext("2d").drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
+  return o;
+}
+const S = {};
+async function loadSprites() {
+  const [av, tu, sn, lf, bc] = await Promise.all([
+    load("assets/runner-avatar-sheet-v9.png"), load("assets/turtle-sheet-v1.png"),
+    load("assets/snake-sheet-v1.png"), load("assets/leaf-sheet-v1.png"),
+    load("assets/blockcoin-sheet-v1.png")]);
+  const grid = (img, cw, ch, cells) => img ? cells.map(([c, r]) => cut(img, c * cw, r * ch, cw, ch)) : [];
+  // her run, in stride order, then rising / head-butt / falling / landing
+  S.run = grid(av, 362, 362, [[0,0],[1,0],[2,0],[3,0],[0,1],[1,1],[2,1]]);
+  S.runW = [1, 1, 1, 4/3, 4/3, 4/3, 1];
+  S.air = grid(av, 362, 362, [[1,2],[2,2],[3,2],[0,3]]);
+  S.turtle = grid(tu, 200, 200, [0,1,2,3,4,5].map(i => [i, 0]));
+  S.shell = grid(tu, 200, 200, [[4, 2]]);
+  S.snake = grid(sn, 260, 260, [0,1,2,3,4,5,6,7].map(i => [i, 0]));
+  S.leaf = grid(lf, 140, 140, [[2,0],[3,0],[4,0]]);
+  S.block = grid(bc, 128, 128, [[0,0],[1,0],[2,0]]);
+  S.coin = grid(bc, 128, 128, [[0,1],[1,1],[2,1],[3,1]]);
+}
+
+// ---------------------------------------------------------------- the world from her contributions
+let weeks = null;
+async function loadWeeks() {
+  try {
+    const r = await fetch("contrib.json", { cache: "no-store" });
+    const j = await r.json();
+    if (Array.isArray(j.levels) && j.levels.length) weeks = j.levels;
+  } catch (e) {}
+  if (!weeks) {               // offline / first build: a made-up but plausible grid
+    weeks = [];
+    for (let c = 0; c < 52; c++) weeks.push([0,1,2,3,4,5,6].map(() => Math.random() < .35 ? 1 + (Math.random() * 4 | 0) : 0));
+  }
+  // drop the empty stretch at the start so the run begins where the work does
+  const first = weeks.findIndex(w => w.some(v => v > 0));
+  if (first > 0) weeks = weeks.slice(first);
+}
+function levelAt(col, row) { return weeks[((col % weeks.length) + weeks.length) % weeks.length][row]; }
+
+// ---------------------------------------------------------------- state
+const P = { x: 300, y: GROUND, vy: 0, h: 110, w: 46, onGround: true, hold: 0, shield: 0, hurt: 0 };
+let state = "title", t = 0, speed = 300, dist = 0, coins = 0, stomps = 0, scroll = 0;
+let enemies = [], blocks = new Map(), pops = [], leaves = [], nextEnemy = 2.2, flash = 0, paused = false;
+const GRAV = 2600, JUMP_V = 980, HOLD_G = 0.45, MAX_HOLD = 0.22;
+
+function reset() {
+  P.y = GROUND; P.vy = 0; P.onGround = true; P.shield = 0; P.hurt = 0; P.hold = 0;
+  t = 0; speed = 300; dist = 0; coins = 0; stomps = 0; scroll = 0;
+  enemies = []; blocks = new Map(); pops = []; leaves = []; nextEnemy = 2.2; flash = 0;
+}
+function score() { return Math.floor(dist / 40) + coins * 10 + stomps * 25; }
+
+// which squares are </> blocks: a lit square in a reachable row, every few columns
+function blockAt(col) {
+  if (blocks.has(col)) return blocks.get(col);
+  let b = null;
+  if (col % 4 === 0) {
+    for (const r of [6, 5, 4, 3]) if (levelAt(col, r) > 0) { b = { col, row: r, state: 0, bump: 0, kind: (col % 15 === 0) ? "leaf" : "coin" }; break; }
+  }
+  blocks.set(col, b);
+  if (blocks.size > 400) { const k = blocks.keys().next().value; blocks.delete(k); }
+  return b;
+}
+
+// ---------------------------------------------------------------- input
+let down = false;
+function press() {
+  if (state === "title" || state === "over") { if (state === "over" && t < 0.6) return; reset(); state = "play"; return; }
+  if (paused) { paused = false; return; }
+  down = true;
+  if (P.onGround) { P.vy = -JUMP_V; P.onGround = false; P.hold = 0; }
+}
+function release() { down = false; }
+addEventListener("keydown", e => {
+  if (["Space", "ArrowUp", "KeyW", "Enter"].includes(e.code)) { e.preventDefault(); if (!e.repeat) press(); }
+  if (e.code === "KeyP" || e.code === "Escape") { if (state === "play") paused = !paused; }
+});
+addEventListener("keyup", e => { if (["Space", "ArrowUp", "KeyW", "Enter"].includes(e.code)) release(); });
+cv.addEventListener("pointerdown", e => { e.preventDefault(); press(); });
+addEventListener("pointerup", release);
+addEventListener("blur", () => { if (state === "play") paused = true; });
+
+// ---------------------------------------------------------------- update
+function spawnEnemy() {
+  const kind = Math.random() < 0.55 ? "turtle" : "snake";
+  enemies.push({ kind, x: W + 80, walk: kind === "turtle" ? 40 : 70, w: kind === "turtle" ? 62 : 84, h: kind === "turtle" ? 46 : 52, dead: 0 });
+  const gap = Math.max(0.9, 2.6 - t / 60) + Math.random() * 1.4;
+  nextEnemy = gap;
+}
+function update(dt) {
+  t += dt;
+  if (state !== "play" || paused) return;
+  speed = Math.min(620, 300 + t * 6);
+  const dx = speed * dt;
+  scroll += dx; dist += dx;
+
+  // jump: holding the button keeps lift for a moment
+  if (!P.onGround) {
+    let g = GRAV;
+    if (down && P.vy < 0 && P.hold < MAX_HOLD) { g *= HOLD_G; P.hold += dt; }
+    P.vy += g * dt;
+    const prevHead = P.y - P.h;
+    P.y += P.vy * dt;
+    // head-butt: moving up through the bottom of a block above her
+    if (P.vy < 0) {
+      const col = Math.floor((scroll + P.x) / PITCH);
+      for (const c of [col - 1, col, col + 1]) {
+        const b = blockAt(c); if (!b || b.state) continue;
+        const bx = c * PITCH - scroll, by = GY0 + b.row * PITCH, bottom = by + CELL * 1.12;
+        if (P.x + P.w / 2 > bx && P.x - P.w / 2 < bx + CELL && prevHead >= bottom - 2 && P.y - P.h <= bottom) {
+          b.state = 1; b.bump = 0.25; P.vy = 60; P.y = bottom + P.h;
+          if (b.kind === "leaf") leaves.push({ x: c * PITCH + CELL / 2, y: by - 10, vy: -380, got: false });
+          else { coins++; pops.push({ x: c * PITCH + CELL / 2, y: by - 6, age: 0 }); }
+        }
+      }
+    }
+    if (P.y >= GROUND) { P.y = GROUND; P.vy = 0; P.onGround = true; }
+  }
+  for (const b of blocks.values()) if (b && b.bump > 0) b.bump -= dt;
+  for (const p of pops) p.age += dt;
+  pops = pops.filter(p => p.age < 0.6);
+
+  // leaf power-up: pops up, falls, slides with the world until she touches it
+  for (const l of leaves) {
+    l.vy = Math.min(l.vy + 1400 * dt, 500); l.y = Math.min(l.y + l.vy * dt, GROUND - 4);
+    const sx = l.x - scroll;
+    if (!l.got && Math.abs(sx - P.x) < 40 && Math.abs((P.y - P.h / 2) - l.y) < P.h / 2 + 20) { l.got = true; P.shield = 1; flash = 0.4; }
+  }
+  leaves = leaves.filter(l => !l.got && l.x - scroll > -60);
+
+  // enemies
+  nextEnemy -= dt; if (nextEnemy <= 0) spawnEnemy();
+  for (const e of enemies) {
+    if (e.dead) { e.dead += dt; e.x -= dx; continue; }
+    e.x -= dx + e.walk * dt;
+    const overlapX = Math.abs(e.x - P.x) < (e.w + P.w) / 2 - 8;
+    const feet = P.y, top = GROUND - e.h;
+    if (overlapX && feet > top + 6) {
+      if (P.vy > 0 && feet < top + 26) { e.dead = 0.001; stomps++; P.vy = -620; P.onGround = false; P.hold = MAX_HOLD; }
+      else if (P.hurt <= 0) {
+        if (P.shield) { P.shield = 0; P.hurt = 1.0; flash = 0.3; e.dead = 0.001; }
+        else { state = "over"; t = 0; const s = score(); if (s > best) { best = s; saveBest(); } }
+      }
+    }
+  }
+  enemies = enemies.filter(e => e.x > -150 && e.dead < 0.6);
+  if (P.hurt > 0) P.hurt -= dt;
+  if (flash > 0) flash -= dt;
+}
+
+// ---------------------------------------------------------------- draw
+function rrect(x, y, w, h, r, fill) { ctx.fillStyle = fill; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); ctx.fill(); }
+function sprite(img, cx, bottom, height, flip) {
+  if (!img) return;
+  const k = height / img.height, w = img.width * k;
+  ctx.save(); ctx.translate(cx, bottom); if (flip) ctx.scale(-1, 1);
+  ctx.drawImage(img, -w / 2, -height, w, height); ctx.restore();
+}
+function frameAt(list, weights, period, time) {
+  const tot = weights.reduce((a, b) => a + b, 0); let x = (time % period) / period * tot;
+  for (let i = 0; i < list.length; i++) { x -= weights[i]; if (x < 0) return list[i]; }
+  return list[list.length - 1];
+}
+const EVEN = n => Array(n).fill(1);
+const stars = Array.from({ length: 22 }, (_, k) => [60 + (k * 331) % (W - 120), 70 + (k * 137) % 400, k]);
+
+function draw() {
+  ctx.fillStyle = "#081420"; ctx.fillRect(0, 0, W, H);
+  for (const [x, y, k] of stars) { ctx.globalAlpha = 0.15 + 0.35 * (0.5 + 0.5 * Math.sin(t * 1.5 + k)); ctx.fillStyle = "#9BEFD9"; ctx.fillRect(x, y, 4, 4); }
+  ctx.globalAlpha = 1;
+
+  // contribution grid scrolling as the world
+  const c0 = Math.floor(scroll / PITCH) - 1, c1 = c0 + Math.ceil(W / PITCH) + 2;
+  for (let c = c0; c <= c1; c++) {
+    const x = c * PITCH - scroll;
+    const b = blockAt(c);
+    for (let r = 0; r < 7; r++) {
+      const y = GY0 + r * PITCH;
+      if (b && b.row === r) continue;
+      rrect(x, y, CELL, CELL, 7, LEVELS[levelAt(c, r)]);
+    }
+    if (b) {
+      const y = GY0 + b.row * PITCH - (b.bump > 0 ? Math.sin((0.25 - b.bump) / 0.25 * Math.PI) * 14 : 0);
+      const img = b.state ? (b.bump > 0.12 ? S.block[1] : S.block[2]) : S.block[0];
+      if (img) ctx.drawImage(img, x - CELL * 0.12, y - CELL * 0.12, CELL * 1.24, CELL * 1.24);
+      else rrect(x, y, CELL, CELL, 7, b.state ? "#0a6b5c" : "#20D898");
+    }
+  }
+  // coins popping out of blocks
+  for (const p of pops) {
+    const y = p.y - Math.sin(Math.min(1, p.age / 0.6) * Math.PI) * 90;
+    const img = frameAt(S.coin, [1,1,1,1], 0.4, p.age);
+    if (img) sprite(img, p.x - scroll, y + 14, 28);
+  }
+  // ground
+  ctx.fillStyle = "#0B2A33"; ctx.fillRect(0, GROUND, W, H - GROUND);
+  ctx.fillStyle = "#3CEDA5"; ctx.fillRect(0, GROUND, W, 6);
+  ctx.fillStyle = "#07202A";
+  for (let x = -((scroll) % 74); x < W; x += 74) ctx.fillRect(x, GROUND + 6, 2, H - GROUND - 6);
+
+  for (const l of leaves) sprite(frameAt(S.leaf, [1,1,1], 0.6, t), l.x - scroll, l.y + 4, 30);
+
+  for (const e of enemies) {
+    const squash = e.dead ? Math.max(0.25, 1 - e.dead * 3) : 1;
+    ctx.save(); ctx.translate(e.x, GROUND + 4); ctx.scale(1, squash);
+    if (e.kind === "turtle") sprite(e.dead ? S.shell[0] : frameAt(S.turtle, EVEN(6), 0.62, t), 0, 0, e.h);
+    else sprite(frameAt(S.snake, EVEN(8), 0.8, t), 0, 0, e.h);
+    ctx.restore();
+  }
+
+  // her
+  const blink = P.hurt > 0 && Math.floor(t * 12) % 2;
+  if (!blink) {
+    let img;
+    if (state === "title") img = S.run[0];
+    else if (!P.onGround) img = P.vy < -250 ? S.air[0] : P.vy < 120 ? S.air[1] : S.air[2];
+    else img = frameAt(S.run, S.runW, 2 * 51 / speed, t);   // two steps of ~51px per cycle, so her feet keep pace with the ground
+    ctx.beginPath(); ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.ellipse(P.x, GROUND - 2, 30, 6, 0, 0, 7); ctx.fill();
+    if (P.shield) { ctx.beginPath(); ctx.strokeStyle = "rgba(155,239,217,.7)"; ctx.lineWidth = 3; ctx.ellipse(P.x, P.y - P.h / 2, 46, 64, 0, 0, 7); ctx.stroke(); }
+    sprite(img, P.x, P.y, P.h);
+  }
+
+  // HUD
+  const coinImg = frameAt(S.coin, [3,1,1,1], 1.6, t);
+  if (coinImg) sprite(coinImg, 54, 50, 30);
+  ctx.fillStyle = "#CFEAE3"; ctx.font = "600 28px ui-monospace,Consolas,monospace"; ctx.textBaseline = "middle";
+  ctx.fillText("x " + coins, 78, 36);
+  ctx.textAlign = "right";
+  const sc = "SCORE " + score();
+  ctx.fillText(sc, W - 40, 36);
+  const scw = ctx.measureText(sc).width;
+  ctx.fillStyle = "#4e6b66"; ctx.font = "600 20px ui-monospace,Consolas,monospace";
+  ctx.fillText("BEST " + best, W - 40 - scw - 28, 37);
+  ctx.textAlign = "left";
+
+  if (flash > 0) { ctx.fillStyle = `rgba(155,239,217,${flash})`; ctx.fillRect(0, 0, W, H); }
+  if (state !== "play" || paused) overlay();
+}
+function overlay() {
+  ctx.fillStyle = "rgba(5,10,20,.62)"; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = "center"; ctx.fillStyle = "#9BE7C4";
+  ctx.font = "700 54px ui-monospace,Consolas,monospace";
+  const title = paused ? "PAUSED" : state === "title" ? "COMMIT RUNNER" : "GAME OVER";
+  ctx.fillText(title, W / 2, H / 2 - 60);
+  ctx.fillStyle = "#CFEAE3"; ctx.font = "600 22px ui-monospace,Consolas,monospace";
+  if (state === "over") ctx.fillText(`score ${score()}   ·   coins ${coins}   ·   best ${best}`, W / 2, H / 2);
+  else if (state === "title") ctx.fillText("an endless run through Ananya's contribution graph", W / 2, H / 2);
+  ctx.fillStyle = "#20D898";
+  if (Math.floor(t * 2) % 2 === 0) ctx.fillText(paused ? "press P or tap to continue" : "press SPACE or tap to " + (state === "over" ? "play again" : "play"), W / 2, H / 2 + 60);
+  ctx.textAlign = "left";
+}
+
+// ---------------------------------------------------------------- loop
+let last = 0;
+function frame(now) {
+  const dt = Math.min(0.033, (now - last) / 1000 || 0); last = now;
+  update(dt); draw(); requestAnimationFrame(frame);
+}
+Promise.all([loadSprites(), loadWeeks()]).then(() => requestAnimationFrame(frame));
+})();
+</script>
+</body>
+</html>
