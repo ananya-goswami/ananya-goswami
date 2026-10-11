@@ -86,7 +86,7 @@ TAIL = """
 
 <text opacity="0" x="500" y="190" font-size="14" xml:space="preserve"><tspan fill="#22D3EE">Subject</tspan><tspan fill="#31514c"> ..................................................... </tspan><tspan fill="#F2FBF8" font-weight="600">Ananya Goswami</tspan><animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.106;0.161;1" dur="9.0s" begin="0s" fill="freeze"/></text>
 <text opacity="0" x="500" y="214" font-size="14" xml:space="preserve"><tspan fill="#22D3EE">Role</tspan><tspan fill="#31514c"> .............................................. </tspan><tspan fill="#00FF9C" font-weight="600">Senior Product Associate</tspan><animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.123;0.178;1" dur="9.0s" begin="0s" fill="freeze"/></text>
-<text opacity="0" x="500" y="238" font-size="14" xml:space="preserve"><tspan fill="#22D3EE">Team</tspan><tspan fill="#31514c"> ...................................... </tspan><tspan fill="#CFEAE3" font-weight="600">Game Development, ConveGenius AI</tspan><animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.140;0.196;1" dur="9.0s" begin="0s" fill="freeze"/></text>
+<text opacity="0" x="500" y="238" font-size="14" xml:space="preserve"><tspan fill="#22D3EE">Company</tspan><tspan fill="#31514c"> ..................................................... </tspan><tspan fill="#CFEAE3" font-weight="600">ConveGenius AI</tspan><animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.140;0.196;1" dur="9.0s" begin="0s" fill="freeze"/></text>
 <text opacity="0" x="500" y="262" font-size="14" xml:space="preserve"><tspan fill="#22D3EE">Origin</tspan><tspan fill="#31514c"> ........................................................ </tspan><tspan fill="#CFEAE3" font-weight="600">Noida, India</tspan><animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.157;0.213;1" dur="9.0s" begin="0s" fill="freeze"/></text>
 <text opacity="0" x="500" y="286" font-size="14" xml:space="preserve"><tspan fill="#22D3EE">Education</tspan><tspan fill="#31514c"> ..................... </tspan><tspan fill="#CFEAE3" font-weight="600">BSc Programming and Data Science, IIT Madras</tspan><animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.174;0.230;1" dur="9.0s" begin="0s" fill="freeze"/></text>
 <text opacity="0" x="500" y="310" font-size="14" xml:space="preserve"><tspan fill="#22D3EE">Status</tspan><tspan fill="#31514c"> ................................. </tspan><tspan fill="#22D3EE" font-weight="600">Prototyping + Shipping + Automating</tspan><animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.192;0.247;1" dur="9.0s" begin="0s" fill="freeze"/></text>
@@ -117,7 +117,7 @@ TAIL = """
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MASK = os.path.join(ROOT, "assets", "portrait-mask.png")
 REF = os.path.join(ROOT, "assets", "portrait-colour.png")
-OUT = os.path.join(ROOT, "assets", "hero-v22.svg")
+OUT = os.path.join(ROOT, "assets", "hero-v23.svg")
 
 RNG = random.Random(7)
 
