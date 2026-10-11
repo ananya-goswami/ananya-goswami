@@ -1353,11 +1353,15 @@ TURTLE_S, LEAF_S, SNAKE_S = 0.50, 0.75, 0.50
 V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 48.0, 22.0
 EAT = 3.0                            # a readable set of bites, not a rapid flicker
 LEAF_GAP = 52.0                      # the leaf halts with its edge at the mouth
+# She crosses the panel in RUN_TIME seconds. At 18 s her stride came to ~2.5
+# steps a second, a walk; 11 s gives ~4 steps a second, a run.
+RUN_TIME = 11.0
 # Flipbook speeds. Each is the time for one full loop of that character's cycle.
 # Her cycle is derived below from the avatar's measured contact stride and the
 # panel's ground speed.
-RUN_SPEED = ((VB_W + 120.0) - (-120.0)) / 18.0
+RUN_SPEED = ((VB_W + 120.0) - (-120.0)) / RUN_TIME
 JD_MAX, LIFT_MAX = 1.08, 184.0
+RUN_BOUNCE = 5.0                     # a runner rises a little off every stride
 JUMP_SAMPLE_DT = 1.0 / 50.0
 # Its four legs are planted 43 units apart, so a step moves it about half that
 # and two steps take 42/34 of a second at its walking speed.
@@ -1393,9 +1397,15 @@ def _pick_cells(grid, cols):
     (so it turns up after the meal). Every combination of lit columns is scored
     and the closest fit wins, so clustered activity still gets a usable trio.
     """
-    lit = {i: [r for r in (6, 5, 4, 3, 2, 1, 0) if grid[i][r] > 0] for i in range(cols)}
+    # only squares her highest jump can reach (rows 2-6); rows 0-1 sit above it
+    reach = [r for r in (6, 5, 4, 3, 2, 1, 0)
+             if GROUND - GIRL_TARGET_H - (GY0 + r * GPY + GCELL) <= LIFT_MAX]
+    lit = {i: [r for r in reach if grid[i][r] > 0] for i in range(cols)}
     lcols = [i for i in range(cols) if lit[i]]
-    aim = int(cols * 0.52)
+    # The squares must sit far enough apart that one jump has landed before
+    # the next begins. That is a time, so in columns it grows with her speed.
+    G = max(3, math.ceil(1.3 * RUN_SPEED / GPX))
+    aim = int(cols * 0.40)
 
     def rows_for(trio):
         used, out = set(), []
@@ -1409,17 +1419,17 @@ def _pick_cells(grid, cols):
 
     def penalty(a, b, c):
         d1, d2 = b - a, c - b
-        return (8.0 * max(0, 4 - d1) + 4.0 * max(0, d1 - 7)
-                + 3.0 * max(0, 12 - d2) + 0.4 * abs(a - aim))
+        return (8.0 * max(0, G + 1 - d1) + 4.0 * max(0, d1 - (G + 4))
+                + 3.0 * max(0, G + 6 - d2) + 0.4 * abs(a - aim))
 
     best = None
     for ai, a in enumerate(lcols):
         for bi in range(ai + 1, len(lcols)):
             b = lcols[bi]
-            if b - a < 3:
+            if b - a < G:
                 continue
             for c in lcols[bi + 1:]:
-                if c - b < 3:
+                if c - b < G:
                     continue
                 rows = rows_for((a, b, c))
                 if rows is None:
@@ -1431,7 +1441,7 @@ def _pick_cells(grid, cols):
     if best is None:
         # fewer than three usable squares: take whatever is there, spaced out
         for c in lcols:
-            if all(abs(c - q["col"]) >= 3 for q in picked) and len(picked) < 3:
+            if all(abs(c - q["col"]) >= G for q in picked) and len(picked) < 3:
                 r = next((r for r in lit[c] if r not in {q["row"] for q in picked}), None)
                 if r is not None:
                     picked.append({"col": c, "row": r, "lv": grid[c][r]})
@@ -1458,7 +1468,7 @@ def build_runner_panel(weeks, total=None):
     T = 56.0
     X0, X1 = -120.0, VB_W + 120.0
     BASE = GROUND + 4
-    RUN = 18.0
+    RUN = RUN_TIME
 
     events = _pick_cells(grid, cols)
     speed = (X1 - X0) / RUN
@@ -1732,26 +1742,34 @@ def build_runner_panel(weeks, total=None):
                (t3 + 0.55, e3["x"] - 12.0, e3["y"] - 60.0),
                (t_land3, sx0, BASE),
                (t_slith, sx0, BASE)]
-        # A shallow zig-zag makes the travel direction readable without making
-        # the grounded snake look as though it is hopping. The body flipbook
-        # supplies the larger head-to-tail wave.
-        zig_t = t_slith + 0.34
-        zig_i = 0
-        while zig_t < t_gone:
-            zig_x = snake_at(zig_t)
-            zig_y = BASE - (3.5 if zig_i % 2 == 0 else 0.0)
-            pts.append((zig_t, zig_x, zig_y))
-            zig_t += 0.34
-            zig_i += 1
+        # A smooth zig-zag, sampled finely so it is a wave and not a hop: the
+        # head rises and dips (never below the ground), it surges forward on
+        # each push and eases between them, and the body tilts with the slope.
+        ZIG_P, ZIG_AMP, ZIG_SURGE, ZIG_TILT = 0.9, 10.0, 12.0, 9.0
+        tilt = [(0.0, 0.0), (t_slith, 0.0)]
+        zt = t_slith + 0.05
+        while zt < t_gone:
+            ph = 2 * math.pi * (zt - t_slith) / ZIG_P
+            pts.append((zt, snake_at(zt) - ZIG_SURGE * math.sin(ph),
+                        BASE - ZIG_AMP * (1 - math.cos(ph)) / 2))
+            tilt.append((zt, ZIG_TILT * math.sin(ph)))
+            zt += 0.06
         pts += [(t_gone, snake_gone, BASE), (T, snake_gone, BASE)]
+        tilt += [(t_gone, 0.0), (T, 0.0)]
 
-        # Run a clear tongue-flick/hiss beat in every slither cycle so the hiss
-        # cannot disappear inside one brief pair of frames.
+        # While it waits in its block it flicks its tongue; once it moves, the
+        # body wave runs on the same clock as the zig-zag, so the body and the
+        # path agree instead of the snake gliding along.
         slither = sheet_row("sslith", SNAKE_S)
         tongue = sheet_row("stongue", SNAKE_S)
-        snake = flipbook(slither + tongue + tongue[::-1] + sheet_row("scont", SNAKE_S),
-                         SLITHER_CYCLE,
-                         weights=[1.0] * 8 + [2.0, 2.8, 2.8, 2.0, 1.0, 1.0])
+        hiss = flipbook(tongue + tongue[::-1] + sheet_row("scont", SNAKE_S),
+                        1.4, weights=[2.0, 2.8, 2.8, 2.0, 1.0, 1.0])
+        wave = flipbook(slither, ZIG_P)
+        body = gate(hiss, [(t_slith, T)], T) + gate(wave, [(0.0, t_slith)], T)
+        tv, tk = _keys([f"{a:.1f} 0 -20" for _, a in tilt], [tt for tt, _ in tilt], T)
+        snake = (f'<g><animateTransform attributeName="transform" type="rotate" dur="{T}s"'
+                 f' repeatCount="indefinite" calcMode="linear" values="{tv}" keyTimes="{tk}"/>'
+                 f'{body}</g>')
         pops.append(moving(snake, pts, t3, t_gone))
 
     # ---- her ----
@@ -1970,6 +1988,23 @@ def _planet_designs():
     return out
 
 
+def per_loop(items, T):
+    """Show items[k] during loop k of the panel, in turn; the order turns daily."""
+    n = len(items)
+    if n == 1:
+        return items[0]
+    start = datetime.now(timezone.utc).timetuple().tm_yday % n
+    order = items[start:] + items[:start]
+    span = n * T
+    out = ""
+    for k, d in enumerate(order):
+        vals, keys = _keys(["0", "1", "0", "0"] if k else ["1", "0", "0", "0"],
+                           [0.0, k * T, (k + 1) * T, span] if k else [0.0, T, span, span], span)
+        out += (f'<g opacity="0"><animate attributeName="opacity" dur="{span:.1f}s" repeatCount="indefinite"'
+                f' calcMode="discrete" values="{vals}" keyTimes="{keys}"/>{d}</g>')
+    return out
+
+
 def planets(cx, cy, T):
     """One planet per loop of the panel, in turn; the first one changes daily."""
     designs = _planet_designs()
@@ -1995,15 +2030,11 @@ def story_outro(t_cut, T):
     t_cover = t_cut + OUTRO_WIPE
     rnd = random.Random(7)
 
-    # The play screen is swapped in all at once, at the moment the hero leaf
-    # fills the whole panel; until then it is clipped away entirely.
+    # The play screen is fully in place at t_switch, when the hero leaf has
+    # opened onto all of it.
     t_switch = t_cover
-    edge_v, edge_k = _keys([f"{px1 + 40:.1f}", f"{px1 + 40:.1f}", f"{px0:.1f}", f"{px0:.1f}"],
-                           [0.0, t_switch - 0.01, t_switch, T], T)
     fade_v, fade_k = _keys(["0", "0", "1", "1", "0", "0"],
                            [0.0, t_cut, t_cut + 0.01, T - OUTRO_FADE, T - 0.01, T], T)
-    curtain_anim = (f'<animate attributeName="x" dur="{T}s" repeatCount="indefinite"'
-                    f' calcMode="linear" values="{edge_v}" keyTimes="{edge_k}"/>')
 
     # ---- the play screen ----
     faces, drawn_bump = _play_faces()
@@ -2127,11 +2158,25 @@ def story_outro(t_cut, T):
               f'<g><animateTransform attributeName="transform" type="translate"'
               f' values="0 0;-74 0" dur="{74.0 / RUN_SPEED:.3f}s" repeatCount="indefinite"/>'
               f'{stripes}</g>')
-    screen = (f'<clipPath id="outroClip"><rect y="{py0}" width="{W + 80}" height="{H}"'
-              f' x="{px1 + 40}">{curtain_anim}</rect></clipPath>'
-              f'<g clip-path="url(#outroClip)">'
-              f'<rect x="{px0}" y="{py0}" width="{W}" height="{H}" fill="#081420"/>'
-              f'{sky}{ground}{halo}{ring}{orbit_back}{coins}{button}{orbit_front}{her}</g>')
+    # The story dissolves behind the gust: a soft-edged wipe follows the
+    # leaves from right to left and leaves the empty space sky behind.
+    SOFT = 380.0
+    wv, wk = _keys([f"{px1 + 40:.0f} 0", f"{px1 + 40:.0f} 0", f"{px0 - SOFT - 40:.0f} 0",
+                    f"{px0 - SOFT - 40:.0f} 0"],
+                   [0.0, t_cut + 0.25, t_cut + OUTRO_WIPE - 0.35, T], T)
+    wipe = (f'<linearGradient id="wipeEdge" x1="0" x2="1"><stop offset="0" stop-color="#000"/>'
+            f'<stop offset="1" stop-color="#fff"/></linearGradient>'
+            f'<mask id="outroWipe" maskUnits="userSpaceOnUse" x="{px0 - 10}" y="{py0 - 10}"'
+            f' width="{W + 20}" height="{H + 20}"><g>'
+            f'<animateTransform attributeName="transform" type="translate" dur="{T}s"'
+            f' repeatCount="indefinite" calcMode="linear" values="{wv}" keyTimes="{wk}"/>'
+            f'<rect x="0" y="{py0 - 10}" width="{SOFT:.0f}" height="{H + 20}" fill="url(#wipeEdge)"/>'
+            f'<rect x="{SOFT:.0f}" y="{py0 - 10}" width="{W + 200}" height="{H + 20}" fill="#fff"/>'
+            f'</g></mask>')
+    backdrop = (f'<g mask="url(#outroWipe)">'
+                f'<rect x="{px0}" y="{py0}" width="{W}" height="{H}" fill="#081420"/>{sky}{ground}</g>')
+    play_layer = f'{halo}{ring}{orbit_back}{coins}{button}{orbit_front}{her}'
+    screen = wipe + backdrop      # the play layer is added with the hero leaf below
 
     # ---- the gust: leaves on curved, swirling paths, with depth ----
     # Near leaves are big, fast and bright; far ones small, slow and dim. The
@@ -2173,52 +2218,90 @@ def story_outro(t_cut, T):
             [(a, z)], T)
 
     # ---- the hero leaf: one leaf comes out of the gust towards the camera ----
-    # It drifts to the middle tumbling, turns face on, grows until it fills the
-    # whole panel (the scene is swapped under it then), and rushes past.
+    # It drifts to the middle tumbling and turns face on. Then it grows, and as
+    # it grows it turns into a window: the play screen shows inside its
+    # outline, so the leaf "opens" onto the next scene until it fills it.
+    # Each loop it is a different colour, cycling through the leaf's year.
     cx, cy = px0 + W / 2, py0 + H / 2
     h_in, h_mid, h_grow = t_cut + 0.35, t_cut + 1.45, t_cut + 1.85
-    h_gone = t_switch + 0.6
-    hero_frames = _strip_frames("herotumble", TUMBLE_SHEET_PATH, TUMBLE_CELL, 8, 0)
-    if hero_frames:
-        ref = max(f[2] for f in hero_frames)
-        tumble = [_strip_use(f, 80.0, TUMBLE_CELL, ref) for f in hero_frames]
-        face = tumble[0]
-    else:
-        tumble = lives[1]
-        face = tumble[0]
-    # where it is: in from the upper right, curving to the centre, then still
+    # its tumble reuses the gust's small frames; only its face-on frame, the
+    # one that grows, is stored larger (the file has a size budget)
+    looks = []
+    for li, row in enumerate(TUMBLE_LIFE):
+        fr = _strip_frames("heroface", TUMBLE_SHEET_PATH, TUMBLE_CELL, 1, row, max_px=160)
+        small = _tumble_leaf(80.0, row)
+        if fr and small:
+            ref = max(f[2] for f in _strip_frames("tumble", TUMBLE_SHEET_PATH, TUMBLE_CELL, 8, row, max_px=72))
+            looks.append(small[1:] + [_strip_use(fr[0], 80.0, TUMBLE_CELL, ref)])
+    if not looks:
+        looks = [lives[1]]
+    sil = _strip_frames("heroshape", TUMBLE_SHEET_PATH, TUMBLE_CELL, 1, 0, max_px=160)
+    shape = (_strip_use(sil[0], 80.0, TUMBLE_CELL, max(f[2] for f in sil)) if sil
+             else looks[0][0])
+    # path: in from the upper right, curving to the centre, then still
     mv, mk = _keys([f"{px1 + 100:.0f},{py0 + 60:.0f}", f"{px1 + 100:.0f},{py0 + 60:.0f}",
                     f"{px0 + W * 0.75:.0f},{py0 + 40:.0f}", f"{cx:.0f},{cy:.0f}",
                     f"{cx:.0f},{cy:.0f}"],
                    [0.0, h_in, (h_in + h_mid) / 2, h_mid, T], T)
-    # how big: 1 while it travels, then an accelerating zoom (exponential, so it
-    # feels like it is coming at you), covering the panel at t_switch
-    COVER, PAST = 70.0, 140.0
+    # size: a smooth ease-in zoom that reaches full cover at t_switch
+    COVER = 70.0
     sv, st = ["1 1", "1 1"], [0.0, h_grow]
-    n = 14
+    n = 18
     for j in range(1, n + 1):
         f = j / n
-        k = math.exp(math.log(COVER) * f ** 1.6)
+        e = f * f * (3 - 2 * f)                     # smoothstep, so it eases in and out
+        k = math.exp(math.log(COVER) * e)
         sv.append(f"{k:.3f} {k:.3f}")
         st.append(h_grow + (t_switch - h_grow) * f)
-    sv += [f"{PAST:.1f} {PAST:.1f}", f"{PAST:.1f} {PAST:.1f}"]
-    st += [h_gone, T]
+    sv += [f"{COVER:.1f} {COVER:.1f}"]
+    st += [T]
     sv_, sk_ = _keys(sv, st, T)
-    rv, rk = _keys(["0", "0", "28", "28"], [0.0, h_grow, h_gone, T], T)
-    ov, ok = _keys(["0", "0", "1", "1", "0", "0"],
-                   [0.0, h_in, h_in + 0.05, t_switch + 0.08, h_gone, T], T)
-    look = (sequence([flipbook(tumble, 0.9)], h_in, h_grow, T)
-            + sequence([face], h_grow, h_gone, T))
-    hero = (f'<g opacity="0" style="image-rendering:pixelated"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
-            f' calcMode="linear" values="{ov}" keyTimes="{ok}"/>'
-            f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
-            f' repeatCount="indefinite" calcMode="linear" values="{mv}" keyTimes="{mk}"/>'
-            f'<g><animateTransform attributeName="transform" type="scale" dur="{T}s"'
-            f' repeatCount="indefinite" calcMode="linear" values="{sv_}" keyTimes="{sk_}"/>'
-            f'<g><animateTransform attributeName="transform" type="rotate" dur="{T}s"'
-            f' repeatCount="indefinite" calcMode="linear" values="{rv}" keyTimes="{rk}"/>'
-            f'{look}</g></g></g></g>')
-    leaves += hero
+    rv, rk = _keys(["0", "0", "-20", "-20"], [0.0, h_grow, t_switch, T], T)
+
+    def carried(inner):
+        return (f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
+                f' repeatCount="indefinite" calcMode="linear" values="{mv}" keyTimes="{mk}"/>'
+                f'<g><animateTransform attributeName="transform" type="scale" dur="{T}s"'
+                f' repeatCount="indefinite" calcMode="linear" values="{sv_}" keyTimes="{sk_}"/>'
+                f'<g><animateTransform attributeName="transform" type="rotate" dur="{T}s"'
+                f' repeatCount="indefinite" calcMode="linear" values="{rv}" keyTimes="{rk}"/>'
+                f'{inner}</g></g></g>')
+
+    # the window: an alpha mask in the leaf's shape, then the whole panel
+    mon, mok = _keys(["0", "0", "1", "1"], [0.0, h_grow, h_grow + 0.01, T], T)
+    full, fk = _keys(["0", "0", "1", "1"], [0.0, t_switch, t_switch + 0.01, T], T)
+    window_mask = (f'<mask id="leafWindow" mask-type="alpha" maskUnits="userSpaceOnUse"'
+                   f' x="{px0 - 10}" y="{py0 - 10}" width="{W + 20}" height="{H + 20}">'
+                   f'<g opacity="0"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
+                   f' calcMode="discrete" values="{mon}" keyTimes="{mok}"/>{carried(shape)}</g>'
+                   f'<rect x="{px0 - 10}" y="{py0 - 10}" width="{W + 20}" height="{H + 20}" fill="#fff"'
+                   f' opacity="0"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
+                   f' calcMode="discrete" values="{full}" keyTimes="{fk}"/></rect></mask>')
+    through = (f'<g mask="url(#leafWindow)"><rect x="{px0}" y="{py0}" width="{W}" height="{H}"'
+               f' fill="#081420"/>{sky}{ground}{play_layer}</g>')
+
+    # the visible leaf: tumbling in, then its colour melts away into the window
+    vo, vk = _keys(["0", "0", "1", "1", "0", "0"],
+                   [0.0, h_in, h_in + 0.05, h_grow + 0.15, h_grow + 0.55, T], T)
+    coloured = [sequence([flipbook(lk[:-1], 0.9)], h_in, h_grow, T) + sequence([lk[-1]], h_grow, T, T)
+                for lk in looks]
+    visible = (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
+               f' calcMode="linear" values="{vo}" keyTimes="{vk}"/>'
+               f'{carried(per_loop(coloured, T))}</g>')
+    # a thin glowing rim keeps the leaf's outline readable while it opens
+    rim = (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
+           f' calcMode="linear" values="0;0;.9;.9;0;0"'
+           f' keyTimes="{";".join(f"{x / T:.5f}" for x in [0, h_grow + 0.2, h_grow + 0.5, t_switch - 0.3, t_switch, T])}"/>'
+           f'<g filter="url(#leafRim)">{carried(shape)}</g></g>')
+    # outline only: the leaf's shape grown by a few units, minus the shape
+    rim = ('<filter id="leafRim" x="-5%" y="-5%" width="110%" height="110%">'
+           '<feMorphology in="SourceAlpha" operator="dilate" radius="4" result="grow"/>'
+           '<feComposite in="grow" in2="SourceAlpha" operator="out" result="ring"/>'
+           '<feFlood flood-color="#9BEFD9"/><feComposite in2="ring" operator="in" result="line"/>'
+           '<feGaussianBlur in="line" stdDeviation="3" result="glow"/>'
+           '<feMerge><feMergeNode in="glow"/><feMergeNode in="line"/></feMerge></filter>') + rim
+    screen += window_mask + through
+    leaves += rim + visible
 
     return (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s"'
             f' repeatCount="indefinite" calcMode="linear" values="{fade_v}"'
@@ -2494,7 +2577,7 @@ def girl_runner(jumps, T, baseline=6.0):
     """Her whole flipbook, built rather than cut: a walk whose legs genuinely
     alternate, with the jump held over the top of it for each square she opens."""
     wins = [(j["t0"], j["resume"]) for j in jumps]
-    run = avatar_run(RUN_CYCLE, baseline)
+    run = bob(avatar_run(RUN_CYCLE, baseline), RUN_CYCLE / 2.0, RUN_BOUNCE)
     air = ""
     for jump in jumps:
         t0, hit, t1, resume = (jump[k] for k in ("t0", "hit", "t1", "resume"))
@@ -2559,9 +2642,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v22.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v23.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v22.svg")
+        print("wrote runner-v23.svg")
     else:
         print("no calendar data - runner panel skipped")
     # The playable game, served by Pages at /play/: the page, the art it
