@@ -11,18 +11,18 @@
     font:600 14px/1.5 ui-monospace,"SF Mono","JetBrains Mono",Consolas,monospace; }
   body { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px;
     padding:16px; box-sizing:border-box; }
-  #wrap { width:min(1200px,100%); }
+  #wrap { width:min(1200px, 100%, calc((100vh - 90px) * 1800 / 570)); }
   canvas { display:block; width:100%; height:auto; image-rendering:pixelated;
     border-radius:12px; background:#081420; touch-action:manipulation; cursor:pointer;
     box-shadow:0 0 0 1px #13302c, 0 18px 50px rgba(0,0,0,.45); }
-  .bar { width:min(1200px,100%); display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;
+  .bar { width:min(1200px, 100%, calc((100vh - 90px) * 1800 / 570)); display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;
     color:var(--dim); font-size:12px; }
   a { color:var(--mint); text-decoration:none; }
   a:hover { text-decoration:underline; }
 </style>
 </head>
 <body>
-<div id="wrap"><canvas id="c" width="1200" height="570" aria-label="Commit Runner game"></canvas></div>
+<div id="wrap"><canvas id="c" width="1800" height="570" aria-label="Commit Runner game"></canvas></div>
 <div class="bar">
   <span>Space / ↑ / tap: jump (hold for higher) · P: pause · stomp turtles and snakes, head-butt &lt;/&gt; blocks</span>
   <a href="https://github.com/ananya-goswami">← back to GitHub</a>
@@ -30,7 +30,7 @@
 <script>
 (() => {
 "use strict";
-const W = 1200, H = 570, GROUND = 530, GY0 = 64, PITCH = 44, CELL = 34;
+const W = 1800, H = 570, GROUND = 530, GY0 = 64, PITCH = 44, CELL = 34;
 const LEVELS = ["#06313E", "#128070", "#18A088", "#20D898", "#9BEFD9"];
 const cv = document.getElementById("c"), ctx = cv.getContext("2d");
 ctx.imageSmoothingEnabled = false;
