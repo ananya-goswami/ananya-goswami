@@ -1082,48 +1082,35 @@ def sprite_defs():
                    f' xlink:href="{u}"/>' for n, (u, w, h) in _USED.items())
 
 
-# ---------------------------------------------------------------- sprite sheet
-# The atlas holds the turtle, the leaf and the snake. She is not cut from it
-# any more - see "her, in blocks" below for why - so the avatar rows are gone.
-SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
-                          "assets", "sprite-sheet.png")
-SHEET_BG = (0, 26, 28)
-# The turtle has its own sheet: transparent, 3 rows x 6 cells of 200px, drawn
-# at twice the old turtle's size (TURTLE_S halves it back). Rows are walk, eat
-# and hide, already in the order the story uses them.
-TURTLE_SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
-                                 "assets", "turtle-sheet-v1.png")
+# ---------------------------------------------------------------- sprite sheets
+# Each character has its own transparent sheet, drawn at about twice the size it
+# appears in the panel (the *_S scales below bring it back down). The old shared
+# atlas (sprite-sheet.png) is gone.
+_ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "assets")
+# Turtle: 3 rows x 6 cells of 200px. Rows are walk, eat and hide, already in
+# the order the story uses them.
+TURTLE_SHEET_PATH = os.path.join(_ASSETS, "turtle-sheet-v1.png")
 TURTLE_CELL = 200
-# The snake's sheet: transparent, 2 rows x 8 cells of 260px, also at twice the
-# size it is drawn (SNAKE_S halves it). Row 1 is the slither; row 2 holds three
+# Snake: 2 rows x 8 cells of 260px. Row 1 is the slither; row 2 holds three
 # tongue-flick frames and one with the mouth closed.
-SNAKE_SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
-                                "assets", "snake-sheet-v1.png")
+SNAKE_SHEET_PATH = os.path.join(_ASSETS, "snake-sheet-v1.png")
 SNAKE_CELL = 260
-SHEET_PAD = 3
-# The ground line each panel of the sheet is drawn on. Frames keep their own
-# distance from it, so a jump frame really does sit higher than a run frame.
-SHEET_BASE = {"turtle": 454.0, "lettuce": 665.0, "snake": 884.0}
-# row: (panel, [(x0, y0, x1, y1, centre line of the body), ...])
-SHEET_ROWS = {
-    "twalk": ("turtle", [(33, 393, 103, 446, 68), (125, 399, 193, 447, 159), (208, 393, 279, 446, 243), (296, 398, 364, 446, 330), (382, 393, 451, 446, 416), (466, 396, 532, 446, 499)]),
-    "teat": ("turtle", [(566, 407, 607, 451, 586), (620, 401, 690, 449, 655), (740, 402, 811, 450, 775), (833, 406, 904, 450, 868), (925, 417, 957, 449, 941), (1028, 380, 1102, 449, 1065)]),
-    "thide": ("turtle", [(1143, 393, 1215, 447, 1179), (1231, 399, 1295, 448, 1263), (1317, 401, 1372, 449, 1344), (1402, 409, 1461, 448, 1431), (1488, 407, 1548, 449, 1518), (1578, 398, 1641, 448, 1609)]),
-    "lpop": ("lettuce", [(467, 609, 500, 649, 483), (555, 591, 600, 656, 577)]),
-    "lfall": ("lettuce", [(685, 612, 723, 652, 704), (777, 607, 814, 648, 795), (872, 606, 910, 648, 891)]),
-    "lslide": ("lettuce", [(1286, 621, 1330, 659, 1308)]),
-    "sslith": ("snake", [(27, 812, 135, 878, 81), (155, 815, 252, 880, 203), (264, 816, 363, 880, 313), (377, 815, 473, 879, 425), (488, 811, 593, 877, 540), (610, 811, 715, 877, 662), (731, 814, 837, 877, 784), (851, 810, 958, 878, 904)]),
-    "stongue": ("snake", [(1006, 814, 1121, 878, 1063), (1145, 806, 1261, 879, 1203)]),
-    "scont": ("snake", [(1349, 812, 1446, 879, 1397), (1465, 814, 1561, 878, 1513)]),
-}
+# Leaf: 1 row x 6 cells of 140px: two popping out of the block, three
+# fluttering down (left, level, right) and one lying flat, stem to the right.
+LEAF_SHEET_PATH = os.path.join(_ASSETS, "leaf-sheet-v1.png")
+LEAF_CELL = 140
+# How many frames each row has.
+SHEET_ROWS = {"twalk": 6, "teat": 6, "thide": 6,
+              "lpop": 2, "lfall": 3, "lslide": 1,
+              "sslith": 8, "stongue": 2, "scont": 2}
 _SHEET = None
 
 
 def sheet():
-    """Cut every sheet frame out, keyed to transparency.
+    """Every character frame, keyed by (row, i).
 
     Returns {(row, i): (data_uri, w, h, ox, oy)}, where ox/oy is the frame's own
-    anchor: the centre line of the body and the ground it stands on. Two frames
+    anchor: the middle of the body and the ground it stands on. Two frames
     placed at the same point therefore line their bodies and their feet up,
     instead of lining up two bounding boxes of different sizes.
     """
@@ -1135,41 +1122,35 @@ def sheet():
         import base64, io
         import numpy as np
         from PIL import Image
-        src = Image.open(SHEET_PATH).convert("RGB")
     except Exception as exc:
-        print("sheet skipped:", exc)
+        print("sheets skipped:", exc)
         return _SHEET
-    bg = np.array(SHEET_BG, dtype=float)
-    for row, (panel, frames) in SHEET_ROWS.items():
-        base_y = SHEET_BASE[panel]
-        for i, (x0, y0, x1, y1, ax) in enumerate(frames):
-            cx0, cy0 = x0 - SHEET_PAD, y0 - SHEET_PAD
-            crop = src.crop((cx0, cy0, x1 + SHEET_PAD, y1 + SHEET_PAD))
-            a = np.array(crop).astype(float)
-            d = np.linalg.norm(a - bg, axis=2)
-            alpha = _silhouette(d, np, cut=10.0)
-            # Two things used to leave the sheet's own backdrop on screen. The
-            # feather inside _silhouette blurs the mask outwards as well as in,
-            # so pure background pixels came out up to 60% opaque and painted a
-            # teal fringe round every sprite; and background trapped inside a
-            # shape - the hollow of the snake's tail, the gap under her shoe -
-            # is unreachable by a flood that starts at the border, so it stayed
-            # solid. Capping the alpha by how far the pixel actually is from the
-            # backdrop colour clears both: on this sheet the backdrop reaches
-            # d=10 and the nearest real sprite pixel is d=32, so the cut lands
-            # in open space and takes nothing with it.
-            alpha = np.minimum(alpha, np.clip((d - 12.0) / 14.0, 0.0, 1.0) * 255.0)
-            img = Image.fromarray(np.dstack([a, alpha]).astype(np.uint8), "RGBA")
-            buf = io.BytesIO()
-            flat = img.convert("RGB").quantize(colors=96, method=Image.FASTOCTREE).convert("RGBA")
-            flat.putalpha(img.getchannel("A"))
-            flat.save(buf, "PNG", optimize=True)
-            _SHEET[(row, i)] = (
-                "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
-                img.width, img.height, ax - cx0, base_y - cy0)
     _turtle_frames(Image, np, base64, io)
     _snake_frames(Image, np, base64, io)
+    _leaf_frames(Image, np, base64, io)
     return _SHEET
+
+
+def _leaf_frames(Image, np, base64, io):
+    """The leaf: anchored on its middle and its lowest pixel."""
+    try:
+        src = Image.open(LEAF_SHEET_PATH).convert("RGBA")
+    except Exception as exc:
+        print("leaf sheet skipped:", exc)
+        return
+    rows = {"lpop": [0, 1], "lfall": [2, 3, 4], "lslide": [5]}
+    for row, cells in rows.items():
+        for i, c in enumerate(cells):
+            cell = src.crop((c * LEAF_CELL, 0, (c + 1) * LEAF_CELL, LEAF_CELL))
+            box = cell.getbbox()
+            if box is None:
+                continue
+            img = cell.crop(box)
+            buf = io.BytesIO()
+            img.save(buf, "PNG", optimize=True)
+            _SHEET[(row, i)] = (
+                "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
+                img.width, img.height, img.width / 2.0, float(img.height))
 
 
 def _snake_frames(Image, np, base64, io):
@@ -1252,7 +1233,7 @@ def sheet_use(row, i, scale=1.0, dx=0.0, dy=0.0):
 
 def sheet_row(row, scale=1.0, dx=0.0, dy=0.0, only=None):
     """Frames of a row, in order, ready to hand to flipbook() or sequence()."""
-    idx = range(len(SHEET_ROWS[row][1])) if only is None else only
+    idx = range(SHEET_ROWS[row]) if only is None else only
     return [sheet_use(row, i, scale, dx, dy) for i in idx]
 
 
@@ -1362,7 +1343,7 @@ LEVELS = ["#06313E", "#128070", "#18A088", "#20D898", "#9BEFD9"]
 # character is all that is needed to land it at the size the panel used before.
 GIRL_TARGET_H = 128.0                # her displayed height, unchanged
 GIRL_S = GIRL_TARGET_H / 104.0
-TURTLE_S, LEAF_S, SNAKE_S = 0.50, 0.82, 0.50
+TURTLE_S, LEAF_S, SNAKE_S = 0.50, 0.45, 0.50
 V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 48.0, 22.0
 EAT = 3.0                            # a readable set of bites, not a rapid flicker
 LEAF_GAP = 39.0                      # smaller leaf halts with its edge at the mouth
@@ -2102,9 +2083,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v13.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v14.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v13.svg")
+        print("wrote runner-v14.svg")
     else:
         print("no calendar data - runner panel skipped")
     print("panels:", data["repos"], "repos,", data["deployed"], "live,", g.get("contributions"), "contributions")
