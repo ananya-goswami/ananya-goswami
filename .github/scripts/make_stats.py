@@ -1099,6 +1099,12 @@ SNAKE_CELL = 260
 # fluttering down (left, level, right) and one lying flat, stem to the right.
 LEAF_SHEET_PATH = os.path.join(_ASSETS, "leaf-sheet-v1.png")
 LEAF_CELL = 140
+# Block and coin: 2 rows x 4 cells of 128px. Row 1 is the </> block (normal,
+# flashing when hit, spent); row 2 is the leaf coin spinning (front, turning,
+# edge-on, turning back). Each frame is centred in its cell.
+BLOCKCOIN_SHEET_PATH = os.path.join(_ASSETS, "blockcoin-sheet-v1.png")
+BLOCKCOIN_CELL = 128
+_BC = None
 # How many frames each row has.
 SHEET_ROWS = {"twalk": 6, "teat": 6, "thide": 6,
               "lpop": 2, "lfall": 3, "lslide": 1,
@@ -1848,26 +1854,70 @@ def coin_cells(grid, cols, skip):
     return out
 
 
+def _bc_frames():
+    """Block and coin frames from their sheet, registered as sprites.
+
+    Returns {"blk0".."blk2", "coin0".."coin3": (fid, w, h)}, or {} when the
+    sheet is missing (the drawn fallbacks are used then).
+    """
+    global _BC
+    if _BC is not None:
+        return _BC
+    _BC = {}
+    try:
+        import base64, io
+        from PIL import Image
+        src = Image.open(BLOCKCOIN_SHEET_PATH).convert("RGBA")
+    except Exception as exc:
+        print("block/coin sheet skipped:", exc)
+        return _BC
+    C = BLOCKCOIN_CELL
+    for name, row, n in (("blk", 0, 3), ("coin", 1, 4)):
+        for i in range(n):
+            cell = src.crop((i * C, row * C, (i + 1) * C, (row + 1) * C))
+            box = cell.getbbox()
+            if box is None:
+                continue
+            img = cell.crop(box)
+            buf = io.BytesIO()
+            img.save(buf, "PNG", optimize=True)
+            fid = f"bc-{name}{i}"
+            _USED[fid] = ("data:image/png;base64," +
+                          base64.b64encode(buf.getvalue()).decode(), img.width, img.height)
+            _BC[f"{name}{i}"] = (fid, img.width, img.height)
+    return _BC
+
+
+def _bc_use(key, height):
+    """One block/coin frame centred on the origin, `height` units tall."""
+    fid, w, h = _bc_frames()[key]
+    k = height / h
+    return (f'<use xlink:href="#sp-{fid}" transform="translate({-w * k / 2:.2f}'
+            f' {-height / 2:.2f}) scale({k:.4f})"/>')
+
+
 def coin_face(r):
-    # One coin, centred on the origin: body, highlight, engraved notch.
+    # One coin, centred on the origin. Drawn only if the coin sheet is missing.
     return (f'<circle r="{r * 1.8:.1f}" fill="url(#coinHalo)"/>'
             f'<circle r="{r:.1f}" fill="url(#coinG)" stroke="#8A5A12"'
-            f' stroke-width="{r * 0.17:.2f}"/>'
-            f'<ellipse cx="{-r * 0.22:.2f}" cy="{-r * 0.18:.2f}"'
-            f' rx="{r * 0.3:.2f}" ry="{r * 0.46:.2f}" fill="#FFF8DC"'
-            f' fill-opacity="0.7"/>'
-            f'<rect x="{-r * 0.11:.2f}" y="{-r * 0.5:.2f}"'
-            f' width="{r * 0.22:.2f}" height="{r:.1f}" rx="{r * 0.11:.2f}"'
-            f' fill="#B9791C" fill-opacity="0.45"/>')
+            f' stroke-width="{r * 0.17:.2f}"/>')
 
 
 def coin_spin(dur, begin=0.0, r=COIN_R):
-    # Mario coin flip: face on for most of the cycle, then a quick spin.
-    return (f'<g>{coin_face(r)}<animateTransform attributeName="transform"'
-            f' type="scale" values="1 1;1 1;0.22 1;1 1;1 1"'
-            f' keyTimes="0;0.34;0.5;0.66;1"'
-            f' dur="{dur:.2f}s" begin="{begin:.2f}s"'
-            f' repeatCount="indefinite"/></g>')
+    """The leaf coin: faces the viewer most of the cycle, then turns once."""
+    if "coin0" not in _bc_frames():
+        return (f'<g>{coin_face(r)}<animateTransform attributeName="transform"'
+                f' type="scale" values="1 1;1 1;0.22 1;1 1;1 1"'
+                f' keyTimes="0;0.34;0.5;0.66;1"'
+                f' dur="{dur:.2f}s" begin="{begin:.2f}s"'
+                f' repeatCount="indefinite"/></g>')
+    frames = [_bc_use(f"coin{i}", r * 2.0) for i in range(4)]
+    # start each coin on a different frame so a row of them is not in lockstep
+    shift = int(begin * 7) % 4
+    order = frames[shift:] + frames[:shift]
+    weights = [3.0, 1.0, 1.0, 1.0][shift:] + [3.0, 1.0, 1.0, 1.0][:shift]
+    return (f'<circle r="{r * 1.8:.1f}" fill="url(#coinHalo)"/>'
+            + flipbook(order, dur, weights=weights))
 
 
 def pop_coin(x, y, t, T, r=COIN_R):
@@ -1899,40 +1949,32 @@ def float_coin(x, y, k, r=COIN_R):
 
 
 def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
-    # A commit square she can headbutt: amber mystery block with a question
-    # mark, bumps up on impact, then reads as spent.
-    h = size / 2
+    # A commit square she can headbutt: the </> block, which bumps up on
+    # impact, flashes, then reads as spent before fading back into the grid.
     bv, bk = _keys(["0,0", "0,0", "0,-15", "0,4", "0,0", "0,0"],
                    [0.0, t, t + 0.12, t + 0.34, t + 0.52, T], T)
-    fv, fk = _keys(["#E9A63C", "#E9A63C", "#FFF0B8", "#C98A2C", "#8A5E22",
-                    "#8A5E22"],
-                   [0.0, t, t + 0.08, t + 0.3, t + 0.62, T], T)
-    qv, qk = _keys(["1", "1", "0", "0"], [0.0, t, t + 0.16, T], T)
-    rivets = "".join(
-        f'<rect x="{dx * h * 0.62 - 2.2:.1f}" y="{dy * h * 0.62 - 2.2:.1f}"'
-        f' width="4.4" height="4.4" rx="1.2" fill="#7A4E16"'
-        f' fill-opacity="0.75"/>'
-        for dx in (-1, 1) for dy in (-1, 1))
     ov, ok = _keys(["1", "1", "0", "0", "1"],
                    [0.0, t + 1.4, t + 2.0, T - 0.6, T], T)
+    frames = _bc_frames()
+    if "blk0" in frames:
+        def shown(key, vals, times):
+            v, k = _keys(vals, times, T)
+            return (f'<g><animate attributeName="opacity" dur="{T}s"'
+                    f' repeatCount="indefinite" calcMode="discrete"'
+                    f' values="{v}" keyTimes="{k}"/>{_bc_use(key, size)}</g>')
+        face = (shown("blk0", ["1", "1", "0", "0"], [0.0, t, t, T])
+                + shown("blk1", ["0", "0", "1", "0", "0"], [0.0, t, t, t + 0.3, T])
+                + shown("blk2", ["0", "0", "1", "1"], [0.0, t + 0.3, t + 0.3, T]))
+    else:
+        h = size / 2
+        face = (f'<rect x="{-h:.1f}" y="{-h:.1f}" width="{size:.1f}"'
+                f' height="{size:.1f}" rx="5" fill="#18A088"/>')
     return (f'<g transform="translate({cx:.1f} {cy:.1f})"><g>'
             f'<animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
             f' values="{ov}" keyTimes="{ok}"/>'
             f'<animateTransform attributeName="transform" type="translate"'
             f' dur="{T}s" repeatCount="indefinite" values="{bv}"'
-            f' keyTimes="{bk}"/>'
-            f'<rect x="{-h:.1f}" y="{-h:.1f}" width="{size:.1f}"'
-            f' height="{size:.1f}" rx="5" fill="#E9A63C" stroke="#7A4E16"'
-            f' stroke-width="2.2"><animate attributeName="fill" dur="{T}s"'
-            f' repeatCount="indefinite" values="{fv}" keyTimes="{fk}"/></rect>'
-            f'<rect x="{-h + 3.4:.1f}" y="{-h + 3.4:.1f}"'
-            f' width="{size - 6.8:.1f}" height="{size - 6.8:.1f}" rx="3"'
-            f' fill="none" stroke="#FFE9A8" stroke-opacity="0.45"/>{rivets}'
-            f'<text class="rmono" x="0" y="{size * 0.23:.1f}"'
-            f' text-anchor="middle" font-size="{size * 0.66:.1f}"'
-            f' font-weight="700" fill="#FFF8DC"><animate'
-            f' attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
-            f' values="{qv}" keyTimes="{qk}"/>?</text></g></g>')
+            f' keyTimes="{bk}"/>{face}</g></g>')
 
 
 # ---------------------------------------------------------------- her, from the supplied avatar
@@ -2083,9 +2125,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v14.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v15.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v14.svg")
+        print("wrote runner-v15.svg")
     else:
         print("no calendar data - runner panel skipped")
     print("panels:", data["repos"], "repos,", data["deployed"], "live,", g.get("contributions"), "contributions")
