@@ -1583,7 +1583,7 @@ RING_GAP = 2.4                           # px of track between two slices
 # than an image that takes a few minutes to turn over on its own - raw.github
 # serves these with max-age=300, so a plain content change gets there by
 # itself.  Change the contents and wait; only bump if something is wedged.
-CARD_REV = "m"
+CARD_REV = "n"
 
 
 # The game repos are private, so the API hands back no languages for them.
@@ -1606,7 +1606,7 @@ LANG_FALLBACK = {
 # never hands their homepage over; the card still names the live site.
 CARD_SITE = {"fln-animation-toolkit": "fln-animation-toolkit.vercel.app",
              "aaru_ki_cheenk": "aaru-ki-cheenk.vercel.app",
-             "Keyword-class9": "ch1-keywords-mocha.vercel.app",
+             "Keyword-class9": "9-ch1-keywords.vercel.app",
              "feeling-wheel-tap": "feeling-wheel-tap.vercel.app",
              "think-ask-act": "think-ask-act-builder.vercel.app",
              "real-or-fake-sender": "real-or-fake-sender.vercel.app",
@@ -1895,6 +1895,8 @@ def build_pages(index, cards):
         svg = svg.replace('<svg ', '<svg class="live" ', 1)
         svg = re.sub(r'\swidth="\d+" height="\d+"', "", svg, count=1)
         home = (index.get(repo, {}).get("homepage") or "").strip()
+        if not home and CARD_SITE.get(repo):
+            home = "https://" + CARD_SITE[repo]
         link = (f'<a class="open" href="{esc(home)}" target="_blank" rel="noopener">'
                 f'open {esc(title)} \u2197</a>') if home else ""
         blocks.append(f'<div class="card" data-glow="{CARD_GLOW.get(repo, "#00FF9C")}">{svg}{link}</div>')
