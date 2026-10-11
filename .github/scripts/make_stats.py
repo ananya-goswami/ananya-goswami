@@ -1354,10 +1354,10 @@ V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 48.0, 22.0
 EAT = 3.0                            # a readable set of bites, not a rapid flicker
 LEAF_GAP = 52.0                      # the leaf halts with its edge at the mouth
 # She crosses the panel in RUN_TIME seconds, and her legs are locked to the
-# ground, so this also sets her cadence. 18 s gave ~8.7 frames a second (a
-# walk), 11 s ~14 (frantic). 14 s gives ~11 frames a second: a steady,
-# Mario-style run.
-RUN_TIME = 14.0
+# ground, so this also sets her cadence: 11 s gave ~14 frames a second and
+# 14 s ~11, both too quick. 20 s gives ~8 frames a second, an unhurried
+# jog with her feet still planted.
+RUN_TIME = 20.0
 # Flipbook speeds. Each is the time for one full loop of that character's cycle.
 # Her cycle is derived below from the avatar's measured contact stride and the
 # panel's ground speed.
@@ -2650,9 +2650,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v25.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v26.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v25.svg")
+        print("wrote runner-v26.svg")
     else:
         print("no calendar data - runner panel skipped")
     # The playable game, served by Pages at /play/: the page, the art it
