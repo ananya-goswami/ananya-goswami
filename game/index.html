@@ -141,7 +141,11 @@ addEventListener("blur", () => { if (state === "play") paused = true; });
 // ---------------------------------------------------------------- update
 function spawnEnemy() {
   const kind = Math.random() < 0.55 ? "turtle" : "snake";
-  enemies.push({ kind, x: W + 80, walk: kind === "turtle" ? 40 : 70, w: kind === "turtle" ? 62 : 84, h: kind === "turtle" ? 46 : 52, dead: 0 });
+  const h = kind === "turtle" ? 46 : 52;
+  // hitbox = the drawn sprite's width, trimmed a little so grazes are forgiven
+  const img = kind === "turtle" ? S.turtle[0] : S.snake[0];
+  const w = img ? img.width * h / img.height * 0.8 : (kind === "turtle" ? 70 : 54);
+  enemies.push({ kind, x: W + 80, walk: kind === "turtle" ? 40 : 70, w, h, dead: 0 });
   const gap = Math.max(0.9, 2.6 - t / 60) + Math.random() * 1.4;
   nextEnemy = gap;
 }
@@ -153,6 +157,7 @@ function update(dt) {
   scroll += dx; dist += dx;
 
   // jump: holding the button keeps lift for a moment
+  const prevFeet = P.y;
   if (!P.onGround) {
     let g = GRAV;
     if (down && P.vy < 0 && P.hold < MAX_HOLD) { g *= HOLD_G; P.hold += dt; }
@@ -194,7 +199,9 @@ function update(dt) {
     const overlapX = Math.abs(e.x - P.x) < (e.w + P.w) / 2 - 8;
     const feet = P.y, top = GROUND - e.h;
     if (overlapX && feet > top + 6) {
-      if (P.vy > 0 && feet < top + 26) { e.dead = 0.001; stomps++; P.vy = -620; P.onGround = false; P.hold = MAX_HOLD; }
+      // a stomp is judged by where her feet were last frame, so a fast fall
+      // (up to ~35 px a frame) cannot skip past the top of the enemy
+      if (P.vy > 0 && prevFeet <= top + 14) { e.dead = 0.001; stomps++; P.vy = -620; P.onGround = false; P.hold = MAX_HOLD; }
       else if (P.hurt <= 0) {
         if (P.shield) { P.shield = 0; P.hurt = 1.0; flash = 0.3; e.dead = 0.001; }
         else { state = "over"; t = 0; const s = score(); if (s > best) { best = s; saveBest(); } }
