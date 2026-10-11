@@ -1956,31 +1956,34 @@ def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
 
 # ---------------------------------------------------------------- her, from the supplied avatar
 AVATAR_SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                 "..", "..", "assets", "runner-avatar-sheet-v8.png")
+                                 "..", "..", "assets", "runner-avatar-sheet-v9.png")
 AVATAR_COLS, AVATAR_ROWS = 4, 4
 AVATAR_CELL = 362.0
 AVATAR_SCALE = GIRL_TARGET_H / AVATAR_CELL
 RUN_LIMB_SPLIT_Y = 270
 _AVATAR = None
 
-# v8 sheet: the shoes are about 183 source px apart at contact, and one run
+# v9 sheet: the shoes are about 152 source px apart at contact, and one run
 # cycle is two steps (one per leg).
-RUN_STEP = 183.0 * AVATAR_SCALE
-# The run, in the order the sheet now holds it. The near leg is the one with
-# the light stripe down the trousers; in a real run the arm on the same side
-# swings the opposite way, and these frames already draw that correctly.
-#   0 near leg forward, far arm forward (widest stride)
-#   1 near leg forward, legs closing
-#   2 passing: near leg under her, far leg swinging through
-#   3 far leg forward, near arm forward (stride opening)
-#   4 far leg forward, near arm forward (widest stride)
-# The generated sheet came in a different order (forward, forward, passing,
-# back, forward, back, passing, forward) so the legs and arms flipped back and
-# forth on every frame. Slots 5-7 are spare near-leg-forward poses, unused.
-# The near-leg-forward half has three frames and the other two, so the last
-# two are held 1.5x as long and each leg gets the same share of the cycle.
-RUN_ORDER = [0, 1, 2, 3, 4]
-RUN_WEIGHTS = [1.0, 1.0, 1.0, 1.5, 1.5]
+RUN_STEP = 152.0 * AVATAR_SCALE
+# The run, in the order the sheet holds it. The near leg is the one with the
+# cream stripe; the near arm is the one whose sleeve lies over the hoodie, and
+# it always swings opposite to the near leg.
+#   0 near leg forward (widest), near fist behind her hip
+#   1 near leg forward, legs closing, near hand at her side
+#   2 passing: near leg under her, FAR knee coming forward
+#   3 far leg forward (widest), near fist in front of her chest
+#   4 far leg forward, legs closing, near fist still in front
+#   5 passing: far leg under her, NEAR knee coming forward
+#   6 near leg reaching forward, near fist swinging back
+# Before using any new sheet, check every frame for which leg and which arm is
+# forward, and order them as above: GPT returned these as 1,2,7,4,5,3,8 with
+# the two passing frames swapped, which made the legs jump once per stride.
+# Slot 7 is a spare near-leg-forward pose and is not used.
+# Near-leg stance is frames 6,0,1 plus passing 2 (four frames); far-leg stance
+# is 3,4 plus passing 5 (three), so those three are held 4/3 as long.
+RUN_ORDER = [0, 1, 2, 3, 4, 5, 6]
+RUN_WEIGHTS = [1.0, 1.0, 1.0, 4 / 3, 4 / 3, 4 / 3, 1.0]
 RUN_CYCLE = 2.0 * RUN_STEP / RUN_SPEED
 assert math.isclose(RUN_SPEED * RUN_CYCLE, 2.0 * RUN_STEP,
                     rel_tol=1e-12, abs_tol=1e-12)
@@ -2053,7 +2056,7 @@ def avatar_run(cycle, baseline):
                     weights=RUN_WEIGHTS)
 
 
-# v8 sheet: 9 rising with an arm up, 10 the head-butt (held across the moment
+# v9 sheet: 9 rising with an arm up, 10 the head-butt (held across the moment
 # of impact so the hit reads clearly), 11 falling, 12 the landing squash.
 AIR_POSES = [9, 10, 10, 11, 11, 11, 12]
 
@@ -2099,9 +2102,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v12.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v13.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v12.svg")
+        print("wrote runner-v13.svg")
     else:
         print("no calendar data - runner panel skipped")
     print("panels:", data["repos"], "repos,", data["deployed"], "live,", g.get("contributions"), "contributions")
