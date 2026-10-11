@@ -183,7 +183,7 @@ def ghost_cursor():
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MASK = os.path.join(ROOT, "assets", "portrait-mask.png")
 REF = os.path.join(ROOT, "assets", "portrait-colour.png")
-OUT = os.path.join(ROOT, "assets", "hero-v24.svg")
+OUT = os.path.join(ROOT, "assets", "hero-v23.svg")
 
 RNG = random.Random(7)
 
@@ -1130,7 +1130,7 @@ def main():
         f.write(HEAD)
         f.write("\n".join(body))
         f.write("\n")
-        f.write(TAIL.replace("<!--TICKER-->", "\n".join(ticker_svg())).replace("<!--GHOSTROWS-->", ghost_rows()).replace("<!--GHOST-->", ghost_cursor()))
+        f.write(TAIL.replace("<!--TICKER-->", "\n".join(ticker_svg())).replace("<!--GHOSTROWS-->", "").replace("<!--GHOST-->", ""))
     print(f"{OUT}  {os.path.getsize(OUT) / 1024:.0f} KB  "
           f"{len(pts)} avatar px in {N_INKS} inks, {N_PARTICLES} particles in "
           f"{n_groups} colour groups, {len(SYMBOLS)} symbols, {LOOP:.1f}s loop")
