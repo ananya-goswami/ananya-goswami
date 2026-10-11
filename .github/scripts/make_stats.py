@@ -1956,16 +1956,31 @@ def qblock(cx, cy, t, T, size=GCELL * QBLOCK_S):
 
 # ---------------------------------------------------------------- her, from the supplied avatar
 AVATAR_SHEET_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                 "..", "..", "assets", "runner-avatar-sheet-v7.png")
+                                 "..", "..", "assets", "runner-avatar-sheet-v8.png")
 AVATAR_COLS, AVATAR_ROWS = 4, 4
 AVATAR_CELL = 362.0
 AVATAR_SCALE = GIRL_TARGET_H / AVATAR_CELL
 RUN_LIMB_SPLIT_Y = 270
 _AVATAR = None
 
-# v7 sheet: the shoes are about 180 source px apart at contact, and the eight
-# frames hold two steps (passing poses at frames 2 and 6).
-RUN_STEP = 180.0 * AVATAR_SCALE
+# v8 sheet: the shoes are about 183 source px apart at contact, and one run
+# cycle is two steps (one per leg).
+RUN_STEP = 183.0 * AVATAR_SCALE
+# The run, in the order the sheet now holds it. The near leg is the one with
+# the light stripe down the trousers; in a real run the arm on the same side
+# swings the opposite way, and these frames already draw that correctly.
+#   0 near leg forward, far arm forward (widest stride)
+#   1 near leg forward, legs closing
+#   2 passing: near leg under her, far leg swinging through
+#   3 far leg forward, near arm forward (stride opening)
+#   4 far leg forward, near arm forward (widest stride)
+# The generated sheet came in a different order (forward, forward, passing,
+# back, forward, back, passing, forward) so the legs and arms flipped back and
+# forth on every frame. Slots 5-7 are spare near-leg-forward poses, unused.
+# The near-leg-forward half has three frames and the other two, so the last
+# two are held 1.5x as long and each leg gets the same share of the cycle.
+RUN_ORDER = [0, 1, 2, 3, 4]
+RUN_WEIGHTS = [1.0, 1.0, 1.0, 1.5, 1.5]
 RUN_CYCLE = 2.0 * RUN_STEP / RUN_SPEED
 assert math.isclose(RUN_SPEED * RUN_CYCLE, 2.0 * RUN_STEP,
                     rel_tol=1e-12, abs_tol=1e-12)
@@ -1991,18 +2006,12 @@ def avatar_frames():
     if cw != int(AVATAR_CELL) or ch != int(AVATAR_CELL):
         raise ValueError(f"runner avatar cells must be {int(AVATAR_CELL)}px square")
 
-    # Each second-half pose must exchange the visible leg, but must not be an
-    # automatic horizontal reflection: reflecting the lower body also turns
-    # both shoes backwards. This guard prevents that exact regression.
-    for i in range(4):
-        first = src.crop((i * cw, RUN_LIMB_SPLIT_Y,
-                          (i + 1) * cw, ch))
-        opposite = src.crop((i * cw, ch + RUN_LIMB_SPLIT_Y,
-                             (i + 1) * cw, 2 * ch))
-        if ImageChops.difference(first, opposite).getbbox() is None:
-            raise ValueError(f"runner frame {i + 4} does not exchange legs")
-        if ImageChops.difference(ImageOps.mirror(first), opposite).getbbox() is None:
-            raise ValueError(f"runner frame {i + 4} mirrors the shoes backwards")
+    # Consecutive run frames must never be identical, or that leg would hang.
+    for a, b in zip(RUN_ORDER, RUN_ORDER[1:] + RUN_ORDER[:1]):
+        fa = src.crop(((a % 4) * cw, (a // 4) * ch, (a % 4 + 1) * cw, (a // 4 + 1) * ch))
+        fb = src.crop(((b % 4) * cw, (b // 4) * ch, (b % 4 + 1) * cw, (b // 4 + 1) * ch))
+        if ImageChops.difference(fa, fb).getbbox() is None:
+            raise ValueError(f"runner frames {a} and {b} are identical")
 
     for i in range(AVATAR_COLS * AVATAR_ROWS):
         col, row = i % AVATAR_COLS, i // AVATAR_COLS
@@ -2039,11 +2048,12 @@ def avatar_frame(i, baseline):
 
 
 def avatar_run(cycle, baseline):
-    """Eight poses: contact/down/pass/up, then the opposite-leg half."""
-    return flipbook([avatar_frame(i, baseline) for i in range(8)], cycle)
+    """One full stride per leg, in RUN_ORDER (see the notes above it)."""
+    return flipbook([avatar_frame(i, baseline) for i in RUN_ORDER], cycle,
+                    weights=RUN_WEIGHTS)
 
 
-# v7 sheet: 9 rising with an arm up, 10 the head-butt (held across the moment
+# v8 sheet: 9 rising with an arm up, 10 the head-butt (held across the moment
 # of impact so the hit reads clearly), 11 falling, 12 the landing squash.
 AIR_POSES = [9, 10, 10, 11, 11, 11, 12]
 
@@ -2089,9 +2099,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v11.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v12.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v11.svg")
+        print("wrote runner-v12.svg")
     else:
         print("no calendar data - runner panel skipped")
     print("panels:", data["repos"], "repos,", data["deployed"], "live,", g.get("contributions"), "contributions")
