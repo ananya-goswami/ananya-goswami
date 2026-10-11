@@ -65,31 +65,29 @@
 <table>
 <tr><td valign="top" width="33%">
 
-`products / prototypes`
-
-**Competition Zone**, a contest platform prototype with entries, results and a trophy room.
-
-**FLN Animation Kit**, an animation system other builders drop into their lessons.
-
-**VSK Script Generator**, a bilingual script tool for teachers across 13 states, built on the Claude API.
-
-</td><td valign="top" width="33%">
-
 `learning games`
 
-30+ browser games from KG to Class 9: cyber safety, math, SEL and language.
+**30+ browser games**, KG to Class 9: cyber safety, math, SEL and language.
 
-Bilingual, voiced, landscape ready, light enough for a shared classroom tablet.
+Bilingual and voiced, light enough for one shared classroom tablet.
 
 No frameworks, no build step, no install.
 
 </td><td valign="top" width="33%">
 
+`products`
+
+**VSK Script Generator**, bilingual teaching scripts for teachers across **13 states**, built on the Claude API.
+
+**FLN Animation Kit**, the animation system other builders drop into their lessons.
+
+**Competition Zone**, a contest platform prototype: entries, results, trophy room.
+
+</td><td valign="top" width="33%">
+
 `automations`
 
-WhatsApp channel automation on **n8n** and **WAHA**.
-
-Running on **Railway** with **Postgres** behind it.
+**WhatsApp channel automation** on n8n and WAHA, running on Railway with Postgres.
 
 Media delivery fixes, workflow tuning, and the unglamorous parts that keep a channel alive.
 
