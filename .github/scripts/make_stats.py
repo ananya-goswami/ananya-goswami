@@ -1832,7 +1832,10 @@ def build_runner_panel(weeks, total=None):
 # is a picture; clicking anywhere on the panel opens the game.
 PLAY_SHEET_PATH = os.path.join(_ASSETS, "play-block-sheet-v1.png")    # 3 x 320px: idle, glow, squashed bump
 PLAY_CELL = 320
-TUMBLE_SHEET_PATH = os.path.join(_ASSETS, "leaf-tumble-sheet-v1.png")  # 8 x 256px tumble
+TUMBLE_SHEET_PATH = os.path.join(_ASSETS, "leaf-tumble-sheet-v1.png")  # 8 x 256px tumble, 6 rows
+# its rows are the same leaf through a year, listed here youngest first:
+# spring lime, summer teal (the art as drawn), gold, orange, red, dry brown
+TUMBLE_LIFE = [1, 0, 2, 3, 4, 5]
 TUMBLE_CELL = 256
 OUTRO_WIPE = 1.5          # seconds for the storm to cross the panel
 OUTRO_FADE = 0.6          # the play screen fades back into the story's first frame
@@ -1841,8 +1844,9 @@ PLAY_BTN_CX, PLAY_BTN_CY = 1086.0, 300.0
 _STRIPS = {}
 
 
-def _strip_frames(key, path, cell, n):
-    """Frames from a one-row sheet, trimmed and registered as sprites."""
+def _strip_frames(key, path, cell, n, row=0, max_px=None):
+    """Frames from one row of a sheet, trimmed and registered as sprites."""
+    key = f"{key}{row}-" if row else key
     if key in _STRIPS:
         return _STRIPS[key]
     out = []
@@ -1851,19 +1855,25 @@ def _strip_frames(key, path, cell, n):
         from PIL import Image
         src = Image.open(path).convert("RGBA")
         for i in range(n):
-            c = src.crop((i * cell, 0, (i + 1) * cell, cell))
+            c = src.crop((i * cell, row * cell, (i + 1) * cell, (row + 1) * cell))
             box = c.getbbox()
             if box is None:
                 continue
             img = c.crop(box)
+            w, h = img.size
+            # the picture is stored no bigger than it is drawn; its <image>
+            # keeps the full size, so every frame shares one scale
+            if max_px and max(w, h) > max_px:
+                k = max_px / max(w, h)
+                img = img.resize((max(1, round(w * k)), max(1, round(h * k))), Image.LANCZOS)
             buf = io.BytesIO()
             img.save(buf, "PNG", optimize=True)
             fid = f"{key}{i}"
             _USED[fid] = ("data:image/png;base64," +
-                          base64.b64encode(buf.getvalue()).decode(), img.width, img.height)
+                          base64.b64encode(buf.getvalue()).decode(), w, h)
             # remember where the trimmed frame sat in its cell, so a bump
             # drawn into the art keeps its offset
-            out.append((fid, img.width, img.height, box))
+            out.append((fid, w, h, box))
     except Exception as exc:
         print(f"{key} sheet not used yet:", exc)
     _STRIPS[key] = out
@@ -1881,7 +1891,7 @@ def _strip_use(fr, height, cell, ref_h):
 
 def _play_faces():
     """[idle, glow, bump] for the play block, and whether the bump is drawn in."""
-    got = _strip_frames("play", PLAY_SHEET_PATH, PLAY_CELL, 3)
+    got = _strip_frames("play", PLAY_SHEET_PATH, PLAY_CELL, 3, max_px=200)
     if len(got) == 3:
         ref = got[0][2]
         return [_strip_use(f, PLAY_BTN_H, PLAY_CELL, ref) for f in got], True
@@ -1911,8 +1921,8 @@ def _play_faces():
     return [face("#20D898", False), face("#3CEDA5", True), face("#3CEDA5", False)], False
 
 
-def _tumble_leaf(size):
-    got = _strip_frames("tumble", TUMBLE_SHEET_PATH, TUMBLE_CELL, 8)
+def _tumble_leaf(size, row=0):
+    got = _strip_frames("tumble", TUMBLE_SHEET_PATH, TUMBLE_CELL, 8, row, max_px=72)
     if len(got) == 8:
         ref = max(f[2] for f in got)
         return [_strip_use(f, size, TUMBLE_CELL, ref) for f in got]
@@ -2004,11 +2014,12 @@ def story_outro(t_cut, T):
               f'{ground}{side}{coins}{button}{her}</g>')
 
     # ---- the storm: leaves riding just ahead of the curtain's edge ----
+    # The storm is a year going by: fresh leaves lead, the oldest trail.
     leaves = ""
-    frames = _tumble_leaf(70.0)
+    lives = [_tumble_leaf(70.0, r) for r in TUMBLE_LIFE]
     for i in range(34):
         y = py0 + (i + 0.5) * H / 34 + rnd.uniform(-14, 14)
-        lead = rnd.uniform(-30.0, 170.0)               # how far ahead of the edge
+        lead = rnd.uniform(-30.0, 170.0)    # where it rides: <0 ahead of the edge, >0 behind
         late = rnd.uniform(0.0, 0.18)
         a, z = t_cut + late, t_cover + late + 0.25
         x_a, x_z = px1 + 40 + lead, px0 - 260 + lead
@@ -2019,6 +2030,8 @@ def story_outro(t_cut, T):
                         f"{x_z:.1f},{y:.1f}", f"{x_z:.1f},{y:.1f}"],
                        [0.0, a, mid, z, T], T)
         size = rnd.uniform(0.7, 1.25)
+        age = (lead + 30.0) / 200.0 + rnd.uniform(-0.12, 0.12)    # 0 front, 1 back
+        frames = lives[min(len(lives) - 1, max(0, int(age * len(lives))))]
         spin = flipbook(frames[i % len(frames):] + frames[:i % len(frames)],
                         rnd.uniform(0.45, 0.7))
         leaves += _ep_shown(
