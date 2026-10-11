@@ -590,10 +590,12 @@ function draw() {
   const blink = P.hurt > 0 && Math.floor(t * 12) % 2;
   if (!blink) {
     let img;
-    if (state === "title") img = frameAt(S.run, S.runW, 2 * 51 / 300, t);
+    if (state === "title") img = frameAt(S.run, S.runW, 0.68, t);
     else if (state === "dying" || state === "over") img = S.air[2];
     else if (!P.onGround) img = P.vy < -250 ? S.air[0] : P.vy < 120 ? S.air[1] : S.air[2];
-    else img = frameAt(S.run, S.runW, 2 * 51 / speed, t);   // two steps of ~51px per cycle, so her feet keep pace with the ground
+    // Mario-style cadence: ~10 frames a second at the start, never above ~14,
+    // however fast the world scrolls (tying it to the scroll made a blur)
+    else img = frameAt(S.run, S.runW, Math.min(0.68, Math.max(0.5, 160 / speed)), t);
     if (P.y > GROUND - 200 && state !== "dying") {
       ctx.beginPath(); ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.ellipse(P.x, (P.plat ? P.plat.y : GROUND) - 2, 30, 6, 0, 0, 7); ctx.fill();
     }
