@@ -99,7 +99,7 @@ TAIL = """
 <text opacity="0" x="500" y="440" font-size="14" xml:space="preserve"><tspan fill="#22D3EE">Core.AI</tspan><tspan fill="#31514c"> ............................. </tspan><tspan fill="#CFEAE3" font-weight="600">Claude Code, Codex, Gemini, OpenRouter</tspan><animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.295;0.351;1" dur="9.0s" begin="0s" fill="freeze"/></text>
 <text opacity="0" x="500" y="464" font-size="14" xml:space="preserve"><tspan fill="#22D3EE">Ships</tspan><tspan fill="#31514c"> ..................................... </tspan><tspan fill="#00FF9C" font-weight="600">30+ browser games, KG to Class 9</tspan><animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.312;0.368;1" dur="9.0s" begin="0s" fill="freeze"/></text>
 <text class="rv" x="500" y="498" font-size="14" fill="#3f5f58">- Contact ..................................................................<animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.329;0.385;1" dur="9.0s" begin="0s" fill="freeze"/></text>
-<text opacity="0" x="500" y="522" font-size="14" xml:space="preserve"><tspan fill="#22D3EE">Grid.Portfolio</tspan><tspan fill="#31514c"> ........................................ </tspan><tspan fill="#22D3EE" font-weight="600">g-ananya.netlify.app</tspan><animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.360;0.416;1" dur="9.0s" begin="0s" fill="freeze"/></text>
+<text opacity="0" x="500" y="522" font-size="14" xml:space="preserve"><tspan fill="#22D3EE">Grid.Portfolio</tspan><tspan fill="#31514c"> ................................... </tspan><tspan fill="#22D3EE" font-weight="600">ananya-goswami.vercel.app</tspan><animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.360;0.416;1" dur="9.0s" begin="0s" fill="freeze"/></text>
 <text opacity="0" x="500" y="546" font-size="14" xml:space="preserve"><tspan fill="#22D3EE">Grid.LinkedIn</tspan><tspan fill="#31514c"> .................................................... </tspan><tspan fill="#CFEAE3" font-weight="600">ananyagos</tspan><animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.377;0.433;1" dur="9.0s" begin="0s" fill="freeze"/></text>
 <text opacity="0" x="500" y="570" font-size="14" xml:space="preserve"><tspan fill="#22D3EE">Grid.GitHub</tspan><tspan fill="#31514c"> ................................................ </tspan><tspan fill="#CFEAE3" font-weight="600">@ananya-goswami</tspan><animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.394;0.450;1" dur="9.0s" begin="0s" fill="freeze"/></text>
 
@@ -181,7 +181,7 @@ def ghost_cursor():
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MASK = os.path.join(ROOT, "assets", "portrait-mask.png")
 REF = os.path.join(ROOT, "assets", "portrait-colour.png")
-OUT = os.path.join(ROOT, "assets", "hero-v25.svg")
+OUT = os.path.join(ROOT, "assets", "hero-v26.svg")
 
 RNG = random.Random(7)
 
