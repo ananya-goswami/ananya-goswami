@@ -1842,6 +1842,39 @@ document.addEventListener('click', () => {
 """
 
 
+# The cursor glow for the two pages Pages serves (the live cards and /play):
+# the real-mouse version of the ghost cursor drawn into the hero panel. A
+# soft #00FF9C light trails the pointer with a little lag; over a project
+# card it takes that card's colour. Off on touch screens and for reduced
+# motion, and it never takes a click.
+CARD_GLOW = {"Keyword-class9": "#E040FB", "feeling-wheel-tap": "#FF4D6D", "think-ask-act": "#8A5CF6",
+             "real-or-fake-sender": "#53BDEB", "calm-or-react": "#3DFF7A", "aaru_ki_cheenk": "#FFB020",
+             "fln-animation-toolkit": "#7FD3FF", "Competition-Zone": "#FFD23F", "Portfolio": "#E8A5C0"}
+GLOW_SNIPPET = """<style>
+#glow,#glowDot{position:fixed;left:0;top:0;pointer-events:none;z-index:99;opacity:0;transition:opacity .4s}
+#glow{width:420px;height:420px;margin:-210px 0 0 -210px;border-radius:50%;mix-blend-mode:screen;
+  background:radial-gradient(closest-side,var(--g,#00FF9C) 0%,transparent 100%);filter:blur(6px);
+}
+#glowDot{width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:var(--g,#00FF9C);
+  box-shadow:0 0 14px 3px var(--g,#00FF9C)}
+body.glow-on #glow{opacity:.34} body.glow-on #glowDot{opacity:.85}
+@media (hover:none),(prefers-reduced-motion:reduce){#glow,#glowDot{display:none}}
+</style>
+<div id="glow"></div><div id="glowDot"></div>
+<script>(()=>{
+  if (matchMedia('(hover:none),(prefers-reduced-motion:reduce)').matches) return;
+  const g=document.getElementById('glow'), d=document.getElementById('glowDot');
+  let mx=-999,my=-999,gx=-999,gy=-999,dx=-999,dy=-999;
+  addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY;document.body.classList.add('glow-on');
+    const c=e.target.closest&&e.target.closest('[data-glow]');
+    document.documentElement.style.setProperty('--g',c?c.dataset.glow:'#00FF9C');},{passive:true});
+  document.addEventListener('pointerleave',()=>document.body.classList.remove('glow-on'));
+  (function f(){gx+=(mx-gx)*.09;gy+=(my-gy)*.09;dx+=(mx-dx)*.35;dy+=(my-dy)*.35;
+    g.style.transform=`translate(${gx}px,${gy}px)`;d.style.transform=`translate(${dx}px,${dy}px)`;
+    requestAnimationFrame(f);})();
+})();</script>"""
+
+
 def build_pages(index, cards):
     """One page, the nine cards inlined, every arc alive."""
     blocks = []
@@ -1855,7 +1888,7 @@ def build_pages(index, cards):
         home = (index.get(repo, {}).get("homepage") or "").strip()
         link = (f'<a class="open" href="{esc(home)}" target="_blank" rel="noopener">'
                 f'open {esc(title)} \u2197</a>') if home else ""
-        blocks.append(f'<div class="card">{svg}{link}</div>')
+        blocks.append(f'<div class="card" data-glow="{CARD_GLOW.get(repo, "#00FF9C")}">{svg}{link}</div>')
 
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
@@ -1866,7 +1899,7 @@ def build_pages(index, cards):
             f'point at one colour to see just that language and its share, '
             f'click to keep it up.</p></header>'
             f'<div class="grid">{"".join(blocks)}</div>'
-            f'<div id="tip"></div><script>{PAGE_JS}</script></body></html>\n')
+            f'<div id="tip"></div><script>{PAGE_JS}</script>{GLOW_SNIPPET}</body></html>\n')
 
 
 _CARD_CSS = '''<style>
@@ -3555,7 +3588,9 @@ if __name__ == "__main__":
     play = os.path.join(out_dir, "play")
     os.makedirs(os.path.join(play, "assets"), exist_ok=True)
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-    shutil.copy(os.path.join(root, "game", "index.html"), os.path.join(play, "index.html"))
+    page = open(os.path.join(root, "game", "index.html"), encoding="utf-8").read()
+    page = page.replace("</body>", GLOW_SNIPPET + "</body>", 1) if "</body>" in page else page + GLOW_SNIPPET
+    open(os.path.join(play, "index.html"), "w", encoding="utf-8").write(page)
     for name in ("runner-avatar-sheet-v9.png", "turtle-sheet-v1.png", "snake-sheet-v1.png",
                  "leaf-sheet-v1.png", "blockcoin-sheet-v1.png"):
         shutil.copy(os.path.join(_ASSETS, name), os.path.join(play, "assets", name))

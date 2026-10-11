@@ -47,6 +47,7 @@ HEAD = """<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="706" view
   </linearGradient>
   <radialGradient id="glowA"><stop offset="0" stop-color="#00FF9C" stop-opacity=".14"/><stop offset="1" stop-color="#00FF9C" stop-opacity="0"/></radialGradient>
   <radialGradient id="glowB"><stop offset="0" stop-color="#22D3EE" stop-opacity=".12"/><stop offset="1" stop-color="#22D3EE" stop-opacity="0"/></radialGradient>
+  <radialGradient id="ghostGlow"><stop offset="0" stop-color="#00FF9C" stop-opacity=".34"/><stop offset=".45" stop-color="#00FF9C" stop-opacity=".12"/><stop offset="1" stop-color="#00FF9C" stop-opacity="0"/></radialGradient>
   <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#7fffd4" fill-opacity=".03"/></pattern>
   <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse"><path d="M34 0H0V34" fill="none" stroke="#00FF9C" stroke-opacity=".04"/></pattern>
   <rect id="d" width="1.25" height="1.25"/>
@@ -82,6 +83,7 @@ TAIL = """
 <rect x="500" y="102" width="330" height="26" rx="6" fill="#0d1a17" stroke="#00FF9C" stroke-opacity=".35"/>
 <text x="512" y="120" font-size="13" fill="#00FF9C">goswamiananya54@gmail.com</text>
 <line x1="500" y1="150" x2="1140" y2="150" stroke="#00FF9C" stroke-opacity=".12"/>
+<!--GHOSTROWS-->
 <text x="500" y="172" font-size="12" letter-spacing="2" fill="#31514c">$ whoami --verbose</text>
 
 <text opacity="0" x="500" y="190" font-size="14" xml:space="preserve"><tspan fill="#22D3EE">Subject</tspan><tspan fill="#31514c"> ..................................................... </tspan><tspan fill="#F2FBF8" font-weight="600">Ananya Goswami</tspan><animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.106;0.161;1" dur="9.0s" begin="0s" fill="freeze"/></text>
@@ -108,16 +110,80 @@ TAIL = """
 <rect x="830" y="646" width="9" height="15" fill="#00FF9C">
   <animate attributeName="opacity" values="1;1;0;0" dur="1.05s" begin="0s" repeatCount="indefinite"/></rect>
 
+<!--GHOST-->
 <rect width="1180" height="706" rx="16" fill="url(#scan)"/>
 <rect x="1" y="1" width="1178" height="704" rx="16" fill="none" stroke="#00FF9C" stroke-opacity=".3"/>
 </svg>
 """
 
 
+
+# The ghost cursor. A README cannot see the visitor's mouse, so the panel
+# carries its own: a pointer with a soft #00FF9C glow that drifts over the
+# avatar, rests on the lines worth reading (each row lights as it arrives),
+# clicks the portfolio and the email, and leaves. It starts once the intro
+# has typed the rows in, then loops.
+GHOST_BEGIN = 4.6
+GHOST_T = 16.0
+GHOST_PATH = [(0.0, 1230, 740), (1.3, 330, 470), (2.5, 250, 330), (3.5, 310, 250),
+              (4.7, 1010, 220), (6.0, 1010, 220), (6.9, 1050, 494), (8.2, 1050, 494),
+              (9.1, 990, 576), (10.5, 990, 576), (11.4, 660, 124), (12.5, 660, 124),
+              (13.6, 1240, 760), (GHOST_T, 1240, 760)]
+GHOST_ROWS = [(214, 4.7, 6.0), (488, 6.9, 8.2), (570, 9.1, 10.5)]
+GHOST_CLICKS = [(990, 576, 9.7), (660, 124, 11.8)]
+
+
+def _gk(*ts):
+    return ";".join(f"{t / GHOST_T:.4f}" for t in ts)
+
+
+def _grep():
+    return f' dur="{GHOST_T}s" begin="{GHOST_BEGIN}s" repeatCount="indefinite"'
+
+
+def ghost_rows():
+    out = []
+    for y, a, b in GHOST_ROWS:
+        out.append(f'<rect x="494" y="{y - 17}" width="652" height="24" rx="5" fill="#00FF9C" opacity="0">'
+                   f'<animate attributeName="opacity" values="0;0;.11;.11;0;0" keyTimes="{_gk(0, a - .1, a + .2, b, b + .4, GHOST_T)}"{_grep()}/></rect>')
+    return "\n".join(out)
+
+
+def ghost_cursor():
+    vals = ";".join(f"{x} {y}" for _, x, y in GHOST_PATH)
+    keys = _gk(*[t for t, _, _ in GHOST_PATH])
+    spl = ";".join([".45 0 .3 1"] * (len(GHOST_PATH) - 1))
+    move = (f'<animateTransform attributeName="transform" type="translate" values="{vals}" keyTimes="{keys}"'
+            f' calcMode="spline" keySplines="{spl}"{_grep()}/>')
+    out = ['<g style="mix-blend-mode:screen">']
+    # the glow, with a short trail lagging behind it
+    for i, (r, o) in enumerate(((150, 1), (90, .55), (60, .35), (40, .25))):
+        lag = (f'<animateTransform attributeName="transform" type="translate" values="{vals}" keyTimes="{keys}"'
+               f' calcMode="spline" keySplines="{spl}" dur="{GHOST_T}s" begin="{GHOST_BEGIN + i * .09:.2f}s"'
+               ' repeatCount="indefinite"/>')
+        out.append(f'<g transform="translate(1240 760)">{lag}<circle r="{r}" fill="url(#ghostGlow)" opacity="{o}"/></g>')
+    out.append('</g>')
+    for cx, cy, t in GHOST_CLICKS:
+        for d in (0, .14):
+            out.append(f'<circle cx="{cx}" cy="{cy}" r="4" fill="none" stroke="#00FF9C" stroke-width="2" opacity="0">'
+                       f'<animate attributeName="r" values="4;4;30;30" keyTimes="{_gk(0, t + d, t + d + .55, GHOST_T)}"{_grep()}/>'
+                       f'<animate attributeName="opacity" values="0;0;.9;0;0" keyTimes="{_gk(0, t + d, t + d + .03, t + d + .55, GHOST_T)}"{_grep()}/></circle>')
+    press = ";".join(["1"] + sum([[ "1", ".82", "1"] for _ in GHOST_CLICKS], []) + ["1"])
+    pk = [0.0]
+    for _, _, t in GHOST_CLICKS:
+        pk += [t - .08, t, t + .12]
+    pk.append(GHOST_T)
+    out.append(f'<g transform="translate(1240 760)">{move}<g><animateTransform attributeName="transform" type="scale"'
+               f' values="{press}" keyTimes="{_gk(*pk)}"{_grep()}/>'
+               '<path d="M0 0L0 19L4.6 14.6L7.8 21.6L10.9 20.2L7.8 13.4L14 13.4Z" fill="#F2FBF8" stroke="#04070a"'
+               ' stroke-width="1.4" stroke-linejoin="round"/></g></g>')
+    return "\n".join(out)
+
+
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MASK = os.path.join(ROOT, "assets", "portrait-mask.png")
 REF = os.path.join(ROOT, "assets", "portrait-colour.png")
-OUT = os.path.join(ROOT, "assets", "hero-v23.svg")
+OUT = os.path.join(ROOT, "assets", "hero-v24.svg")
 
 RNG = random.Random(7)
 
@@ -1064,7 +1130,7 @@ def main():
         f.write(HEAD)
         f.write("\n".join(body))
         f.write("\n")
-        f.write(TAIL.replace("<!--TICKER-->", "\n".join(ticker_svg())))
+        f.write(TAIL.replace("<!--TICKER-->", "\n".join(ticker_svg())).replace("<!--GHOSTROWS-->", ghost_rows()).replace("<!--GHOST-->", ghost_cursor()))
     print(f"{OUT}  {os.path.getsize(OUT) / 1024:.0f} KB  "
           f"{len(pts)} avatar px in {N_INKS} inks, {N_PARTICLES} particles in "
           f"{n_groups} colour groups, {len(SYMBOLS)} symbols, {LOOP:.1f}s loop")
