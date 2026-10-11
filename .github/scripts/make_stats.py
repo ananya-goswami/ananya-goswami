@@ -1745,7 +1745,13 @@ def build_runner_panel(weeks, total=None):
         # A smooth zig-zag, sampled finely so it is a wave and not a hop: the
         # head rises and dips (never below the ground), it surges forward on
         # each push and eases between them, and the body tilts with the slope.
-        ZIG_P, ZIG_AMP, ZIG_SURGE, ZIG_TILT = 0.9, 10.0, 12.0, 9.0
+        # One body wave carries it one body length (~84 units), so the wave
+        # and the ground agree. The surge only varies its speed by about 30%
+        # (it must never slip backwards), and the rise and tilt stay gentle,
+        # so it glides rather than heaves.
+        ZIG_P = 84.0 / V_SNAKE
+        ZIG_SURGE = 0.3 * V_SNAKE * ZIG_P / (2 * math.pi)
+        ZIG_AMP, ZIG_TILT = 5.0, 4.0
         tilt = [(0.0, 0.0), (t_slith, 0.0)]
         zt = t_slith + 0.05
         while zt < t_gone:
@@ -1753,7 +1759,7 @@ def build_runner_panel(weeks, total=None):
             pts.append((zt, snake_at(zt) - ZIG_SURGE * math.sin(ph),
                         BASE - ZIG_AMP * (1 - math.cos(ph)) / 2))
             tilt.append((zt, ZIG_TILT * math.sin(ph)))
-            zt += 0.06
+            zt += 0.08
         pts += [(t_gone, snake_gone, BASE), (T, snake_gone, BASE)]
         tilt += [(t_gone, 0.0), (T, 0.0)]
 
@@ -2642,9 +2648,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v23.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v24.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v23.svg")
+        print("wrote runner-v24.svg")
     else:
         print("no calendar data - runner panel skipped")
     # The playable game, served by Pages at /play/: the page, the art it
