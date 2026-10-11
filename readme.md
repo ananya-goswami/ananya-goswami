@@ -117,7 +117,6 @@ Media delivery fixes, workflow tuning, and the unglamorous parts that keep a cha
 `math/`
 
 - Factor Forge : LCM and HCF by prime factorisation
-- [Exponent Game](https://exponent-game.vercel.app/) : powers, made visual
 - Factorial Tiles : polynomial factoring
 
 </td><td valign="top" width="33%">
