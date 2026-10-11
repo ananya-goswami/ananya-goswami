@@ -1472,7 +1472,7 @@ RING_GAP = 2.4                           # px of track between two slices
 # than an image that takes a few minutes to turn over on its own - raw.github
 # serves these with max-age=300, so a plain content change gets there by
 # itself.  Change the contents and wait; only bump if something is wedged.
-CARD_REV = "h"
+CARD_REV = "i"
 
 
 # The game repos are private, so the API hands back no languages for them.
