@@ -161,7 +161,6 @@ def build(d, g=None):
     # Only numbers that say something: zero stars, a handful of public repos
     # (most game repos are private) and live-build counts undersold the work.
     lines = [
-        ("box", "Repositories", d.get("repos", "-")),
         ("star", "Top Language", d["langs"][0][0] if d.get("langs") else "-"),
         ("live", "Active Days", g.get("active_days", "-")),
         ("clock", "Contributions per Active Day",
@@ -3567,6 +3566,15 @@ def _ep_shown(svg, intervals, T):
 
 if __name__ == "__main__":
     data = collect()
+    # Most game repos are private, so the API sees almost none of their live
+    # links; the README's own list of deployed games is the honest count.
+    try:
+        _rd = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "readme.md"),
+                   encoding="utf-8").read()
+        _live = set(re.findall(r"https://[a-z0-9.-]+\.(?:vercel|netlify)\.app", _rd))
+        data["deployed"] = max(data["deployed"], len(_live))
+    except Exception as exc:
+        print("live count from readme skipped:", exc)
     try:
         g = graph()
     except Exception as exc:                 # never fail the whole build on one API hiccup
