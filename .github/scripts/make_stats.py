@@ -10,7 +10,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 USER = "ananya-goswami"
-OUT = os.environ.get("STATS_OUT", "dist/highscores-v2.svg")
+OUT = os.environ.get("STATS_OUT", "dist/highscores-v3.svg")
 TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
 HEAD = {"Accept": "application/vnd.github+json", "User-Agent": "profile-stats"}
@@ -143,19 +143,12 @@ def build(d, g=None):
           transform="rotate(-90 500 112)">
     <animateTransform attributeName="transform" type="rotate" from="-90 500 112" to="270 500 112" dur="14s" repeatCount="indefinite"/>
   </circle>
-  <circle cx="500" cy="66" r="13.5" fill="#050c10"/>
-  <g transform="translate(500 64) scale(1.45)">
-    <path d="M1-9.6C4-5.8 6.2-3 6.2 1A6.2 6.2 0 01-6.2 1C-6.2-1.6-4.6-3.8-2.4-5.4-2.6-2.8-1.4-1.6.4-1.8-1.4-4.2-1-7.2 1-9.6Z" fill="url(#ring)">
-      <animate attributeName="opacity" values="1;.5;1" dur="2.4s" repeatCount="indefinite"/>
-    </path>
-    <path transform="translate(.2 3) scale(.44)" d="M1-9.6C4-5.8 6.2-3 6.2 1A6.2 6.2 0 01-6.2 1C-6.2-1.6-4.6-3.8-2.4-5.4-2.6-2.8-1.4-1.6.4-1.8-1.4-4.2-1-7.2 1-9.6Z" fill="#F2FBF8" fill-opacity=".85"/>
-  </g>
-  <text class="mono" x="500" y="122" text-anchor="middle" font-size="34" font-weight="700" fill="#F2FBF8">{g.get("current_streak", "-")}</text>
-  <text class="mono" x="500" y="180" text-anchor="middle" font-size="12.5" fill="#9BE7C4">Current Streak</text>
+  <text class="mono" x="500" y="122" text-anchor="middle" font-size="34" font-weight="700" fill="#F2FBF8">{g.get("commits", "-")}</text>
+  <text class="mono" x="500" y="180" text-anchor="middle" font-size="12.5" fill="#9BE7C4">Commits This Year</text>
 
-  <text class="mono" x="833" y="112" text-anchor="middle" font-size="40" font-weight="700" fill="#F2FBF8">{g.get("longest_streak", "-")}</text>
-  <text class="mono" x="833" y="140" text-anchor="middle" font-size="12.5" fill="#CFEAE3">Longest Streak</text>
-  <text class="mono" x="833" y="164" text-anchor="middle" font-size="11" fill="#4e6b66">best run so far</text>'''
+  <text class="mono" x="833" y="112" text-anchor="middle" font-size="40" font-weight="700" fill="#F2FBF8">{d.get("deployed", "-")}</text>
+  <text class="mono" x="833" y="140" text-anchor="middle" font-size="12.5" fill="#CFEAE3">Live Deployments</text>
+  <text class="mono" x="833" y="164" text-anchor="middle" font-size="11" fill="#4e6b66">each with a live link</text>'''
 
     # ---- bottom left: the stats list ----
     ICONS = {
@@ -168,10 +161,11 @@ def build(d, g=None):
     # Only numbers that say something: zero stars, a handful of public repos
     # (most game repos are private) and live-build counts undersold the work.
     lines = [
-        ("clock", "Commits This Year", g.get("commits", "-")),
+        ("box", "Repositories", d.get("repos", "-")),
+        ("star", "Top Language", d["langs"][0][0] if d.get("langs") else "-"),
         ("live", "Active Days", g.get("active_days", "-")),
-        ("star", "Games Shipped", "30+"),
-        ("box", "Grades Covered", "KG to Class 9"),
+        ("clock", "Contributions per Active Day",
+         f'{g["contributions"] / g["active_days"]:.1f}' if g.get("active_days") else "-"),
     ]
     left = ""
     ly = 296
@@ -256,8 +250,6 @@ FEATURED = [
      "check who is really writing"),
     ("calm-or-react", "Calm or React", "CYBER SAFETY",
      "the emotion behind it"),
-    ("Competition-Zone", "Competition Zone", "PROTOTYPE",
-     "entries, results, trophies"),
     ("Portfolio", "Portfolio", "SITE",
      "the rest of the work"),
 ]
@@ -1592,7 +1584,7 @@ RING_GAP = 2.4                           # px of track between two slices
 # than an image that takes a few minutes to turn over on its own - raw.github
 # serves these with max-age=300, so a plain content change gets there by
 # itself.  Change the contents and wait; only bump if something is wedged.
-CARD_REV = "k"
+CARD_REV = "l"
 
 
 # The game repos are private, so the API hands back no languages for them.
@@ -1609,6 +1601,24 @@ LANG_FALLBACK = {
     "Competition-Zone": {"HTML": 100},
     "Portfolio": {"HTML": 100},
 }
+
+
+# Where each featured game lives. The game repos are private, so the API
+# never hands their homepage over; the card still names the live site.
+CARD_SITE = {"fln-animation-toolkit": "fln-animation-toolkit.vercel.app",
+             "aaru_ki_cheenk": "aaru-ki-cheenk.vercel.app",
+             "Keyword-class9": "ch1-keywords-mocha.vercel.app",
+             "feeling-wheel-tap": "feeling-wheel-tap.vercel.app",
+             "think-ask-act": "think-ask-act-builder.vercel.app",
+             "real-or-fake-sender": "real-or-fake-sender.vercel.app",
+             "calm-or-react": "calm-or-react.vercel.app",
+             "Portfolio": "g-ananya.netlify.app"}
+
+
+def _site_label(home, repo):
+    """The card's top line: where the game lives, never a private repo path."""
+    host = re.sub(r"^https?://", "", (home or CARD_SITE.get(repo, "")).strip()).rstrip("/")
+    return _clip_text(host, 34) if host else repo
 
 
 def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
@@ -1643,7 +1653,7 @@ def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
 
     <circle cx="{x + TEXT_X + 4}" cy="{y + 16}" r="3" fill="{'#00FF9C' if live else '#33534e'}"/>
     <text class="mono" x="{x + TEXT_X + 15}" y="{y + 20}" font-size="10.5"
-          fill="#557a73">{esc(USER)}/{esc(repo)}</text>
+          fill="#557a73">{esc(_site_label(meta.get("homepage"), repo))}</text>
     <text class="mono" x="{x + CW - 15}" y="{y + 20}" font-size="9" text-anchor="end"
           letter-spacing="1.2" fill="{'#00FF9C' if live else '#3f5f58'}"
           fill-opacity=".85">{'LIVE' if live else ''}</text>
