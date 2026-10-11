@@ -1969,9 +1969,74 @@ def story_outro(t_cut, T):
               f'<g>{lift}{glow}{bumps}</g></g>')
     coins = "".join(pop_coin(PLAY_BTN_CX, PLAY_BTN_CY - PLAY_BTN_H / 2 - 10, bk, T, r=18.0)
                     for bk in bonks)
-    side = "".join(float_coin(PLAY_BTN_CX + dx, PLAY_BTN_CY + dy, k, r=16.0)
-                   for k, (dx, dy) in enumerate([(-330, -40), (-520, 20), (-720, -60),
-                                                 (330, -40), (520, 20), (720, -60)]))
+    # six leaf coins orbit the block on a tilted ring; the front half of the
+    # ring is drawn again over the block so they pass in front of it
+    ORX, ORY, OPER = 200.0, 44.0, 7.0
+    ring_path = (f"M {-ORX:.0f},0 a {ORX:.0f},{ORY:.0f} 0 1,0 {2 * ORX:.0f},0"
+                 f" a {ORX:.0f},{ORY:.0f} 0 1,0 {-2 * ORX:.0f},0")
+    orbit = "".join(
+        f'<g><animateMotion path="{ring_path}" dur="{OPER}s" repeatCount="indefinite"'
+        f' begin="{-k * OPER / 6:.2f}s"/>{coin_spin(1.6 + (k % 3) * 0.2, k * 0.17, 15.0)}</g>'
+        for k in range(6))
+    ocy = PLAY_BTN_CY + 8
+    ring = (f'<ellipse cx="{PLAY_BTN_CX}" cy="{ocy}" rx="{ORX}" ry="{ORY}" fill="none"'
+            f' stroke="#20D898" stroke-opacity=".14" stroke-width="2" stroke-dasharray="4 10"/>')
+    orbit_back = f'<g transform="translate({PLAY_BTN_CX} {ocy})">{orbit}</g>'
+    orbit_front = (f'<clipPath id="orbitFront"><rect x="{PLAY_BTN_CX - ORX - 40}" y="{ocy}"'
+                   f' width="{2 * ORX + 80}" height="{ORY + 40}"/></clipPath>'
+                   f'<g clip-path="url(#orbitFront)">{orbit_back}</g>')
+
+    # minimal space: a faint nebula, two drifting star layers, a ringed
+    # planet low on the right, a shooting star now and then
+    srnd = random.Random(11)
+    def star_layer(n, sizes, drift):
+        out = ""
+        for k in range(n):
+            x, y = srnd.uniform(0, W), srnd.uniform(py0 + 10, GROUND - 30)
+            sz = srnd.choice(sizes)
+            d = srnd.uniform(1.8, 4.2)
+            for dx in (0, W):     # two copies so the drift wraps seamlessly
+                out += (f'<rect x="{px0 + x + dx:.0f}" y="{y:.0f}" width="{sz}" height="{sz}"'
+                        f' fill="#CFEAE3" opacity=".5"><animate attributeName="opacity"'
+                        f' values=".15;.75;.15" dur="{d:.1f}s" begin="{-srnd.uniform(0, d):.1f}s"'
+                        f' repeatCount="indefinite"/></rect>')
+        return (f'<g><animateTransform attributeName="transform" type="translate"'
+                f' values="0 0;{-W} 0" dur="{drift}s" repeatCount="indefinite"/>{out}</g>')
+    stars = star_layer(40, [2, 2, 3], 160) + star_layer(14, [3, 4], 70)
+    sky = (f'<defs><radialGradient id="neb1"><stop offset="0" stop-color="#20D898" stop-opacity=".10"/>'
+           f'<stop offset="1" stop-color="#20D898" stop-opacity="0"/></radialGradient>'
+           f'<radialGradient id="neb2"><stop offset="0" stop-color="#7B6CF6" stop-opacity=".09"/>'
+           f'<stop offset="1" stop-color="#7B6CF6" stop-opacity="0"/></radialGradient>'
+           f'<radialGradient id="planet" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#1E6B66"/>'
+           f'<stop offset=".6" stop-color="#0E3A40"/><stop offset="1" stop-color="#081420"/></radialGradient>'
+           f'<radialGradient id="halo"><stop offset="0" stop-color="#20D898" stop-opacity=".22"/>'
+           f'<stop offset="1" stop-color="#20D898" stop-opacity="0"/></radialGradient>'
+           f'<linearGradient id="streak" x1="0" x2="1"><stop offset="0" stop-color="#CFEAE3" stop-opacity="0"/>'
+           f'<stop offset="1" stop-color="#CFEAE3" stop-opacity=".9"/></linearGradient></defs>'
+           f'<ellipse cx="{px0 + W * 0.28}" cy="{py0 + 150}" rx="520" ry="210" fill="url(#neb2)"/>'
+           f'<ellipse cx="{px0 + W * 0.72}" cy="{py0 + 260}" rx="560" ry="230" fill="url(#neb1)"/>'
+           + stars +
+           # the planet, partly below the horizon line of the panel
+           f'<g transform="translate({px0 + W * 0.86:.0f} {py0 + 175})">'
+           f'<ellipse rx="150" ry="30" fill="none" stroke="#20D898" stroke-opacity=".18" stroke-width="5"'
+           f' transform="rotate(-14)"/>'
+           f'<circle r="74" fill="url(#planet)"/>'
+           f'<path d="M -150 0 A 150 30 0 0 0 150 0" fill="none" stroke="#20D898" stroke-opacity=".3"'
+           f' stroke-width="5" transform="rotate(-14)"/></g>'
+           # a small moon on the left
+           f'<circle cx="{px0 + W * 0.12:.0f}" cy="{py0 + 110}" r="16" fill="#12404A"/>'
+           f'<circle cx="{px0 + W * 0.12 - 5:.0f}" cy="{py0 + 105}" r="16" fill="#081420" opacity=".55"/>')
+    for k, (sx, sy, beg) in enumerate([(0.62, 60, 1.0), (0.30, 120, 4.2)]):
+        x0s, y0s = px0 + W * sx, py0 + sy
+        sky += (f'<g opacity="0"><animate attributeName="opacity" values="0;1;0;0"'
+                f' keyTimes="0;.05;.14;1" dur="6.5s" begin="{beg}s" repeatCount="indefinite"/>'
+                f'<g><animateTransform attributeName="transform" type="translate"'
+                f' values="{x0s:.0f} {y0s};{x0s - 260:.0f} {y0s + 90};{x0s - 260:.0f} {y0s + 90}"'
+                f' keyTimes="0;.14;1" dur="6.5s" begin="{beg}s" repeatCount="indefinite"/>'
+                f'<rect x="0" y="-1.5" width="120" height="3" rx="1.5" fill="url(#streak)"'
+                f' transform="rotate(160)"/></g></g>')
+    halo = (f'<ellipse cx="{PLAY_BTN_CX}" cy="{PLAY_BTN_CY}" rx="170" ry="150" fill="url(#halo)">'
+            f'<animate attributeName="opacity" values=".7;1;.7" dur="2.6s" repeatCount="indefinite"/></ellipse>')
 
     # her, under the block, running on the spot and jumping to bonk it
     G = 2.0 * LIFT_MAX / (JD_MAX / 2.0) ** 2
@@ -2011,7 +2076,7 @@ def story_outro(t_cut, T):
               f' x="{px1 + 40}">{curtain_anim}</rect></clipPath>'
               f'<g clip-path="url(#outroClip)">'
               f'<rect x="{px0}" y="{py0}" width="{W}" height="{H}" fill="#081420"/>'
-              f'{ground}{side}{coins}{button}{her}</g>')
+              f'{sky}{ground}{halo}{ring}{orbit_back}{coins}{button}{orbit_front}{her}</g>')
 
     # ---- the storm: leaves riding just ahead of the curtain's edge ----
     # The storm is a year going by: fresh leaves lead, the oldest trail.
