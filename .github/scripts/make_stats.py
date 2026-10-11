@@ -644,88 +644,83 @@ def _scene_defs_aaru():
 
 
 def _scene_aaru(x, y):
-    got = {k: _asset_layer(f) for k, (f, _, _) in AARU_LAYERS.items()}
-    if not all(got.values()):
+    """A trailer cut from the book: the title ride with the bell going, then
+    three sneezes - the flour flying off the plate, Aaru flying off his
+    bike, the sugarcane juice going over - each landing with the book's own
+    comic starburst, a white flash and a shake on the cut."""
+    shots = [("proj-ak-p01.jpg", "proj-ak-ring.png", (372, 318), .62, (300, 200)),
+             ("proj-ak-p03.jpg", "proj-ak-sneeze.png", (150, 110), .82, (380, 250)),
+             ("proj-ak-p06.jpg", "proj-ak-crash.png", (150, 318), .95, (250, 170)),
+             ("proj-ak-p08.jpg", "proj-ak-splash.png", (488, 82), .62, (420, 300))]
+    got = [(_asset_layer(a), _asset_layer(b)) for a, b, *_ in shots]
+    if not all(p and q for p, q in got):
         uri = _photo_uri("proj-art-aaru.png")
         return (f'<image xlink:href="{uri}" x="{x}" y="{y}" width="{ART_W}" height="{CH}"'
                 f' preserveAspectRatio="xMidYMid slice"/>') if uri else ""
-    wx, wy, ww, wh = AARU_WIN
-    k = CH / wh
-    ox = x + (ART_W - ww * k) / 2.0           # centre the window if the shapes differ
+    S = 2.7                                   # one shot
+    T = S * len(shots)
+    k = CH / 384.0
 
-    def place(key):
-        uri, w, h = got[key]
-        _, sx, sy = AARU_LAYERS[key]
-        px, py = ox + (sx - wx) * k, y + (sy - wy) * k
-        return uri, px, py, w * k, h * k
+    def kt(*ts):
+        return ";".join(f"{max(0.0, min(T, t)) / T:.4f}" for t in ts)
 
-    out = []
-    # the sky: artSway, 14 s each way, about its centre
-    uri, px, py, w, h = place("bg")
-    cx, cy = px + w / 2, py + h / 2
-    t0, t1 = _sway(["0 0", f"{4 * k:.2f} {-4 * k:.2f}"], 14, cx, cy, "translate")
-    r0, r1 = _sway([f"-0.22 {cx:.1f} {cy:.1f}", f"0.22 {cx:.1f} {cy:.1f}"], 14, cx, cy, "rotate")
-    s0, s1 = _sway(["1.02", "1.035"], 14, cx, cy, "scale")
-    out.append(t0 + r0 + s0 + f'<image xlink:href="{uri}" x="{px:.2f}" y="{py:.2f}"'
-               f' width="{w:.2f}" height="{h:.2f}" preserveAspectRatio="none"/>' + s1 + r1 + t1)
-    # dust motes rising from the road (moteRise)
-    rnd = random.Random(5)
-    for i in range(5):
-        mx = x + ART_W * (0.08 + 0.18 * i + rnd.uniform(-0.03, 0.03))
-        my = y + CH * rnd.uniform(0.72, 0.92)
-        dur = rnd.choice([15.6, 17.6, 13.8, 16.4, 14.6])
-        dx = rnd.uniform(-10, 10)
-        out.append(f'<circle cx="{mx:.1f}" cy="{my:.1f}" r="{rnd.uniform(1.1, 2.0):.1f}" fill="#FFF3D6"'
-                   f' opacity="0"><animate attributeName="opacity" values="0;.8;.45;0"'
-                   f' keyTimes="0;.25;.7;1" dur="{dur}s" begin="{-rnd.uniform(0, dur):.1f}s"'
-                   f' repeatCount="indefinite"/><animateTransform attributeName="transform"'
-                   f' type="translate" values="0 0;{dx:.1f} {-CH * 0.42:.1f}" dur="{dur}s"'
-                   f' begin="{-rnd.uniform(0, dur):.1f}s" repeatCount="indefinite"/></circle>')
-    # Aaru: heroIdle, 4.6 s each way
-    uri, px, py, w, h = place("hero")
-    cx, cy = px + w / 2, py + h / 2
-    t0, t1 = _sway(["0 0", f"{-0.0035 * w:.2f} {-0.007 * h:.2f}"], 4.6, cx, cy, "translate")
-    r0, r1 = _sway([f"0 {cx:.1f} {cy:.1f}", f"-0.35 {cx:.1f} {cy:.1f}"], 4.6, cx, cy, "rotate")
-    out.append(t0 + r0 + f'<image xlink:href="{uri}" x="{px:.2f}" y="{py:.2f}" width="{w:.2f}"'
-               f' height="{h:.2f}"/>' + r1 + t1)
-    # the title: titleIdle, 6.2 s each way
-    uri, px, py, w, h = place("title")
-    cx, cy = px + w / 2, py + h / 2
-    t0, t1 = _sway(["0 0", f"0 {-0.014 * h:.2f}"], 6.2, cx, cy, "translate")
-    r0, r1 = _sway([f"0 {cx:.1f} {cy:.1f}", f"0.5 {cx:.1f} {cy:.1f}"], 6.2, cx, cy, "rotate")
-    s0, s1 = _sway(["1", "1.014"], 6.2, cx, cy, "scale")
-    out.append(t0 + r0 + s0 + f'<image xlink:href="{uri}" x="{px:.2f}" y="{py:.2f}"'
-               f' width="{w:.2f}" height="{h:.2f}"/>' + s1 + r1 + t1)
-    # the play button: startBeat, with the startPulse ring, 2.4 s
-    uri, px, py, w, h = place("btn")
-    cx, cy = px + w / 2, py + h / 2
-    ring = (f'<g transform="translate({cx:.2f} {cy:.2f})"><g>'
-            f'<animateTransform attributeName="transform" type="scale" values="1;1.55;1.55"'
-            f' keyTimes="0;.7;1" dur="2.4s" repeatCount="indefinite" calcMode="spline"'
-            f' keySplines="0 0 .58 1;0 0 1 1"/>'
-            f'<ellipse rx="{w * 0.44:.2f}" ry="{h * 0.42:.2f}" fill="none" stroke="#784E1E"'
-            f' stroke-opacity=".55" stroke-width="1"><animate attributeName="opacity"'
-            f' values=".85;0;0" keyTimes="0;.7;1" dur="2.4s" repeatCount="indefinite"/>'
-            f'</ellipse></g></g>')
-    beat = (f'<g transform="translate({cx:.2f} {cy:.2f})"><g>'
-            f'<animateTransform attributeName="transform" type="scale"'
-            f' values="1;1.055;0.996;1.01;1;1" keyTimes="0;.14;.32;.48;.64;1" dur="2.4s"'
-            f' repeatCount="indefinite" calcMode="spline"'
-            f' keySplines="{_EASE};{_EASE};{_EASE};{_EASE};0 0 1 1"/>'
-            f'<image xlink:href="{uri}" x="{-w / 2:.2f}" y="{-h / 2:.2f}" width="{w:.2f}"'
-            f' height="{h:.2f}"/></g></g>')
-    out.append(ring + beat)
-    # the tapping hand (handTap): two taps, then rest, rotated -9 degrees
-    uri, px, py, w, h = place("hand")
-    cx, cy = px + w / 2, py + h / 2
-    ys = [0.06, -0.15, 0.06, -0.11, 0.06, 0.06]
-    out.append(f'<g><animateTransform attributeName="transform" type="translate"'
-               f' values="{";".join(f"0 {v * h:.2f}" for v in ys)}" keyTimes="0;.09;.2;.29;.4;1"'
-               f' dur="2.4s" repeatCount="indefinite" calcMode="spline"'
-               f' keySplines="{";".join([_EASE] * 5)}"/>'
-               f'<g transform="rotate(-9 {cx:.1f} {cy:.1f})"><image xlink:href="{uri}" x="{px:.2f}"'
-               f' y="{py:.2f}" width="{w:.2f}" height="{h:.2f}"/></g></g>')
-    return f'<rect x="{x}" y="{y}" width="{ART_W}" height="{CH}" fill="#E9D8B4"/>' + "".join(out)
+    def rep(extra=""):
+        return f' dur="{T}s" repeatCount="indefinite"{extra}'
+
+    out = [f'<g transform="translate({x:.2f} {y:.2f}) scale({k:.5f})">']
+    for i, ((pg, _, _), (burst, bw, bh)) in enumerate(got):
+        _, _, (bx, by), bs, (fx, fy) = shots[i]
+        t0, t1 = i * S, (i + 1) * S
+        hit = t0 + .85
+        # on screen for its shot only (the first one also closes the loop)
+        if i == 0:
+            vis = f'<animate attributeName="opacity" values="1;1;0;0" keyTimes="{kt(0, t1, t1 + .001, T)}"{rep()} calcMode="discrete"/>'
+        else:
+            vis = (f'<animate attributeName="opacity" values="0;1;0" keyTimes="{kt(0, t0, t1)}"{rep()}'
+                   ' calcMode="discrete"/>')
+        # a slow push in on the action, then a jolt when the word lands
+        push = (f'<animateTransform attributeName="transform" type="scale" values="1.02;1.02;1.16;1.16"'
+                f' keyTimes="{kt(0, t0, t1, T)}" calcMode="spline" keySplines="0 0 1 1;.3 0 .6 1;0 0 1 1"{rep()}/>')
+        jolt = ";".join(["0 0", "0 0", "-9 5", "8 -6", "-6 3", "4 -2", "0 0", "0 0"])
+        shake = (f'<animateTransform attributeName="transform" type="translate" values="{jolt}"'
+                 f' keyTimes="{kt(0, hit, hit + .05, hit + .1, hit + .15, hit + .2, hit + .27, T)}"{rep()}/>')
+        out.append(f'<g opacity="{1 if i == 0 else 0}">{vis}<g>{shake}<g transform="translate({fx} {fy})"><g>{push}'
+                   f'<image xlink:href="{pg}" x="{-fx}" y="{-fy}" width="576" height="384"/></g></g>')
+        # the starburst: punches in, wobbles, holds, and is gone on the cut
+        w, h = bw * bs, bh * bs
+        pop = (f'<animateTransform attributeName="transform" type="scale" values="0;0;1.35;.9;1.06;1;1"'
+               f' keyTimes="{kt(0, hit - .12, hit + .05, hit + .18, hit + .3, hit + .42, T)}" calcMode="spline"'
+               f' keySplines="0 0 1 1;.2 .8 .3 1;{_EASE};{_EASE};{_EASE};0 0 1 1"{rep()}/>')
+        wob = (f'<animateTransform attributeName="transform" type="rotate" additive="sum"'
+               f' values="0;0;-8;5;-3;0;0" keyTimes="{kt(0, hit - .12, hit + .05, hit + .2, hit + .35, hit + .5, T)}"{rep()}/>')
+        beat = (f'<g><animateTransform attributeName="transform" type="scale" values="1;1.05;1" dur=".5s"'
+                f' repeatCount="indefinite"/>')
+        out.append(f'<g transform="translate({bx} {by})"><g>{pop}{wob}{beat}'
+                   f'<image xlink:href="{burst}" x="{-w / 2:.1f}" y="{-h / 2:.1f}" width="{w:.1f}" height="{h:.1f}"/>'
+                   '</g></g></g></g></g>')
+    # speed lines streaking past on the title ride
+    rnd = random.Random(3)
+    for j in range(7):
+        ly = rnd.uniform(30, 250)
+        d = rnd.uniform(.45, .7)
+        out.append(f'<rect x="0" y="{ly:.0f}" width="{rnd.uniform(60, 130):.0f}" height="3" rx="1.5" fill="#fff" opacity="0">'
+                   f'<animate attributeName="x" values="620;-160" dur="{d:.2f}s" begin="{-rnd.uniform(0, d):.2f}s" repeatCount="indefinite"/>'
+                   f'<animate attributeName="opacity" values=".8;.8;0;0" keyTimes="{kt(0, S - .1, S, T)}"{rep()} calcMode="discrete"/></rect>')
+    # a white flash on every cut
+    flash = []
+    ks = [0.0]
+    vs = ["0"]
+    for i in range(len(shots)):
+        t0 = i * S
+        if i:
+            ks += [t0 - .06, t0, t0 + .18]
+            vs += ["0", ".85", "0"]
+    ks += [T - .06, T]
+    vs += ["0", ".85"]
+    out.append(f'<rect width="576" height="384" fill="#FFF8E7" opacity="0">'
+               f'<animate attributeName="opacity" values="{";".join(vs)}" keyTimes="{kt(*ks)}"{rep()}/></rect>')
+    out.append('</g>')
+    return "".join(out)
 
 
 # Keywords (Class 9) - a short trailer of its two cyber moments, no text
@@ -1472,7 +1467,7 @@ RING_GAP = 2.4                           # px of track between two slices
 # than an image that takes a few minutes to turn over on its own - raw.github
 # serves these with max-age=300, so a plain content change gets there by
 # itself.  Change the contents and wait; only bump if something is wedged.
-CARD_REV = "i"
+CARD_REV = "j"
 
 
 # The game repos are private, so the API hands back no languages for them.
