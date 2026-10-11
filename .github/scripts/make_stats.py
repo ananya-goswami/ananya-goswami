@@ -1791,6 +1791,10 @@ def build_runner_panel(weeks, total=None):
                f'<text class="rmono" x="{HUD_CX + HUD_R + HUD_GAP:.0f}" y="160"'
                f' font-size="30" fill="#CFEAE3">x {total}</text>')
 
+    # the outro starts once the snake has passed and the turtle is out again
+    t_cut = min(t_emerge + 1.6, T - 9.0) if e3 else T - 9.0
+    outro = story_outro(t_cut, T)
+
     px0, py0, px1, py1 = PANEL
     coin_y = GCELL / 2 - GCELL * QBLOCK_S / 2 - COIN_R * 0.5
     coins = "".join(pop_coin(e["x"], e["y"] + coin_y, e["t"], T)
@@ -1814,9 +1818,219 @@ def build_runner_panel(weeks, total=None):
 {coins}
 {''.join(pops)}
 {girl}
+{outro}
 </g>
 </svg>
 '''
+
+
+# ---------------------------------------------------------------- the outro: leaf storm, then the play block
+# After the snake has passed and the turtle is out of its shell, a gust of
+# leaves sweeps right to left and clears the scene to the play screen: the
+# </> block as a play button, which she keeps bonking like any other block.
+# GitHub never runs code in a README and links the whole image, so the button
+# is a picture; clicking anywhere on the panel opens the game.
+PLAY_SHEET_PATH = os.path.join(_ASSETS, "play-block-sheet-v1.png")    # 3 x 320px: idle, glow, bump
+PLAY_CELL = 320
+TUMBLE_SHEET_PATH = os.path.join(_ASSETS, "leaf-tumble-sheet-v1.png")  # 8 x 256px tumble
+TUMBLE_CELL = 256
+OUTRO_WIPE = 1.5          # seconds for the storm to cross the panel
+OUTRO_FADE = 0.6          # the play screen fades back into the story's first frame
+PLAY_BTN_H = 176.0        # the button's height on screen
+PLAY_BTN_CX, PLAY_BTN_CY = 1086.0, 300.0
+_STRIPS = {}
+
+
+def _strip_frames(key, path, cell, n):
+    """Frames from a one-row sheet, trimmed and registered as sprites."""
+    if key in _STRIPS:
+        return _STRIPS[key]
+    out = []
+    try:
+        import base64, io
+        from PIL import Image
+        src = Image.open(path).convert("RGBA")
+        for i in range(n):
+            c = src.crop((i * cell, 0, (i + 1) * cell, cell))
+            box = c.getbbox()
+            if box is None:
+                continue
+            img = c.crop(box)
+            buf = io.BytesIO()
+            img.save(buf, "PNG", optimize=True)
+            fid = f"{key}{i}"
+            _USED[fid] = ("data:image/png;base64," +
+                          base64.b64encode(buf.getvalue()).decode(), img.width, img.height)
+            # remember where the trimmed frame sat in its cell, so a bump
+            # drawn into the art keeps its offset
+            out.append((fid, img.width, img.height, box))
+    except Exception as exc:
+        print(f"{key} sheet not used yet:", exc)
+    _STRIPS[key] = out
+    return out
+
+
+def _strip_use(fr, height, cell, ref_h):
+    """One sheet frame centred on its cell's centre; ref_h is the art's
+    height in the idle frame, so every frame shares one scale."""
+    fid, w, h, (x0, y0, _, _) = fr
+    k = height / ref_h
+    return (f'<use xlink:href="#sp-{fid}" transform="translate({(x0 - cell / 2) * k:.2f}'
+            f' {(y0 - cell / 2) * k:.2f}) scale({k:.4f})"/>')
+
+
+def _play_faces():
+    """[idle, glow, bump] for the play block, and whether the bump is drawn in."""
+    got = _strip_frames("play", PLAY_SHEET_PATH, PLAY_CELL, 3)
+    if len(got) == 3:
+        ref = got[0][2]
+        return [_strip_use(f, PLAY_BTN_H, PLAY_CELL, ref) for f in got], True
+    # stand-in until the art arrives: a teal block with a play triangle of
+    # contribution squares on its face
+    h = PLAY_BTN_H / 2
+
+    def face(body, glow):
+        tiles = ""
+        step = PLAY_BTN_H / 9.0
+        # columns of the triangle, tallest at the left
+        for col, half in [(-2, 3), (-1, 2.4), (0, 1.8), (1, 1.2), (2, 0.6)]:
+            n = int(round(half * 2))
+            for r in range(n):
+                y = (r - (n - 1) / 2.0) * step
+                x = col * step
+                tip = col == 2 or (col == 1 and abs(y) < step)
+                tiles += (f'<rect x="{x - step * 0.4:.1f}" y="{y - step * 0.4:.1f}"'
+                          f' width="{step * 0.8:.1f}" height="{step * 0.8:.1f}" rx="3"'
+                          f' fill="{"#9BEFD9" if tip else "#06313E"}"/>')
+        ring = (f'<rect x="{-h - 10:.1f}" y="{-h - 10:.1f}" width="{PLAY_BTN_H + 20:.1f}"'
+                f' height="{PLAY_BTN_H + 20:.1f}" rx="30" fill="none" stroke="#3CEDA5"'
+                f' stroke-opacity=".45" stroke-width="6"/>' if glow else "")
+        return (ring + f'<rect x="{-h:.1f}" y="{-h:.1f}" width="{PLAY_BTN_H:.1f}"'
+                f' height="{PLAY_BTN_H:.1f}" rx="24" fill="{body}" stroke="#128070"'
+                f' stroke-width="8"/>' + tiles)
+    return [face("#20D898", False), face("#3CEDA5", True), face("#3CEDA5", False)], False
+
+
+def _tumble_leaf(size):
+    got = _strip_frames("tumble", TUMBLE_SHEET_PATH, TUMBLE_CELL, 8)
+    if len(got) == 8:
+        ref = max(f[2] for f in got)
+        return [_strip_use(f, size, TUMBLE_CELL, ref) for f in got]
+    # stand-in: the story's own falling leaf frames
+    return sheet_row("lfall", LEAF_S * size / 60.0)
+
+
+def story_outro(t_cut, T):
+    px0, py0, px1, py1 = PANEL
+    W, H = px1 - px0, py1 - py0
+    t_cover = t_cut + OUTRO_WIPE
+    rnd = random.Random(7)
+
+    # the curtain trails the storm's front edge; the play screen is clipped to it
+    edge_v = f"{px1 + 40:.1f};{px1 + 40:.1f};{px0:.1f};{px0:.1f}"
+    edge_v, edge_k = _keys(edge_v.split(";"), [0.0, t_cut, t_cover, T], T)
+    fade_v, fade_k = _keys(["0", "0", "1", "1", "0", "0"],
+                           [0.0, t_cut, t_cut + 0.01, T - OUTRO_FADE, T - 0.01, T], T)
+    curtain_anim = (f'<animate attributeName="x" dur="{T}s" repeatCount="indefinite"'
+                    f' calcMode="linear" values="{edge_v}" keyTimes="{edge_k}"/>')
+
+    # ---- the play screen ----
+    faces, drawn_bump = _play_faces()
+    t_on = t_cut + OUTRO_WIPE * 0.55
+    bonks, b = [], t_on + 1.4
+    while b < T - OUTRO_FADE - 1.2:
+        bonks.append(b)
+        b += 3.2
+    bump_len = 0.34
+    quiet = [(bk, bk + bump_len) for bk in bonks]
+    glow = gate(flipbook(faces[:2], 1.3), quiet, T)
+    bumps = "".join(sequence([faces[2]], bk, bk + bump_len, T) for bk in bonks)
+    if drawn_bump:
+        lift = ""
+    else:
+        vals, times = ["0,0"], [0.0]
+        for bk in bonks:
+            vals += ["0,0", "0,-18", "0,3", "0,0"]
+            times += [bk, bk + 0.12, bk + 0.26, bk + bump_len]
+        vals.append("0,0"); times.append(T)
+        lv, lk = _keys(vals, times, T)
+        lift = (f'<animateTransform attributeName="transform" type="translate"'
+                f' dur="{T}s" repeatCount="indefinite" values="{lv}" keyTimes="{lk}"/>')
+    button = (f'<g transform="translate({PLAY_BTN_CX:.1f} {PLAY_BTN_CY:.1f})">'
+              f'<g>{lift}{glow}{bumps}</g></g>')
+    coins = "".join(pop_coin(PLAY_BTN_CX, PLAY_BTN_CY - PLAY_BTN_H / 2 - 10, bk, T, r=18.0)
+                    for bk in bonks)
+    side = "".join(float_coin(PLAY_BTN_CX + dx, PLAY_BTN_CY + dy, k, r=16.0)
+                   for k, (dx, dy) in enumerate([(-330, -40), (-520, 20), (-720, -60),
+                                                 (330, -40), (520, 20), (720, -60)]))
+
+    # her, under the block, running on the spot and jumping to bonk it
+    G = 2.0 * LIFT_MAX / (JD_MAX / 2.0) ** 2
+    head = GROUND - GIRL_TARGET_H
+    clear = max(30.0, head - (PLAY_BTN_CY + PLAY_BTN_H / 2))
+    v0 = math.sqrt(2.0 * G * (clear + 8.0))
+    v_hit = math.sqrt(max(0.0, v0 * v0 - 2.0 * G * clear))
+    t_up, t_down = (v0 - v_hit) / G, math.sqrt(2.0 * clear / G)
+    jumps, samples = [], [(0.0, 0.0)]
+    for bk in bonks:
+        t0 = bk - t_up
+        jumps.append({"t0": t0, "hit": bk, "t1": bk + t_down, "t_up": t_up,
+                      "t_down": t_down, "resume": bk + t_down + 0.14})
+        samples.append((t0, 0.0))
+        for i in range(1, 9):
+            dt = t_up * i / 8
+            samples.append((t0 + dt, v0 * dt - 0.5 * G * dt * dt))
+        for i in range(1, 9):
+            dt = t_down * i / 8
+            samples.append((bk + dt, clear - 0.5 * G * dt * dt))
+    samples.append((T, 0.0))
+    jv, jk = _keys([f"0,{-y:.2f}" for _, y in samples], [t for t, _ in samples], T)
+    her = (f'<g transform="translate({PLAY_BTN_CX:.1f} {GROUND:.1f})">'
+           f'<ellipse cx="0" cy="-4" rx="34" ry="7" fill="#000" fill-opacity=".35"/>'
+           f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
+           f' repeatCount="indefinite" calcMode="linear" values="{jv}" keyTimes="{jk}"/>'
+           f'{girl_runner(jumps, T)}</g></g>')
+    # the ground slides under her so running on the spot reads as running
+    stripes = "".join(f'<rect x="{x}" y="{GROUND + 6}" width="2" height="{py1 - GROUND - 6}"'
+                      f' fill="#07202A"/>' for x in range(int(px0), int(px1) + 148, 74))
+    ground = (f'<rect x="{px0}" y="{GROUND}" width="{W}" height="{py1 - GROUND}" fill="#0B2A33"/>'
+              f'<rect x="{px0}" y="{GROUND}" width="{W}" height="6" fill="#3CEDA5"/>'
+              f'<g><animateTransform attributeName="transform" type="translate"'
+              f' values="0 0;-74 0" dur="{74.0 / RUN_SPEED:.3f}s" repeatCount="indefinite"/>'
+              f'{stripes}</g>')
+    screen = (f'<clipPath id="outroClip"><rect y="{py0}" width="{W + 80}" height="{H}"'
+              f' x="{px1 + 40}">{curtain_anim}</rect></clipPath>'
+              f'<g clip-path="url(#outroClip)">'
+              f'<rect x="{px0}" y="{py0}" width="{W}" height="{H}" fill="#081420"/>'
+              f'{ground}{side}{coins}{button}{her}</g>')
+
+    # ---- the storm: leaves riding just ahead of the curtain's edge ----
+    leaves = ""
+    frames = _tumble_leaf(70.0)
+    for i in range(34):
+        y = py0 + (i + 0.5) * H / 34 + rnd.uniform(-14, 14)
+        lead = rnd.uniform(-30.0, 170.0)               # how far ahead of the edge
+        late = rnd.uniform(0.0, 0.18)
+        a, z = t_cut + late, t_cover + late + 0.25
+        x_a, x_z = px1 + 40 + lead, px0 - 260 + lead
+        wob = rnd.uniform(14, 34) * (1 if i % 2 else -1)
+        mid = (a + z) / 2
+        mv, mk = _keys([f"{x_a:.1f},{y:.1f}", f"{x_a:.1f},{y:.1f}",
+                        f"{(x_a + x_z) / 2:.1f},{y + wob:.1f}",
+                        f"{x_z:.1f},{y:.1f}", f"{x_z:.1f},{y:.1f}"],
+                       [0.0, a, mid, z, T], T)
+        size = rnd.uniform(0.7, 1.25)
+        spin = flipbook(frames[i % len(frames):] + frames[:i % len(frames)],
+                        rnd.uniform(0.45, 0.7))
+        leaves += _ep_shown(
+            f'<g><animateTransform attributeName="transform" type="translate"'
+            f' dur="{T}s" repeatCount="indefinite" calcMode="linear" values="{mv}"'
+            f' keyTimes="{mk}"/><g transform="scale({size:.2f}) rotate({rnd.uniform(-40, 40):.0f})">'
+            f'{spin}</g></g>', [(a, z)], T)
+
+    return (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s"'
+            f' repeatCount="indefinite" calcMode="linear" values="{fade_v}"'
+            f' keyTimes="{fade_k}"/>{screen}{leaves}</g>')
 
 
 # ---------------------------------------------------------------- coins
@@ -2103,25 +2317,7 @@ def girl_runner(jumps, T, baseline=6.0):
     return gate(run, wins, T) + air
 
 
-# ---------------------------------------------------------------- endless runner preview
-# The profile panel: a side-scroller that never visibly restarts. The world
-# (her last 30 weeks of contribution squares and the ground) slides left under
-# her while she runs in place, exactly one strip-width per loop, so the end of a
-# loop is the start of the next. She head-butts </> blocks for coins and jumps
-# the turtle and the snake. It is a picture, not a game: GitHub never runs code
-# in a README, so the playable version lives on the Pages site (play/).
-EP_W, EP_H = 1200.0, 570.0          # viewBox; ~2.1:1 so it shows large in a README
-EP_COLS = 30                         # weeks in the strip (the recent, active ones)
-EP_PITCH, EP_CELL = 44.0, 34.0       # grid spacing and square size
-EP_GY0 = 64.0                        # top of the grid
-EP_GROUND = 530.0                    # top of the ground line
-EP_AX = 300.0                        # where she runs on screen
-EP_SPEED = RUN_SPEED                 # world speed, matched to her stride
-EP_BLOCK_ROWS = (3, 4, 5, 6)         # rows she can reach with a jump
-EP_GAP = 1.15                        # seconds kept clear between two jumps
-EP_HUD_X, EP_HUD_Y = 40.0, 34.0
-
-
+# ---------------------------------------------------------------- timed visibility helpers
 def _ep_windows(intervals, T):
     """Discrete 0/1 opacity values+keyTimes: visible inside the intervals (mod T)."""
     marks = []
@@ -2148,245 +2344,6 @@ def _ep_shown(svg, intervals, T):
             f' keyTimes="{k}"/>{svg}</g>')
 
 
-def build_endless_panel(weeks, total=None):
-    grid = _levels(weeks)[-EP_COLS:]
-    cols = len(grid)
-    S = cols * EP_PITCH                   # strip width = distance per loop
-    T = S / EP_SPEED
-    girl_h = GIRL_TARGET_H
-
-    def cell_xy(c, r, copy=0):
-        return (copy * S + c * EP_PITCH, EP_GY0 + r * EP_PITCH)
-
-    def hit_time(x_world):
-        # the block's centre passes her head when x_world - v t == EP_AX
-        return ((x_world - EP_AX) / EP_SPEED) % T
-
-    # ---- pick blocks: lit squares in reachable rows, spaced out in time ----
-    cands = []
-    for c in range(cols):
-        for r in EP_BLOCK_ROWS[::-1]:
-            if grid[c][r] > 0:
-                cands.append((c, r))
-                break
-    blocks, used_t = [], []
-    for c, r in cands:
-        x, y = cell_xy(c, r)
-        t = hit_time(x + EP_CELL / 2)
-        if all(min(abs(t - u), T - abs(t - u)) >= EP_GAP * 1.6 for u in used_t):
-            blocks.append({"c": c, "r": r, "x": x, "y": y, "t": t})
-            used_t.append(t)
-    blocks.sort(key=lambda b: b["t"])
-
-    # ---- her jumps: block head-butts first, then a hop over each enemy ----
-    G = 2.0 * LIFT_MAX / (JD_MAX / 2.0) ** 2
-
-    def window(hit, clear, apex):
-        v0 = math.sqrt(2.0 * G * apex)
-        v_hit = math.sqrt(max(0.0, v0 * v0 - 2.0 * G * clear))
-        t_up = (v0 - v_hit) / G
-        t_down = math.sqrt(2.0 * clear / G)
-        return {"t0": hit - t_up, "hit": hit, "t1": hit + t_down, "t_up": t_up,
-                "t_down": t_down, "resume": hit + t_down + 0.14,
-                "clear": clear, "v0": v0}
-
-    def fits(w, taken):
-        if w["t0"] < 0.1 or w["resume"] > T - 0.1:
-            return False                   # never straddle the loop
-        return all(w["t0"] > o["resume"] + 0.2 or w["resume"] < o["t0"] - 0.2
-                   for o in taken)
-
-    def plan(blocks):
-        """Jumps for these blocks, then a hop over each enemy where it fits."""
-        jinfo = []
-        for b in list(blocks):
-            clear = max(30.0, EP_GROUND - girl_h - (b["y"] + EP_CELL))
-            w = window(b["t"], clear, clear + 8.0)
-            if fits(w, jinfo):
-                jinfo.append(w)
-            else:
-                blocks.remove(b)
-    
-        # the turtle and the snake reach her where there is most room to hop them
-        turtle_v = EP_SPEED + 34.0              # they walk left while the world scrolls
-        snake_v = EP_SPEED + 48.0
-        # Sprite sizes above the ground line (drawn at GROUND + 4): the turtle is
-        # ~40 tall plus its bob, the snake ~63; both are ~84 wide. Her feet are
-        # ~44 wide. Her feet must stay above the body for the whole time the two
-        # overlap, so the hop's apex comes from that time, not from the height.
-        HOP_FEET_W, HOP_MARGIN = 44.0, 12.0
-        enemies = []
-        for kind, v, h, ew in (("turtle", turtle_v, 40.0 + TURTLE_BOB, 84.0),
-                               ("snake", snake_v, 63.0, 84.0)):
-            need = (ew + HOP_FEET_W) / v           # seconds the bodies overlap in x
-            apex = h + HOP_MARGIN + G * need * need / 8.0
-            best = None
-            tt = 0.6
-            while tt < T - 0.6:
-                w = window(tt, apex, apex)
-                w["poses"] = [9, 9, 11, 11, 11, 11, 12]
-                if fits(w, jinfo):
-                    room = min([abs(tt - o["hit"]) for o in jinfo] or [T])
-                    if best is None or room > best[0]:
-                        best = (room, w)
-                tt += 0.05
-            if best:
-                jinfo.append(best[1])
-                enemies.append((kind, best[1]["hit"], v, h))
-        return blocks, jinfo, enemies
-
-    # Both enemies always appear: if a hop cannot fit, give up the last block.
-    all_blocks = list(blocks)
-    while True:
-        blocks, jinfo, enemies = plan(list(all_blocks))
-        if len(enemies) == 2 or not all_blocks:
-            break
-        all_blocks.pop()
-    jinfo.sort(key=lambda w: w["t0"])
-
-    samples = [(0.0, 0.0)]
-    for w in jinfo:
-        t0, hit, t_up, t_down, clear, v0 = (w[k] for k in
-                                             ("t0", "hit", "t_up", "t_down", "clear", "v0"))
-        samples.append((t0, 0.0))
-        n = max(1, math.ceil(t_up / JUMP_SAMPLE_DT))
-        for i in range(1, n + 1):
-            dt = t_up * i / n
-            samples.append((t0 + dt, v0 * dt - 0.5 * G * dt * dt))
-        n = max(1, math.ceil(t_down / JUMP_SAMPLE_DT))
-        for i in range(1, n + 1):
-            dt = t_down * i / n
-            samples.append((hit + dt, clear - 0.5 * G * dt * dt))
-    samples.append((T, 0.0))
-    jump_v, jump_k = _keys([f"0,{-h:.2f}" for _, h in samples],
-                           [t for t, _ in samples], T)
-
-    # ---- the world strip: two copies of the grid, then ground stripes ----
-    hit_at = {}
-    for b in blocks:
-        # Whichever copy reaches her inside this loop gets hit (and pops a
-        # coin), but both copies wear the block, with the same state timeline:
-        # the other copy is off screen at the hit, and it is the one on screen
-        # across the loop seam, so a block never appears from nowhere.
-        copy = 0 if b["x"] + EP_CELL / 2 >= EP_AX else 1
-        hit_at[(b["c"], b["r"], copy)] = b
-        hit_at[(b["c"], b["r"], 1 - copy)] = dict(b, ghost=True)
-    world = []
-    for copy in (0, 1):
-        for c in range(cols):
-            for r in range(7):
-                x, y = cell_xy(c, r, copy)
-                world.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{EP_CELL}"'
-                             f' height="{EP_CELL}" rx="7" fill="{LEVELS[grid[c][r]]}"/>')
-    pops = []
-    for (c, r, copy), b in hit_at.items():
-        x, y = cell_xy(c, r, copy)
-        cx, cy = x + EP_CELL / 2, y + EP_CELL / 2
-        t = b["t"]
-        # normal until hit, flash, spent, then normal again once it is off
-        # screen (the other copy comes round as a fresh block)
-        back = t + (EP_AX + EP_CELL) / EP_SPEED + 0.1
-        bump_v, bump_k = _keys(["0,0", "0,0", "0,-14", "0,4", "0,0", "0,0"],
-                               [0.0, t, t + 0.12, t + 0.34, t + 0.52, T], T)
-        face = (_ep_shown(_bc_use("blk0", EP_CELL * 1.25), [(back, t + T)], T)
-                + _ep_shown(_bc_use("blk1", EP_CELL * 1.25), [(t, t + 0.25)], T)
-                + _ep_shown(_bc_use("blk2", EP_CELL * 1.25), [(t + 0.25, back)], T))
-        world.append(f'<g transform="translate({cx:.1f} {cy:.1f})"><g>'
-                     f'<animateTransform attributeName="transform" type="translate"'
-                     f' dur="{T:.3f}s" repeatCount="indefinite" values="{bump_v}"'
-                     f' keyTimes="{bump_k}"/>{face}</g></g>')
-        if not b.get("ghost"):
-            pops.append(pop_coin(cx, y - 6.0, t, T, r=14.0))
-    for copy in (0, 1):
-        for k in range(int(S // 74) + 1):
-            x = copy * S + k * 74
-            world.append(f'<rect x="{x}" y="{EP_GROUND + 6}" width="2"'
-                         f' height="{EP_H - EP_GROUND - 6}" fill="#07202A"/>')
-    world_svg = (f'<g><animateTransform attributeName="transform" type="translate"'
-                 f' dur="{T:.3f}s" repeatCount="indefinite" calcMode="linear"'
-                 f' values="0 0;{-S:.1f} 0"/>{"".join(world)}{"".join(pops)}</g>')
-
-    # ---- enemies walk in from the right, pass under her, leave on the left ----
-    enemy_svg = ""
-    for kind, t_cross, v, _ in enemies:
-        x_in, x_out = EP_W + 120.0, -160.0
-        t_in = t_cross - (x_in - EP_AX) / v
-        t_out = t_cross + (EP_AX - x_out) / v
-        if kind == "turtle":
-            body = bob(flipbook(sheet_row("twalk", TURTLE_S), WALK_CYCLE),
-                       WALK_CYCLE / 2.0, TURTLE_BOB)
-        else:
-            slither = sheet_row("sslith", SNAKE_S)
-            tongue = sheet_row("stongue", SNAKE_S)
-            body = flipbook(slither + tongue + tongue[::-1] + sheet_row("scont", SNAKE_S),
-                            SLITHER_CYCLE,
-                            weights=[1.0] * 8 + [2.0, 2.8, 2.8, 2.0, 1.0, 1.0])
-        # position keyframes, unwrapped onto 0..T
-        pts = []
-        for tt in sorted({0.0, T, t_in % T, t_out % T}):
-            off = (tt - t_in) % T
-            x = x_in - v * off if off <= (t_out - t_in) else x_out
-            pts.append((tt, x))
-        # the wrap point jumps from x_out back to x_in while hidden
-        mv, mk = _keys([f"{x:.1f},{EP_GROUND + 4:.1f}" for _, x in pts],
-                       [t for t, _ in pts], T)
-        enemy_svg += _ep_shown(
-            f'<g><animateTransform attributeName="transform" type="translate"'
-            f' dur="{T:.3f}s" repeatCount="indefinite" calcMode="linear"'
-            f' values="{mv}" keyTimes="{mk}"/>{body}</g>', [(t_in, t_out)], T)
-
-    # ---- her, running in place, jumping on schedule ----
-    girl = (f'<g transform="translate({EP_AX:.1f} {EP_GROUND:.1f})">'
-            f'<ellipse cx="0" cy="-2" rx="30" ry="6" fill="#000" fill-opacity=".3"/>'
-            f'<g><animateTransform attributeName="transform" type="translate"'
-            f' dur="{T:.3f}s" repeatCount="indefinite" calcMode="linear"'
-            f' values="{jump_v}" keyTimes="{jump_k}"/>'
-            f'{girl_runner(jinfo, T, baseline=6.0)}</g></g>')
-
-    # ---- coin counter: goes up by one for every block she hits ----
-    # The counter runs on a period of many loops (a few minutes), so it keeps
-    # climbing like a real run instead of dropping back at every loop seam.
-    hud = ""
-    base = (total or 0)
-    loops = 40
-    TL = T * loops
-    hits = sorted(b["t"] for b in blocks)
-    edges = [0.0] + [k * T + h + 0.3 for k in range(loops) for h in hits] + [TL]
-    for i in range(len(edges) - 1):
-        hud += _ep_shown(
-            f'<text class="rmono" x="{EP_HUD_X + 34:.0f}" y="{EP_HUD_Y + 11:.0f}"'
-            f' font-size="30" fill="#CFEAE3">x {base + i}</text>',
-            [(edges[i], edges[i + 1])], TL)
-    hud = (f'<g transform="translate({EP_HUD_X + 14:.1f} {EP_HUD_Y:.1f})">'
-           f'{coin_spin(HUD_SPIN, 0.0, 15.0)}</g>' + hud)
-
-    stars = ""
-    for k in range(18):
-        sx = 60 + (k * 331) % (EP_W - 120)
-        sy = 70 + (k * 137) % 400
-        stars += (f'<rect x="{sx}" y="{sy}" width="4" height="4" fill="#9BEFD9"'
-                  f' fill-opacity=".4"><animate attributeName="fill-opacity"'
-                  f' values=".1;.55;.1" dur="{2.0 + (k % 5) * 0.6}s"'
-                  f' repeatCount="indefinite"/></rect>')
-
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
-    viewBox="0 0 {EP_W:.0f} {EP_H:.0f}" width="1000" height="{EP_H * 1000 / EP_W:.0f}" role="img" aria-label="endless contribution runner">
-<defs>{sprite_defs()}{COIN_DEFS}</defs>
-<style>.rmono {{ font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }}</style>
-<rect width="{EP_W:.0f}" height="{EP_H:.0f}" fill="#081420"/>
-<clipPath id="ep"><rect width="{EP_W:.0f}" height="{EP_H:.0f}"/></clipPath>
-<g clip-path="url(#ep)">
-{stars}
-<rect x="0" y="{EP_GROUND}" width="{EP_W:.0f}" height="{EP_H - EP_GROUND}" fill="#0B2A33"/>
-<rect x="0" y="{EP_GROUND}" width="{EP_W:.0f}" height="6" fill="#3CEDA5"/>
-{world_svg}
-{enemy_svg}
-{girl}
-{hud}
-</g>
-</svg>
-'''
-
 
 if __name__ == "__main__":
     data = collect()
@@ -2410,9 +2367,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v17.svg"), "w", encoding="utf-8").write(
-            build_endless_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v17.svg")
+        open(os.path.join(out_dir, "runner-v18.svg"), "w", encoding="utf-8").write(
+            build_runner_panel(g["weeks"], total=g.get("contributions")))
+        print("wrote runner-v18.svg")
     else:
         print("no calendar data - runner panel skipped")
     # The playable game, served by Pages at /play/: the page, the art it
