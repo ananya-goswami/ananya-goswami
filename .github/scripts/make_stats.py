@@ -589,15 +589,154 @@ def _scene_bee(x, y):
             f'</g></g>')
 
 
+
+
+# Aaru Ki Cheenk's card is its own title screen, rebuilt from the game's
+# layers so it moves the way the game does: the painted sky sways, Aaru bobs
+# on his bike, the title wobbles, the play button beats with a ring pulsing
+# out of it, the hand taps, and a few dust motes rise. The keyframes are the
+# game's own (artSway, heroIdle, titleIdle, startBeat, startPulse, handTap,
+# moteRise). Layer positions are in the game's stage pixels; the card shows a
+# 3:2 window of that stage, with the title group moved in a little so it fits.
+AARU_WIN = (66.4, 7.2, 625.0, 415.0)         # x, y, w, h of the window on the stage
+AARU_LAYERS = {                              # file, stage x, stage y
+    "bg":    ("proj-aaru-bg.jpg", 7.9, 7.2),
+    "hero":  ("proj-aaru-hero.png", 64.9, 15.2),
+    "title": ("proj-aaru-title.png", 369.9, 50.2),
+    "btn":   ("proj-aaru-btn.png", 478.9, 295.2),
+    "hand":  ("proj-aaru-hand.png", 517.9, 379.2),
+}
+_EASE = ".42 0 .58 1"                         # CSS ease-in-out
+
+
+def _asset_layer(name):
+    """(data uri, width, height) of an asset, or None."""
+    try:
+        import base64
+        from PIL import Image
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "assets", name)
+        with Image.open(path) as im:
+            w, h = im.size
+        mime = "image/jpeg" if name.endswith(".jpg") else "image/png"
+        with open(path, "rb") as fh:
+            return f"data:{mime};base64," + base64.b64encode(fh.read()).decode(), w, h
+    except Exception as exc:
+        print("aaru layer skipped:", name, exc)
+        return None
+
+
+def _sway(values, dur, cx, cy, kind):
+    """An alternate ease-in-out loop (CSS 'infinite alternate') about a centre."""
+    v = ";".join(values + values[-2::-1])
+    k = ";".join(f"{i / (2 * (len(values) - 1)):.4f}" for i in range(2 * len(values) - 1))
+    splines = ";".join([_EASE] * (2 * len(values) - 2))
+    anim = (f'<animateTransform attributeName="transform" type="{kind}" values="{v}"'
+            f' keyTimes="{k}" dur="{2 * dur}s" repeatCount="indefinite" calcMode="spline"'
+            f' keySplines="{splines}"/>')
+    if kind == "scale":
+        return (f'<g transform="translate({cx:.2f} {cy:.2f})"><g>{anim}'
+                f'<g transform="translate({-cx:.2f} {-cy:.2f})">', '</g></g></g>')
+    return f'<g>{anim}', '</g>'
+
+
+def _scene_defs_aaru():
+    return ""
+
+
+def _scene_aaru(x, y):
+    got = {k: _asset_layer(f) for k, (f, _, _) in AARU_LAYERS.items()}
+    if not all(got.values()):
+        uri = _photo_uri("proj-art-aaru.png")
+        return (f'<image xlink:href="{uri}" x="{x}" y="{y}" width="{ART_W}" height="{CH}"'
+                f' preserveAspectRatio="xMidYMid slice"/>') if uri else ""
+    wx, wy, ww, wh = AARU_WIN
+    k = CH / wh
+    ox = x + (ART_W - ww * k) / 2.0           # centre the window if the shapes differ
+
+    def place(key):
+        uri, w, h = got[key]
+        _, sx, sy = AARU_LAYERS[key]
+        px, py = ox + (sx - wx) * k, y + (sy - wy) * k
+        return uri, px, py, w * k, h * k
+
+    out = []
+    # the sky: artSway, 14 s each way, about its centre
+    uri, px, py, w, h = place("bg")
+    cx, cy = px + w / 2, py + h / 2
+    t0, t1 = _sway(["0 0", f"{4 * k:.2f} {-4 * k:.2f}"], 14, cx, cy, "translate")
+    r0, r1 = _sway([f"-0.22 {cx:.1f} {cy:.1f}", f"0.22 {cx:.1f} {cy:.1f}"], 14, cx, cy, "rotate")
+    s0, s1 = _sway(["1.02", "1.035"], 14, cx, cy, "scale")
+    out.append(t0 + r0 + s0 + f'<image xlink:href="{uri}" x="{px:.2f}" y="{py:.2f}"'
+               f' width="{w:.2f}" height="{h:.2f}" preserveAspectRatio="none"/>' + s1 + r1 + t1)
+    # dust motes rising from the road (moteRise)
+    rnd = random.Random(5)
+    for i in range(5):
+        mx = x + ART_W * (0.08 + 0.18 * i + rnd.uniform(-0.03, 0.03))
+        my = y + CH * rnd.uniform(0.72, 0.92)
+        dur = rnd.choice([15.6, 17.6, 13.8, 16.4, 14.6])
+        dx = rnd.uniform(-10, 10)
+        out.append(f'<circle cx="{mx:.1f}" cy="{my:.1f}" r="{rnd.uniform(1.1, 2.0):.1f}" fill="#FFF3D6"'
+                   f' opacity="0"><animate attributeName="opacity" values="0;.8;.45;0"'
+                   f' keyTimes="0;.25;.7;1" dur="{dur}s" begin="{-rnd.uniform(0, dur):.1f}s"'
+                   f' repeatCount="indefinite"/><animateTransform attributeName="transform"'
+                   f' type="translate" values="0 0;{dx:.1f} {-CH * 0.42:.1f}" dur="{dur}s"'
+                   f' begin="{-rnd.uniform(0, dur):.1f}s" repeatCount="indefinite"/></circle>')
+    # Aaru: heroIdle, 4.6 s each way
+    uri, px, py, w, h = place("hero")
+    cx, cy = px + w / 2, py + h / 2
+    t0, t1 = _sway(["0 0", f"{-0.0035 * w:.2f} {-0.007 * h:.2f}"], 4.6, cx, cy, "translate")
+    r0, r1 = _sway([f"0 {cx:.1f} {cy:.1f}", f"-0.35 {cx:.1f} {cy:.1f}"], 4.6, cx, cy, "rotate")
+    out.append(t0 + r0 + f'<image xlink:href="{uri}" x="{px:.2f}" y="{py:.2f}" width="{w:.2f}"'
+               f' height="{h:.2f}"/>' + r1 + t1)
+    # the title: titleIdle, 6.2 s each way
+    uri, px, py, w, h = place("title")
+    cx, cy = px + w / 2, py + h / 2
+    t0, t1 = _sway(["0 0", f"0 {-0.014 * h:.2f}"], 6.2, cx, cy, "translate")
+    r0, r1 = _sway([f"0 {cx:.1f} {cy:.1f}", f"0.5 {cx:.1f} {cy:.1f}"], 6.2, cx, cy, "rotate")
+    s0, s1 = _sway(["1", "1.014"], 6.2, cx, cy, "scale")
+    out.append(t0 + r0 + s0 + f'<image xlink:href="{uri}" x="{px:.2f}" y="{py:.2f}"'
+               f' width="{w:.2f}" height="{h:.2f}"/>' + s1 + r1 + t1)
+    # the play button: startBeat, with the startPulse ring, 2.4 s
+    uri, px, py, w, h = place("btn")
+    cx, cy = px + w / 2, py + h / 2
+    ring = (f'<g transform="translate({cx:.2f} {cy:.2f})"><g>'
+            f'<animateTransform attributeName="transform" type="scale" values="1;1.55;1.55"'
+            f' keyTimes="0;.7;1" dur="2.4s" repeatCount="indefinite" calcMode="spline"'
+            f' keySplines="0 0 .58 1;0 0 1 1"/>'
+            f'<ellipse rx="{w * 0.44:.2f}" ry="{h * 0.42:.2f}" fill="none" stroke="#784E1E"'
+            f' stroke-opacity=".55" stroke-width="1"><animate attributeName="opacity"'
+            f' values=".85;0;0" keyTimes="0;.7;1" dur="2.4s" repeatCount="indefinite"/>'
+            f'</ellipse></g></g>')
+    beat = (f'<g transform="translate({cx:.2f} {cy:.2f})"><g>'
+            f'<animateTransform attributeName="transform" type="scale"'
+            f' values="1;1.055;0.996;1.01;1;1" keyTimes="0;.14;.32;.48;.64;1" dur="2.4s"'
+            f' repeatCount="indefinite" calcMode="spline"'
+            f' keySplines="{_EASE};{_EASE};{_EASE};{_EASE};0 0 1 1"/>'
+            f'<image xlink:href="{uri}" x="{-w / 2:.2f}" y="{-h / 2:.2f}" width="{w:.2f}"'
+            f' height="{h:.2f}"/></g></g>')
+    out.append(ring + beat)
+    # the tapping hand (handTap): two taps, then rest, rotated -9 degrees
+    uri, px, py, w, h = place("hand")
+    cx, cy = px + w / 2, py + h / 2
+    ys = [0.06, -0.15, 0.06, -0.11, 0.06, 0.06]
+    out.append(f'<g><animateTransform attributeName="transform" type="translate"'
+               f' values="{";".join(f"0 {v * h:.2f}" for v in ys)}" keyTimes="0;.09;.2;.29;.4;1"'
+               f' dur="2.4s" repeatCount="indefinite" calcMode="spline"'
+               f' keySplines="{";".join([_EASE] * 5)}"/>'
+               f'<g transform="rotate(-9 {cx:.1f} {cy:.1f})"><image xlink:href="{uri}" x="{px:.2f}"'
+               f' y="{py:.2f}" width="{w:.2f}" height="{h:.2f}"/></g></g>')
+    return f'<rect x="{x}" y="{y}" width="{ART_W}" height="{CH}" fill="#E9D8B4"/>' + "".join(out)
+
+
 ICON_SCENE = {"fln-animation-toolkit": (_scene_defs_stars, _scene_stars),
-              "think-ask-act": (_scene_defs_bee, _scene_bee)}
+              "think-ask-act": (_scene_defs_bee, _scene_bee),
+              "aaru_ki_cheenk": (_scene_defs_aaru, _scene_aaru)}
 
 
 # Artwork beats a drawn mark wherever a project already has its own, and the
 # crop matters more than the source: at 46px a whole screen is mush, so each
 # of these is the one element that survives - a face, a lit card, a wheel.
-ART_PHOTO = {"aaru_ki_cheenk": "proj-art-aaru.png",
-             "Keyword-class9": "proj-art-tactic.png",
+ART_PHOTO = {"Keyword-class9": "proj-art-tactic.png",
              "feeling-wheel-tap": "proj-art-wheel.png",
              "real-or-fake-sender": "proj-art-shield.png",
              "calm-or-react": "proj-art-calm.png",
