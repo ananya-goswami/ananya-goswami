@@ -1818,7 +1818,7 @@ def build_runner_panel(weeks, total=None):
                f' font-size="30" fill="#CFEAE3">x {total}</text>')
 
     # the outro starts once the snake has passed and the turtle is out again
-    t_cut = min(t_emerge + 1.6, T - 9.0) if e3 else T - 9.0
+    t_cut = min(t_emerge + 1.6, T - 11.0) if e3 else T - 11.0
     outro = story_outro(t_cut, T)
 
     px0, py0, px1, py1 = PANEL
@@ -1863,7 +1863,7 @@ TUMBLE_SHEET_PATH = os.path.join(_ASSETS, "leaf-tumble-sheet-v1.png")  # 8 x 256
 # spring lime, summer teal (the art as drawn), gold, orange, red, dry brown
 TUMBLE_LIFE = [1, 0, 2, 3, 4, 5]
 TUMBLE_CELL = 256
-OUTRO_WIPE = 2.9          # gust start -> the hero leaf covers the screen and the scene swaps
+OUTRO_WIPE = 5.0          # gust start -> the hero leaf covers the screen; slow and smooth
 OUTRO_FADE = 0.6          # the play screen fades back into the story's first frame
 PLAY_BTN_H = 176.0        # the button's height on screen
 PLAY_BTN_CX, PLAY_BTN_CY = 1086.0, 300.0
@@ -2177,7 +2177,8 @@ def story_outro(t_cut, T):
             f'<mask id="outroWipe" maskUnits="userSpaceOnUse" x="{px0 - 10}" y="{py0 - 10}"'
             f' width="{W + 20}" height="{H + 20}"><g>'
             f'<animateTransform attributeName="transform" type="translate" dur="{T}s"'
-            f' repeatCount="indefinite" calcMode="linear" values="{wv}" keyTimes="{wk}"/>'
+            f' repeatCount="indefinite" calcMode="spline" values="{wv}" keyTimes="{wk}"'
+            f' keySplines="0 0 1 1;.45 0 .55 1;0 0 1 1"/>'
             f'<rect x="0" y="{py0 - 10}" width="{SOFT:.0f}" height="{H + 20}" fill="url(#wipeEdge)"/>'
             f'<rect x="{SOFT:.0f}" y="{py0 - 10}" width="{W + 200}" height="{H + 20}" fill="#fff"/>'
             f'</g></mask>')
@@ -2194,8 +2195,8 @@ def story_outro(t_cut, T):
     specs = []
     for i in range(48):
         d = rnd.random()                          # depth: 0 far .. 1 near
-        a = t_cut + rnd.uniform(0.0, 1.1)
-        dur = 2.7 - 1.1 * d + rnd.uniform(-0.15, 0.15)
+        a = t_cut + rnd.uniform(0.0, 2.0)
+        dur = 4.6 - 1.6 * d + rnd.uniform(-0.2, 0.2)
         specs.append((d, a, dur, i))
     specs.sort()                                  # far leaves are drawn first
     leaves = ""
@@ -2214,10 +2215,10 @@ def story_outro(t_cut, T):
                     f" a {r:.0f},{r:.0f} 0 1,1 0,{2 * r:.0f} a {r:.0f},{r:.0f} 0 1,1 0,{-2 * r:.0f}"
                     f" Q {(mx + x_z) / 2:.0f},{my + amp:.0f} {x_z:.0f},{y1:.0f}")
         kt = f"0;{a / T:.5f};{min(z, T - 0.01) / T:.5f};1"
-        stage = min(len(lives) - 1, int((a - t_cut) / 1.1 * len(lives)))
+        stage = min(len(lives) - 1, int((a - t_cut) / 2.0 * len(lives)))
         frames = lives[stage]
         k = i % len(frames)
-        spin = flipbook(frames[k:] + frames[:k], rnd.uniform(0.7, 1.1))
+        spin = flipbook(frames[k:] + frames[:k], rnd.uniform(1.2, 1.7))
         size = 0.55 + 0.95 * d
         leaves += _ep_shown(
             f'<g opacity="{0.45 + 0.55 * d:.2f}"><animateMotion path="{path}" dur="{T}s"'
@@ -2231,7 +2232,7 @@ def story_outro(t_cut, T):
     # outline, so the leaf "opens" onto the next scene until it fills it.
     # Each loop it is a different colour, cycling through the leaf's year.
     cx, cy = px0 + W / 2, py0 + H / 2
-    h_in, h_mid, h_grow = t_cut + 0.35, t_cut + 1.45, t_cut + 1.85
+    h_in, h_mid, h_grow = t_cut + 0.6, t_cut + 2.6, t_cut + 3.3
     # its tumble reuses the gust's small frames; only its face-on frame, the
     # one that grows, is stored larger (the file has a size budget)
     looks = []
@@ -2268,7 +2269,8 @@ def story_outro(t_cut, T):
 
     def carried(inner):
         return (f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
-                f' repeatCount="indefinite" calcMode="linear" values="{mv}" keyTimes="{mk}"/>'
+                f' repeatCount="indefinite" calcMode="spline" values="{mv}" keyTimes="{mk}"'
+                f' keySplines="0 0 1 1;.4 0 .6 1;.4 0 .6 1;0 0 1 1"/>'
                 f'<g><animateTransform attributeName="transform" type="scale" dur="{T}s"'
                 f' repeatCount="indefinite" calcMode="linear" values="{sv_}" keyTimes="{sk_}"/>'
                 f'<g><animateTransform attributeName="transform" type="rotate" dur="{T}s"'
@@ -2290,8 +2292,8 @@ def story_outro(t_cut, T):
 
     # the visible leaf: tumbling in, then its colour melts away into the window
     vo, vk = _keys(["0", "0", "1", "1", "0", "0"],
-                   [0.0, h_in, h_in + 0.05, h_grow + 0.15, h_grow + 0.55, T], T)
-    coloured = [sequence([flipbook(lk[:-1], 0.9)], h_in, h_grow, T) + sequence([lk[-1]], h_grow, T, T)
+                   [0.0, h_in, h_in + 0.3, h_grow + 0.3, h_grow + 0.9, T], T)
+    coloured = [sequence([flipbook(lk[:-1], 1.4)], h_in, h_grow, T) + sequence([lk[-1]], h_grow, T, T)
                 for lk in looks]
     visible = (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
                f' calcMode="linear" values="{vo}" keyTimes="{vk}"/>'
@@ -2299,7 +2301,7 @@ def story_outro(t_cut, T):
     # a thin glowing rim keeps the leaf's outline readable while it opens
     rim = (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
            f' calcMode="linear" values="0;0;.9;.9;0;0"'
-           f' keyTimes="{";".join(f"{x / T:.5f}" for x in [0, h_grow + 0.2, h_grow + 0.5, t_switch - 0.3, t_switch, T])}"/>'
+           f' keyTimes="{";".join(f"{x / T:.5f}" for x in [0, h_grow + 0.3, h_grow + 0.8, t_switch - 0.5, t_switch, T])}"/>'
            f'<g filter="url(#leafRim)">{carried(shape)}</g></g>')
     # outline only: the leaf's shape grown by a few units, minus the shape
     rim = ('<filter id="leafRim" x="-5%" y="-5%" width="110%" height="110%">'
@@ -2650,9 +2652,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v26.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v27.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v26.svg")
+        print("wrote runner-v27.svg")
     else:
         print("no calendar data - runner panel skipped")
     # The playable game, served by Pages at /play/: the page, the art it
