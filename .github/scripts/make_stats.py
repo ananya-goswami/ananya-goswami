@@ -2497,9 +2497,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v19.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v20.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v19.svg")
+        print("wrote runner-v20.svg")
     else:
         print("no calendar data - runner panel skipped")
     # The playable game, served by Pages at /play/: the page, the art it
