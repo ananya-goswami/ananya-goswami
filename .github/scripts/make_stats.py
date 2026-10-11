@@ -728,15 +728,16 @@ def _scene_aaru(x, y):
     return f'<rect x="{x}" y="{y}" width="{ART_W}" height="{CH}" fill="#E9D8B4"/>' + "".join(out)
 
 
-# Keywords (Class 9): its Tactic Decoder screen, replayed. A torch sweeps the
-# four cards and shows the clues hidden in them (the game reveals those under
-# a 96px spotlight that follows the cursor), then the Phishing card opens: its
-# three steps drop in one by one, the definition types out line by line, and
-# the example phone slides in. It closes and starts again. Coordinates are the
-# game's screen pixels; the card shows a 3:2 window of that screen.
-KW_WIN = (247.0, 80.0, 729.0, 486.0)
-KW_MODAL = (191.0, 39.0, 608.0, 498.0)          # where the opened panel sits
-KW_T = 13.0                                     # one loop, seconds
+# Keywords (Class 9) - a short trailer of its two cyber moments, no text
+# panels: a scanner torch sweeps the cards, each card glowing in its own neon
+# as the clues hidden in it light up (the game shows these under a 96px
+# spotlight), then the Phishing card powers on - it flips over to its fully
+# decoded face, pulses, and flips back. Coordinates are the game's screen
+# pixels; the card shows a 3:2 window on the first three cards.
+KW_WIN = (252.0, 128.0, 535.0, 357.0)
+KW_T = 9.0
+KW_CARDS = [((259, 142, 158, 337), "#FF3B5C"), ((443, 142, 158, 337), "#FFB020"),
+            ((627, 142, 158, 337), "#E040FB")]
 
 
 def _scene_defs_kw():
@@ -744,119 +745,628 @@ def _scene_defs_kw():
 
 
 def _scene_kw(x, y):
-    names = {"row": "proj-kw-row.jpg", "reveal": "proj-kw-reveal.jpg",
-             "panel": "proj-kw-panel.jpg", "open": "proj-kw-open.jpg"}
-    got = {k: _asset_layer(v) for k, v in names.items()}
+    got = {k: _asset_layer(v) for k, v in (("row", "proj-kw-row.jpg"),
+                                            ("reveal", "proj-kw-reveal.jpg"))}
     if not all(got.values()):
         uri = _photo_uri("proj-art-tactic.png")
         return (f'<image xlink:href="{uri}" x="{x}" y="{y}" width="{ART_W}" height="{CH}"'
                 f' preserveAspectRatio="xMidYMid slice"/>') if uri else ""
+    T = KW_T
     wx, wy, ww, wh = KW_WIN
     k = CH / wh
-    T = KW_T
+    row_uri, _, _ = got["row"]
+    rev_uri, _, _ = got["reveal"]
+    # the stored layers are cut from (247, 80) on the screen, 729 x 486
+    lx, ly, lw, lh = 247.0, 80.0, 729.0, 486.0
 
-    def keys(pairs):
-        ts = [t for t, _ in pairs]
-        return ";".join(v for _, v in pairs), ";".join(f"{t / T:.4f}" for t in ts)
+    def kt(*ts):
+        return ";".join(f"{t / T:.4f}" for t in ts)
 
-    def show(a, b, fade=0.3):
-        v, kt = keys([(0, "0"), (a, "0"), (a + fade, "1"), (b, "1"), (min(T, b + fade), "0"), (T, "0")])
-        return f'<animate attributeName="opacity" values="{v}" keyTimes="{kt}" dur="{T}s" repeatCount="indefinite"/>'
-
-    # everything below is drawn in the game's screen pixels, then mapped
-    out = [f'<g transform="translate({x:.2f} {y:.2f}) scale({k:.5f}) translate({-wx} {-wy})">']
-    uri, w, h = got["row"]
-    out.append(f'<image xlink:href="{uri}" x="{wx}" y="{wy}" width="{ww}" height="{wh}"/>')
-
-    # ---- the torch: a spotlight over the cards that shows their hidden clues
-    path = [(0.0, (338, 175)), (0.5, (338, 175)), (1.4, (330, 330)), (2.2, (520, 240)),
-            (3.0, (705, 360)), (3.8, (890, 230)), (4.3, (890, 230))]
-    cxv, cxk = keys([(0, "338")] + [(t, str(p[0])) for t, p in path] + [(T, "890")])
-    cyv, _ = keys([(0, "175")] + [(t, str(p[1])) for t, p in path] + [(T, "230")])
-    on = show(0.4, 4.3, 0.35)
-    move = (f'<animate attributeName="cx" values="{cxv}" keyTimes="{cxk}" dur="{T}s"'
-            f' repeatCount="indefinite" calcMode="spline"'
-            f' keySplines="{";".join([".42 0 .58 1"] * (len(path) + 1))}"/>'
-            f'<animate attributeName="cy" values="{cyv}" keyTimes="{cxk}" dur="{T}s"'
-            f' repeatCount="indefinite" calcMode="spline"'
-            f' keySplines="{";".join([".42 0 .58 1"] * (len(path) + 1))}"/>')
-    uri, _, _ = got["reveal"]
-    out.append('<defs><radialGradient id="kwTorchG"><stop offset="0" stop-color="#fff"/>'
-               '<stop offset=".55" stop-color="#fff"/><stop offset=".63" stop-color="#fff" stop-opacity=".5"/>'
-               '<stop offset=".72" stop-color="#fff" stop-opacity="0"/></radialGradient>'
-               '<radialGradient id="kwGlow"><stop offset="0" stop-color="#FF7A93" stop-opacity=".55"/>'
-               '<stop offset=".5" stop-color="#FF4D6D" stop-opacity=".28"/>'
-               '<stop offset="1" stop-color="#FF4D6D" stop-opacity="0"/></radialGradient>'
-               f'<mask id="kwTorch" maskUnits="userSpaceOnUse" x="{wx}" y="{wy}" width="{ww}" height="{wh}">'
-               f'<circle r="96" fill="url(#kwTorchG)">{move}</circle></mask></defs>')
-    out.append(f'<g opacity="0">{on}<image xlink:href="{uri}" x="{wx}" y="{wy}" width="{ww}"'
-               f' height="{wh}" mask="url(#kwTorch)"/>'
-               f'<circle r="150" fill="url(#kwGlow)">{move}</circle></g>')
-
-    # ---- the Phishing card opens into the decoder panel
-    mx, my, mw, mh = KW_MODAL
-    t_open, t_close = 4.7, 11.6
-    out.append(f'<rect x="{wx}" y="{wy}" width="{ww}" height="{wh}" fill="#120A24" opacity="0">'
-               + show(t_open, t_close, 0.4).replace('values="0;0;1;1;0;0"', 'values="0;0;.62;.62;0;0"')
-               + '</rect>')
-    # it grows out of the Phishing card, then settles in the middle of the window
-    fit = min(ww / mw, wh / mh) * 0.97
-    ccx, ccy = wx + ww / 2, wy + wh / 2
-    card_cx, card_cy = 338.0, 310.0
-    sv, sk = keys([(0, "0.35"), (t_open, "0.35"), (t_open + 0.55, f"{fit:.3f}"),
-                   (t_close, f"{fit:.3f}"), (t_close + 0.4, "0.35"), (T, "0.35")])
-    tv, _ = keys([(0, f"{card_cx} {card_cy}"), (t_open, f"{card_cx} {card_cy}"),
-                  (t_open + 0.55, f"{ccx:.1f} {ccy:.1f}"), (t_close, f"{ccx:.1f} {ccy:.1f}"),
-                  (t_close + 0.4, f"{card_cx} {card_cy}"), (T, f"{card_cx} {card_cy}")])
-    ease = ";".join([".25 .8 .3 1"] * 5)
-    panel_uri, _, _ = got["panel"]
-    open_uri, _, _ = got["open"]
-    # pieces of the finished panel, in the panel's own pixels (x, y, w, h, appear at)
-    pieces = [((48, 51, 224, 66), 5.4), ((149, 112, 22, 26), 5.85), ((48, 136, 224, 66), 5.95),
-              ((149, 196, 22, 26), 6.4), ((48, 219, 224, 66), 6.5),
-              ((321, 81, 260, 337), 7.0)]
-    lines = [(311 + 25 * i, 7.0 + 0.32 * i) for i in range(5)]     # the definition, typed
-    inner = [f'<image xlink:href="{panel_uri}" x="{-mw / 2}" y="{-mh / 2}" width="{mw}" height="{mh}"/>',
-             ]
-    clips = (f'<image id="kwOpen" xlink:href="{open_uri}" x="{-mw / 2}" y="{-mh / 2}" width="{mw}"'
-             f' height="{mh}"/>')
-    for i, ((px, py, pw, ph), t0) in enumerate(pieces):
-        clips += (f'<clipPath id="kwP{i}"><rect x="{px - mw / 2}" y="{py - mh / 2}" width="{pw}"'
-                  f' height="{ph}"/></clipPath>')
-        slide = (f'<animateTransform attributeName="transform" type="translate"'
-                 f' values="{"24 0" if i == 5 else "0 10"};{"24 0" if i == 5 else "0 10"};0 0;0 0"'
-                 f' keyTimes="0;{t0 / T:.4f};{(t0 + 0.35) / T:.4f};1" dur="{T}s" repeatCount="indefinite"'
-                 f' calcMode="spline" keySplines="0 0 1 1;.25 .8 .3 1;0 0 1 1"/>')
-        inner.append(f'<g opacity="0">{show(t0, t_close - 0.1, 0.35)}<g>{slide}'
-                     f'<use xlink:href="#kwOpen" clip-path="url(#kwP{i})"/></g></g>')
-    # the definition box, then its text one line at a time
-    clips += (f'<clipPath id="kwDefBox"><rect x="{48 - mw / 2}" y="{296 - mh / 2}" width="224"'
-              f' height="152"/></clipPath>')
-    inner.append(f'<g opacity="0">{show(6.85, t_close - 0.1, 0.25)}'
-                 f'<use xlink:href="#kwOpen" clip-path="url(#kwDefBox)"/></g>')
-    for j, (ly, t0) in enumerate(lines):
-        clips += (f'<clipPath id="kwL{j}"><rect x="{58 - mw / 2}" y="{ly - mh / 2}" height="25" width="0">'
-                  f'<animate attributeName="width" values="0;0;190;190;0" keyTimes="0;{t0 / T:.4f};'
-                  f'{(t0 + 0.3) / T:.4f};{t_close / T:.4f};1" dur="{T}s" repeatCount="indefinite"/>'
-                  f'</rect></clipPath>')
-    # the box itself is shown without its words, then each line is wiped in
-    inner.append(f'<g opacity="0">{show(6.85, t_close - 0.1, 0.25)}'
-                 f'<rect x="{56 - mw / 2}" y="{306 - mh / 2}" width="206" height="136" fill="#161B2E"/></g>')
-    for j in range(len(lines)):
-        inner.append(f'<use xlink:href="#kwOpen" clip-path="url(#kwL{j})"/>')
-    out.append(f'<defs>{clips}</defs>')
-    out.append(f'<g opacity="0">{show(t_open, t_close + 0.1, 0.3)}<g>'
-               f'<animateTransform attributeName="transform" type="translate" values="{tv}"'
-               f' keyTimes="{sk}" dur="{T}s" repeatCount="indefinite" calcMode="spline" keySplines="{ease}"/>'
-               f'<g><animateTransform attributeName="transform" type="scale" values="{sv}"'
-               f' keyTimes="{sk}" dur="{T}s" repeatCount="indefinite" calcMode="spline" keySplines="{ease}"/>'
-               + "".join(inner) + '</g></g></g>')
+    out = [f'<g transform="translate({x:.2f} {y:.2f}) scale({k:.5f}) translate({-wx} {-wy})">',
+           f'<image xlink:href="{row_uri}" x="{lx}" y="{ly}" width="{lw}" height="{lh}"/>']
+    # ---- the scanner torch: card 1, card 2, card 3, then away
+    pts = [(0.0, 300, 210), (0.3, 300, 210), (1.1, 345, 360), (1.8, 520, 230),
+           (2.6, 525, 380), (3.3, 700, 250), (4.0, 690, 390), (4.4, 690, 390), (T, 300, 210)]
+    xs = ";".join(str(p[1]) for p in pts)
+    ys = ";".join(str(p[2]) for p in pts)
+    ks = kt(*[p[0] for p in pts])
+    spl = ";".join([".45 0 .55 1"] * (len(pts) - 1))
+    move = (f'<animate attributeName="cx" values="{xs}" keyTimes="{ks}" dur="{T}s" repeatCount="indefinite"'
+            f' calcMode="spline" keySplines="{spl}"/><animate attributeName="cy" values="{ys}"'
+            f' keyTimes="{ks}" dur="{T}s" repeatCount="indefinite" calcMode="spline" keySplines="{spl}"/>')
+    torch_on = (f'<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="{kt(0, 0.1, 0.4, 4.2, 4.6, T)}"'
+                f' dur="{T}s" repeatCount="indefinite"/>')
+    defs = ('<defs><radialGradient id="kwTorchG"><stop offset="0" stop-color="#fff"/>'
+            '<stop offset=".55" stop-color="#fff"/><stop offset=".63" stop-color="#fff" stop-opacity=".5"/>'
+            '<stop offset=".72" stop-color="#fff" stop-opacity="0"/></radialGradient>'
+            f'<mask id="kwTorch" maskUnits="userSpaceOnUse" x="{lx}" y="{ly}" width="{lw}" height="{lh}">'
+            f'<circle r="105" fill="url(#kwTorchG)">{move}</circle></mask>')
+    for i, (_, col) in enumerate(KW_CARDS):
+        defs += (f'<radialGradient id="kwG{i}"><stop offset="0" stop-color="{col}" stop-opacity=".75"/>'
+                 f'<stop offset=".45" stop-color="{col}" stop-opacity=".35"/>'
+                 f'<stop offset="1" stop-color="{col}" stop-opacity="0"/></radialGradient>')
+        cx0, cy0, cw, ch = KW_CARDS[i][0]
+        defs += (f'<clipPath id="kwC{i}"><rect x="{cx0 + 6}" y="{cy0 + 6}" width="{cw - 12}"'
+                 f' height="{ch - 12}" rx="14"/></clipPath>')
+    out.append(defs + '</defs>')
+    # neon glow inside whichever card the torch is over (each in its own colour)
+    spans = [(0.3, 1.8), (1.8, 3.3), (3.3, 4.4)]
+    glow = ""
+    for i, (a, b) in enumerate(spans):
+        glow += (f'<g clip-path="url(#kwC{i})"><circle r="170" fill="url(#kwG{i})" opacity="0">{move}'
+                 f'<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="{kt(0, a, a + 0.3, b - 0.1, b + 0.25, T)}"'
+                 f' dur="{T}s" repeatCount="indefinite"/></circle></g>')
+    out.append(f'<g opacity="0">{torch_on}<image xlink:href="{rev_uri}" x="{lx}" y="{ly}"'
+               f' width="{lw}" height="{lh}" mask="url(#kwTorch)"/>'
+               f'<g style="mix-blend-mode:screen">{glow}</g></g>')
+    # ---- the Phishing card powers on: flips to its fully decoded face, pulses, flips back
+    (cx0, cy0, cw, ch), col = KW_CARDS[0]
+    mid = cx0 + cw / 2
+    f0, f1, f2, f3 = 4.8, 5.15, 7.6, 7.95
+    sx = (f'<animateTransform attributeName="transform" type="scale" values="1 1;1 1;0.02 1;1 1;1 1;0.02 1;1 1;1 1"'
+          f' keyTimes="{kt(0, f0, f1, f1 + 0.35, f2, f3, f3 + 0.35, T)}" dur="{T}s" repeatCount="indefinite"'
+          f' calcMode="spline" keySplines="0 0 1 1;.55 0 1 .45;0 .55 .45 1;0 0 1 1;.55 0 1 .45;0 .55 .45 1;0 0 1 1"/>')
+    face_on = (f'<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="{kt(0, f1, f1 + 0.01, f3, f3 + 0.01, T)}"'
+               f' dur="{T}s" repeatCount="indefinite" calcMode="discrete"/>')
+    pulse = (f'<animate attributeName="opacity" values=".2;.85;.2" dur="1.1s" repeatCount="indefinite"/>')
+    clip = f'<clipPath id="kwFlip"><rect x="{cx0 - 4}" y="{cy0 - 6}" width="{cw + 8}" height="{ch + 12}" rx="16"/></clipPath>'
+    out.append(f'<defs>{clip}</defs><g transform="translate({mid} 0)"><g>{sx}<g transform="translate({-mid} 0)">'
+               # the card's own face during the flip (the scene behind is hidden by it)
+               f'<rect x="{cx0 - 2}" y="{cy0 - 4}" width="{cw + 4}" height="{ch + 8}" fill="#0b0e1c" opacity="0">'
+               f'<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="{kt(0, f0, f0 + 0.01, f3 + 0.35, f3 + 0.36, T)}"'
+               f' dur="{T}s" repeatCount="indefinite" calcMode="discrete"/></rect>'
+               f'<g opacity="0"><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="{kt(0, f0, f0 + 0.01, f3 + 0.35, f3 + 0.36, T)}"'
+               f' dur="{T}s" repeatCount="indefinite" calcMode="discrete"/>'
+               f'<image xlink:href="{row_uri}" x="{lx}" y="{ly}" width="{lw}" height="{lh}" clip-path="url(#kwFlip)"/></g>'
+               f'<g opacity="0">{face_on}<image xlink:href="{rev_uri}" x="{lx}" y="{ly}" width="{lw}" height="{lh}"'
+               f' clip-path="url(#kwFlip)"/><g clip-path="url(#kwC0)" style="mix-blend-mode:screen"><circle cx="{mid}" cy="{cy0 + ch * 0.45}" r="190"'
+               f' fill="url(#kwG0)">{pulse}</circle></g>'
+               f'<rect x="{cx0 + 2}" y="{cy0 + 2}" width="{cw - 4}" height="{ch - 4}" rx="16" fill="none"'
+               f' stroke="{col}" stroke-width="3">{pulse}</rect></g>'
+               '</g></g></g>')
     out.append('</g>')
     return "".join(out)
 
 
+# Feeling Wheel - a trailer of the spin: the knob is pressed, the wheel whips
+# round four times and coasts to a stop on FEAR, the slice flares red, the
+# warning sign bursts out of it with shock rings, and the rainy town flashes.
+# Screen pixels from the game; the card shows a 3:2 window around the wheel.
+FW_WIN = (432.0, 150.0, 555.0, 370.0)
+FW_T = 7.5
+FW_C = (713.7, 306.6, 104.0)                  # disc centre and radius
+FW_FEAR = 27.0                                # turn that brings FEAR to the top
+
+
+def _scene_defs_fw():
+    return ""
+
+
+def _scene_fw(x, y):
+    names = (("bg", "proj-fw-bg.jpg"), ("stand", "proj-fw-stand.png"),
+             ("disc", "proj-fw-disc.jpg"), ("knob", "proj-fw-knob.png"))
+    got = {k: _asset_layer(v) for k, v in names}
+    if not all(got.values()):
+        uri = _photo_uri("proj-art-wheel.png")
+        return (f'<image xlink:href="{uri}" x="{x}" y="{y}" width="{ART_W}" height="{CH}"'
+                f' preserveAspectRatio="xMidYMid slice"/>') if uri else ""
+    T = FW_T
+    wx, wy, ww, wh = FW_WIN
+    k = CH / wh
+    cx, cy, r = FW_C
+
+    def kt(*ts):
+        return ";".join(f"{t / T:.4f}" for t in ts)
+
+    def anim(attr, vals, ts, extra=""):
+        return (f'<animate attributeName="{attr}" values="{vals}" keyTimes="{kt(*ts)}" dur="{T}s"'
+                f' repeatCount="indefinite"{extra}/>')
+
+    def img(key, px, py):
+        uri, w, h = got[key]
+        return f'<image xlink:href="{uri}" x="{px}" y="{py}" width="{w}" height="{h}"/>'
+
+    s0, s1, land = 0.6, 4.0, 4.0
+    out = [f'<g transform="translate({x:.2f} {y:.2f}) scale({k:.5f}) translate({-wx} {-wy})">',
+           '<defs><radialGradient id="fwRed"><stop offset="0" stop-color="#FF2A3D" stop-opacity="0"/>'
+           '<stop offset=".6" stop-color="#FF2A3D" stop-opacity="0"/>'
+           '<stop offset="1" stop-color="#FF0A22" stop-opacity=".75"/></radialGradient>'
+           '<radialGradient id="fwHalo"><stop offset="0" stop-color="#FF5A5A" stop-opacity=".9"/>'
+           '<stop offset=".5" stop-color="#FF2A3D" stop-opacity=".35"/>'
+           '<stop offset="1" stop-color="#FF2A3D" stop-opacity="0"/></radialGradient>'
+           f'<clipPath id="fwDiscC"><circle cx="{cx}" cy="{cy}" r="{r}"/></clipPath></defs>',
+           img("bg", wx, wy)]
+    # the danger flash over the town
+    out.append(f'<rect x="{wx}" y="{wy}" width="{ww}" height="{wh}" fill="url(#fwRed)" opacity="0">'
+               + anim("opacity", "0;0;.8;.35;.6;.35;0;0", (0, land, land + 0.15, land + 0.6, land + 1.1,
+                                                          land + 2.0, T - 0.4, T)) + '</rect>')
+    # everything on the stand shakes for a beat as it lands
+    shake = ";".join(["0 0", "0 0", "-4 1", "4 -1", "-3 0", "2 1", "0 0", "0 0"])
+    out.append(f'<g><animateTransform attributeName="transform" type="translate" values="{shake}"'
+               f' keyTimes="{kt(0, land, land + .06, land + .12, land + .18, land + .24, land + .32, T)}"'
+               f' dur="{T}s" repeatCount="indefinite"/>')
+    out.append(img("stand", 590, 195))
+    # the disc: four turns and a coast, ending where it began (FEAR on top)
+    a0, a1 = FW_FEAR, FW_FEAR + 4 * 360
+    spin = (f'<animateTransform attributeName="transform" type="rotate"'
+            f' values="{a0} {cx} {cy};{a0} {cx} {cy};{a1} {cx} {cy};{a1} {cx} {cy}"'
+            f' keyTimes="{kt(0, s0, s1, T)}" dur="{T}s" repeatCount="indefinite" calcMode="spline"'
+            f' keySplines="0 0 1 1;.3 .1 .15 1;0 0 1 1"/>')
+    duri, dw, dh = got["disc"]
+    out.append(f'<g clip-path="url(#fwDiscC)"><g transform="rotate(0)">{spin}'
+               f'<image xlink:href="{duri}" x="607" y="200"'
+               f' width="{dw}" height="{dh}"/></g>'
+               # motion blur: a soft veil over the disc while it is fast
+               f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#fff" opacity="0">'
+               + anim("opacity", "0;0;.28;.1;0;0", (0, s0, s0 + .4, s0 + 1.6, s1 - .6, T)) + '</circle></g>')
+    # FEAR flares: the top slice (72 degrees about straight up) lit red
+    import math
+    p1 = (cx + r * math.sin(math.radians(-36)), cy - r * math.cos(math.radians(-36)))
+    p2 = (cx + r * math.sin(math.radians(36)), cy - r * math.cos(math.radians(36)))
+    wedge = f'M{cx} {cy}L{p1[0]:.1f} {p1[1]:.1f}A{r} {r} 0 0 1 {p2[0]:.1f} {p2[1]:.1f}Z'
+    out.append(f'<path d="{wedge}" fill="#FF7A88" stroke="#FFE3E6" stroke-width="3" opacity="0"'
+               f' style="mix-blend-mode:screen">'
+               + anim("opacity", "0;0;.95;.35;.8;.35;.8;0;0",
+                      (0, land, land + .1, land + .5, land + .9, land + 1.3, land + 1.7, T - .5, T)) + '</path>')
+    out.append('</g>')
+    # the knob: pressed to start, then ticking against the pegs as it slows
+    kuri, kw, kh = got["knob"]
+    kx, ky = 682 + kw / 2, 177 + 4
+    ticks = [0, s0 - .25, s0 - .1, s0]
+    vals = ["0", "0", "0", "0"]
+    t, gap, sgn = s0, 0.07, 1
+    while t < s1 - 0.1:
+        t += gap
+        ticks.append(t)
+        vals.append(f"{14 * sgn}")
+        sgn = -sgn
+        gap *= 1.28
+    ticks += [s1, T]
+    vals += ["0", "0"]
+    rot = ";".join(f"{v} {kx:.1f} {ky}" for v in vals)
+    press = (f'<animateTransform attributeName="transform" type="translate"'
+             f' values="0 0;0 0;0 6;0 0;0 0" keyTimes="{kt(0, s0 - .3, s0 - .12, s0, T)}" dur="{T}s"'
+             f' repeatCount="indefinite"/>')
+    out.append(f'<g>{press}<g><animateTransform attributeName="transform" type="rotate" values="{rot}"'
+               f' keyTimes="{kt(*ticks)}" dur="{T}s" repeatCount="indefinite"/>{img("knob", 682, 177)}</g></g>')
+    # the warning sign bursts up out of the slice, with shock rings
+    sx, sy = cx, cy + 6
+    for i, d in enumerate((0, .25, .5)):
+        out.append(f'<circle cx="{sx}" cy="{sy}" r="20" fill="none" stroke="#FF4757" stroke-width="4" opacity="0">'
+                   + anim("r", "30;30;190;190", (0, land + d, land + d + .9, T))
+                   + anim("opacity", "0;0;.9;0;0", (0, land + d, land + d + .05, land + d + .9, T))
+                   + anim("stroke-width", "6;6;.5;.5", (0, land + d, land + d + .9, T)) + '</circle>')
+    pop = (f'<animateTransform attributeName="transform" type="scale" values="0;0;2.1;1.45;1.65;1.55;1.55;0;0"'
+           f' keyTimes="{kt(0, land + .1, land + .4, land + .55, land + .7, land + .85, T - .7, T - .45, T)}"'
+           f' dur="{T}s" repeatCount="indefinite" calcMode="spline"'
+           f' keySplines="0 0 1 1;.2 .8 .3 1;{_EASE};{_EASE};{_EASE};0 0 1 1;.5 0 1 .5;0 0 1 1"/>')
+    rise = (f'<animateTransform attributeName="transform" type="translate"'
+            f' values="{cx} {cy - 70};{cx} {cy - 70};{sx} {sy};{sx} {sy - 6};{sx} {sy}"'
+            f' keyTimes="{kt(0, land + .1, land + .45, land + 1.8, T)}" dur="{T}s" repeatCount="indefinite"'
+            f' calcMode="spline" keySplines="0 0 1 1;.2 .8 .3 1;{_EASE};{_EASE}"/>')
+    beat = (f'<animate attributeName="opacity" values=".55;1;.55" dur=".9s" repeatCount="indefinite"/>')
+    out.append(f'<g>{rise}<g>{pop}'
+               f'<circle r="70" fill="url(#fwHalo)">{beat}</circle>'
+               '<path d="M0 -40L38 28Q40 34 34 34H-34Q-40 34 -38 28Z" fill="#FF2A3D" stroke="#FFE066"'
+               ' stroke-width="5" stroke-linejoin="round"/>'
+               '<rect x="-5" y="-17" width="10" height="30" rx="5" fill="#fff"/>'
+               '<circle cx="0" cy="23" r="5.5" fill="#fff"/></g></g>')
+    out.append('</g>')
+    return "".join(out)
+
+
+# Calm or React - a trailer of the sort: a wet "?" card lifts off the deck,
+# spins through the rain and drops into CALM, the bin flares green and its
+# rat pops up grinning; the next card dives into REACT, the bin flares red
+# and the scammer rat pops up smirking. Screen pixels from the game.
+CR_WIN = (257.0, 60.0, 733.0, 489.0)
+CR_T = 8.0
+
+
+def _scene_defs_cr():
+    return ""
+
+
+def _scene_cr(x, y):
+    names = (("bg", "proj-cr-bg.jpg"), ("card", "proj-cr-card.png"),
+             ("calm", "proj-cr-rat-calm.png"), ("react", "proj-cr-rat-react.png"))
+    got = {k: _asset_layer(v) for k, v in names}
+    if not all(got.values()):
+        uri = _photo_uri("proj-art-calm.png")
+        return (f'<image xlink:href="{uri}" x="{x}" y="{y}" width="{ART_W}" height="{CH}"'
+                f' preserveAspectRatio="xMidYMid slice"/>') if uri else ""
+    T = CR_T
+    wx, wy, ww, wh = CR_WIN
+    k = CH / wh
+
+    def kt(*ts):
+        return ";".join(f"{t / T:.4f}" for t in ts)
+
+    def rep(extra=""):
+        return f' dur="{T}s" repeatCount="indefinite"{extra}'
+
+    curi = got["card"][0]
+    cw, ch = 98.0, 149.0
+    dx, dy = 624.0, 398.0                    # the deck
+    out = [f'<g transform="translate({x:.2f} {y:.2f}) scale({k:.5f}) translate({-wx} {-wy})">',
+           f'<image xlink:href="{got["bg"][0]}" x="257" y="0" width="733" height="576"/>',
+           '<defs>']
+    for n, col in (("g", "#3DFF7A"), ("r", "#FF3B4E")):
+        out.append(f'<radialGradient id="cr{n}"><stop offset="0" stop-color="{col}" stop-opacity=".95"/>'
+                   f'<stop offset=".45" stop-color="{col}" stop-opacity=".4"/>'
+                   f'<stop offset="1" stop-color="{col}" stop-opacity="0"/></radialGradient>')
+    out.append('<clipPath id="crRatC"><rect x="257" y="250" width="733" height="248"/></clipPath></defs>')
+    # the deck underneath: two cards that stay put
+    for i, off in enumerate((18, 9)):
+        out.append(f'<image xlink:href="{curi}" x="{dx - cw / 2}" y="{dy - ch / 2 + off}" width="{cw}"'
+                   f' height="{ch}" opacity=".9"/>')
+
+    # each throw: (start, land, bin centre, colour, rat key, rat x)
+    throws = [(0.6, 1.8, (393.0, 458.0), "g", "calm", 297.0),
+              (3.9, 5.1, (862.0, 458.0), "r", "react", 853.0)]
+    for n, (t0, t1, (bx, by), col, rat, rx) in enumerate(throws):
+        # the card: lift, then arc into the bin, flipping and shrinking
+        lift = t0 + 0.35
+        mx, my = (dx + bx) / 2, 150.0
+        path = f'M{dx} {dy}L{dx} {dy - 26}Q{mx} {my} {bx} {by}'
+        vis = (f'<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="{kt(0, t0 - .5, t0 - .2, T - .9, T - .7, T)}"'
+               f'{rep()}/>') if n else (
+               f'<animate attributeName="opacity" values="1;1;0;0;1" keyTimes="{kt(0, T - .9, T - .7, T - .5, T)}"{rep()}/>')
+        mot = (f'<animateMotion path="{path}" keyPoints="0;0;.06;1;1;0;0" keyTimes="{kt(0, t0, lift, t1, T - .69, T - .68, T)}"'
+               f' calcMode="spline" keySplines="0 0 1 1;.3 0 .5 1;.5 0 .9 .6;0 0 1 1;0 0 1 1;0 0 1 1"{rep()}/>')
+        flip = (f'<animateTransform attributeName="transform" type="scale"'
+                f' values="1 1;1 1;1.08 1.08;-.8 .8;.6 .6;-.5 .5;.45 .45;.45 .45;1 1;1 1"'
+                f' keyTimes="{kt(0, t0, lift, lift + .3, lift + .55, lift + .75, t1, T - .69, T - .68, T)}"{rep()}/>')
+        tilt = (f'<animateTransform attributeName="transform" type="rotate" values="0;0;-6;14;-10;8;0;0"'
+                f' keyTimes="{kt(0, t0, t0 + .15, lift + .25, lift + .5, lift + .7, t1, T)}" additive="sum"{rep()}/>')
+        out.append(f'<g>{vis}<g>{mot}<g>{flip}{tilt}<image xlink:href="{curi}" x="{-cw / 2}" y="{-ch / 2}"'
+                   f' width="{cw}" height="{ch}"/></g></g></g>')
+        # the bin flares
+        out.append(f'<g style="mix-blend-mode:screen"><ellipse cx="{bx}" cy="{by - 30}" rx="150" ry="130"'
+                   f' fill="url(#cr{col})" opacity="0"><animate attributeName="opacity"'
+                   f' values="0;0;1;.35;.7;0;0" keyTimes="{kt(0, t1, t1 + .1, t1 + .5, t1 + .8, t1 + 1.8, T)}"{rep()}/>'
+                   '</ellipse></g>')
+        ring = "#3DFF7A" if col == "g" else "#FF3B4E"
+        for i, d in enumerate((0, .2)):
+            out.append(f'<ellipse cx="{bx}" cy="{by - 70}" rx="20" ry="8" fill="none" stroke="{ring}"'
+                       f' stroke-width="5" opacity="0">'
+                       f'<animate attributeName="rx" values="20;20;170;170" keyTimes="{kt(0, t1 + d, t1 + d + .8, T)}"{rep()}/>'
+                       f'<animate attributeName="ry" values="8;8;60;60" keyTimes="{kt(0, t1 + d, t1 + d + .8, T)}"{rep()}/>'
+                       f'<animate attributeName="opacity" values="0;0;1;0;0" keyTimes="{kt(0, t1 + d, t1 + d + .05, t1 + d + .8, T)}"{rep()}/>'
+                       '</ellipse>')
+        # sparks spray up out of the bin
+        rnd = random.Random(11 + n)
+        for i in range(10):
+            ex = bx + rnd.uniform(-95, 95)
+            ey = by - rnd.uniform(150, 250)
+            s = t1 + rnd.uniform(0, .25)
+            out.append(f'<circle r="{rnd.uniform(2.5, 4.5):.1f}" fill="{"#CFFFD9" if col == "g" else "#FFD0D5"}" opacity="0">'
+                       f'<animate attributeName="cx" values="{bx};{bx};{ex:.0f};{ex:.0f}" keyTimes="{kt(0, s, s + .9, T)}"'
+                       f' calcMode="spline" keySplines="0 0 1 1;.2 .7 .4 1;0 0 1 1"{rep()}/>'
+                       f'<animate attributeName="cy" values="{by - 60};{by - 60};{ey:.0f};{ey + 30:.0f};{ey + 30:.0f}" keyTimes="{kt(0, s, s + .7, s + 1.2, T)}"'
+                       f' calcMode="spline" keySplines="0 0 1 1;.2 .7 .4 1;.5 0 1 1;0 0 1 1"{rep()}/>'
+                       f'<animate attributeName="opacity" values="0;0;1;0;0" keyTimes="{kt(0, s, s + .05, s + 1.2, T)}"{rep()}/></circle>')
+        # the rat pops up out of the bin, bobs, and ducks back down
+        ruri = got[rat][0]
+        r0 = t1 + .25
+        rx = bx - 100
+        bob = "0 0;0 0;0 -168;0 -146;0 -156;0 -146;0 -156;0 -146;0 0;0 0"
+        out.append(f'<g clip-path="url(#crRatC)"><g><animateTransform attributeName="transform" type="translate"'
+                   f' values="{bob}" keyTimes="{kt(0, r0, r0 + .3, r0 + .45, r0 + .7, r0 + .95, r0 + 1.2, r0 + 1.45, r0 + 1.8, T)}"'
+                   f' calcMode="spline" keySplines="0 0 1 1;.2 .8 .3 1;{";".join([_EASE] * 5)};.5 0 1 1;0 0 1 1"{rep()}/>'
+                   + (f'<animateTransform attributeName="transform" type="rotate" additive="sum"'
+                      f' values="0 {rx + 65} 600;0 {rx + 65} 600;-6 {rx + 65} 600;6 {rx + 65} 600;-6 {rx + 65} 600;6 {rx + 65} 600;0 {rx + 65} 600;0 {rx + 65} 600"'
+                      f' keyTimes="{kt(0, r0 + .45, r0 + .6, r0 + .8, r0 + 1.0, r0 + 1.2, r0 + 1.4, T)}"{rep()}/>' if rat == "react" else "")
+                   + f'<image xlink:href="{ruri}" x="{rx}" y="508" width="130" height="130"/></g></g>')
+    out.append('</g>')
+    return "".join(out)
+
+
+# Think Ask Act - a trailer of its finale: confetti over the park, the
+# shield badge bursts in, Avi cheers, the crowned bee loops round the sealed
+# envelope, the seal pops, the flap swings open and the superpower card
+# springs out in a spray of sparks. Window pixels on the game's final board.
+TA_T = 8.0
+
+
+def _scene_defs_ta():
+    return ""
+
+
+def _scene_ta(x, y):
+    names = (("bg", "proj-ta-bg.jpg"), ("avi", "proj-ta-avi.png"), ("badge", "proj-ta-badge.png"),
+             ("bee", "proj-ta-bee.png"), ("wing", "proj-ta-wing.png"))
+    got = {k: _asset_layer(v) for k, v in names}
+    if not all(got.values()):
+        uri = _photo_uri("proj-art-bee.png")
+        return (f'<image xlink:href="{uri}" x="{x}" y="{y}" width="{ART_W}" height="{CH}"'
+                f' preserveAspectRatio="xMidYMid slice"/>') if uri else ""
+    T = TA_T
+    k = CH / 390.0
+
+    def kt(*ts):
+        return ";".join(f"{t / T:.4f}" for t in ts)
+
+    def rep(extra=""):
+        return f' dur="{T}s" repeatCount="indefinite"{extra}'
+
+    def img(key, px, py, s=1.0, extra=""):
+        uri, w, h = got[key]
+        return (f'<image xlink:href="{uri}" x="{px}" y="{py}" width="{w * s:.1f}" height="{h * s:.1f}"{extra}/>')
+
+    out = [f'<g transform="translate({x:.2f} {y:.2f}) scale({k:.5f})">', img("bg", 0, 0),
+           '<defs><linearGradient id="taEnv" x1="0" y1="0" x2=".5" y2="1"><stop offset="0" stop-color="#FFD76E"/>'
+           '<stop offset=".55" stop-color="#F4B73C"/><stop offset="1" stop-color="#E09B1F"/></linearGradient>'
+           '<linearGradient id="taFlap" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE294"/>'
+           '<stop offset="1" stop-color="#F7C554"/></linearGradient>'
+           '<radialGradient id="taSeal" cx=".38" cy=".3" r=".8"><stop offset="0" stop-color="#8A5CF6"/>'
+           '<stop offset=".7" stop-color="#5B2A9C"/></radialGradient>'
+           '<radialGradient id="taCard" cx=".5" cy=".38" r=".75"><stop offset="0" stop-color="#FFF8EC"/>'
+           '<stop offset=".7" stop-color="#FBE9C6"/><stop offset="1" stop-color="#F3D8A3"/></radialGradient>'
+           '<radialGradient id="taGlow"><stop offset="0" stop-color="#FFE9A8" stop-opacity=".9"/>'
+           '<stop offset="1" stop-color="#FFE9A8" stop-opacity="0"/></radialGradient></defs>']
+    # Avi cheering (guide-bob)
+    out.append(f'<g><animateTransform attributeName="transform" type="translate" values="0 0;0 -5;0 0"'
+               f' dur="1.6s" repeatCount="indefinite" calcMode="spline" keySplines="{_EASE};{_EASE}"/>'
+               f'{img("avi", 14, 150, 0.9)}</g>')
+    # the badge bursts in, with rays, then breathes
+    bx, by = 128.0, 74.0
+    bw, bh = got["badge"][1] * .55, got["badge"][2] * .55
+    rays = "".join(f'<path d="M0 0L{70 * math.cos(math.radians(a - 6)):.1f} {70 * math.sin(math.radians(a - 6)):.1f}'
+                   f'L{70 * math.cos(math.radians(a + 6)):.1f} {70 * math.sin(math.radians(a + 6)):.1f}Z"/>'
+                   for a in range(0, 360, 30))
+    out.append(f'<g transform="translate({bx} {by})"><g fill="#FFF4B0" opacity="0">'
+               f'<animate attributeName="opacity" values="0;.55;.25;.25;0" keyTimes="{kt(0, .5, 1.2, T - .6, T)}"{rep()}/>'
+               f'<animateTransform attributeName="transform" type="rotate" values="0;360" dur="14s" repeatCount="indefinite"/>'
+               f'{rays}</g><g><animateTransform attributeName="transform" type="scale"'
+               f' values="0;0;1.25;.95;1;1;1.05;1;0" keyTimes="{kt(0, .1, .45, .6, .75, 4, 4.4, T - .5, T)}"'
+               f' calcMode="spline" keySplines="0 0 1 1;.2 .8 .3 1;{_EASE};{_EASE};0 0 1 1;{_EASE};{_EASE};.5 0 1 .5"{rep()}/>'
+               f'{img("badge", -bw / 2, -bh / 2, .55)}</g></g>')
+    # the envelope, floating (power-float)
+    ex, ey, ew, eh = 300.0, 240.0, 190.0, 114.0
+    mx = ew / 2
+    t_pop, t_flap, t_card, t_close = 2.2, 2.35, 2.6, 6.6
+    out.append(f'<g transform="translate({ex} {ey})"><g><animateTransform attributeName="transform" type="translate"'
+               f' values="0 0;0 -7;0 0" dur="2.4s" repeatCount="indefinite" calcMode="spline" keySplines="{_EASE};{_EASE}"/>')
+    # glow behind once it opens
+    out.append(f'<circle cx="{mx}" cy="-10" r="140" fill="url(#taGlow)" opacity="0">'
+               f'<animate attributeName="opacity" values="0;0;1;.6;.6;0;0" keyTimes="{kt(0, t_card, t_card + .3, t_card + 1, t_close, t_close + .4, T)}"{rep()}/></circle>')
+    out.append(f'<rect width="{ew}" height="{eh}" rx="12" fill="#C9850F"/>')
+    # the open flap, behind the card
+    out.append(f'<g transform="translate(0 0)"><g><animateTransform attributeName="transform" type="scale"'
+               f' values="1 0;1 0;1 -1;1 -1;1 0;1 0" keyTimes="{kt(0, t_flap + .12, t_flap + .35, t_close + .1, t_close + .35, T)}"{rep()}/>'
+               f'<path d="M0 0H{ew}L{mx} 78Z" fill="url(#taFlap)" stroke="#E8A93A" stroke-width="1.5"/></g></g>')
+    # the card springs out
+    cw, ch = 132.0, 150.0
+    rise = (f'<animateTransform attributeName="transform" type="translate"'
+            f' values="0 0;0 0;0 -150;0 -128;0 -136;0 -136;0 0;0 0"'
+            f' keyTimes="{kt(0, t_card, t_card + .4, t_card + .58, t_card + .75, t_close, t_close + .45, T)}"'
+            f' calcMode="spline" keySplines="0 0 1 1;.2 .8 .3 1;{_EASE};{_EASE};0 0 1 1;.5 0 .9 .6;0 0 1 1"{rep()}/>')
+    tilt = (f'<animateTransform attributeName="transform" type="rotate" additive="sum"'
+            f' values="0 {mx} 60;0 {mx} 60;-4 {mx} 60;3 {mx} 60;0 {mx} 60;0 {mx} 60"'
+            f' keyTimes="{kt(0, t_card + .3, t_card + .6, t_card + .9, t_card + 1.2, T)}"{rep()}/>')
+    shield = (f'<g transform="translate({mx} {28 + ch * .38})">'
+              '<path d="M0 -40C14 -30 26 -28 34 -28C34 6 22 28 0 40C-22 28 -34 6 -34 -28C-26 -28 -14 -30 0 -40Z"'
+              ' fill="#7B4BE0" stroke="#FFD23F" stroke-width="4"/>'
+              '<path d="M-14 0L-4 11L16 -11" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"'
+              ' stroke-linejoin="round"/></g>')
+    out.append(f'<clipPath id="taPocket"><rect x="-200" y="-400" width="{ew + 400}" height="{400 + eh - 6}"/></clipPath>'
+               f'<g clip-path="url(#taPocket)"><g>{rise}{tilt}<rect x="{mx - cw / 2}" y="20" width="{cw}" height="{ch}" rx="12" fill="url(#taCard)"'
+               f' stroke="#fff" stroke-opacity=".6" stroke-width="2"/>{shield}'
+               f'<rect x="{mx - 34}" y="{28 + ch * .38 + 56}" width="68" height="7" rx="3.5" fill="#E2C48C"/></g></g>')
+    # the front pocket of the envelope
+    out.append(f'<path d="M0 26L{mx} 70L{ew} 26V{eh - 12}Q{ew} {eh} {ew - 12} {eh}H12Q0 {eh} 0 {eh - 12}Z"'
+               f' fill="url(#taEnv)"/><path d="M0 {eh - 4}L{mx} 62L{ew} {eh - 4}" fill="none" stroke="#D99124"'
+               f' stroke-width="1.5" opacity=".7"/>')
+    # the closed flap folds up and away
+    out.append(f'<g><animateTransform attributeName="transform" type="scale"'
+               f' values="1 1;1 1;1 0;1 0;1 1;1 1" keyTimes="{kt(0, t_flap, t_flap + .12, t_close + .35, t_close + .6, T)}"{rep()}/>'
+               f'<path d="M0 0H{ew}L{mx} 78Z" fill="url(#taFlap)" stroke="#E8A93A" stroke-width="1.5"/></g>')
+    # the seal pulses, then pops
+    out.append(f'<g transform="translate({mx} 60)"><g><animateTransform attributeName="transform" type="scale"'
+               f' values="1;1.08;1;1.08;1.5;0;0;1;1" keyTimes="{kt(0, .6, 1.2, 1.8, t_pop, t_pop + .15, t_close + .6, t_close + .9, T)}"{rep()}/>'
+               f'<animate attributeName="opacity" values="1;1;0;0;1;1" keyTimes="{kt(0, t_pop, t_pop + .15, t_close + .6, t_close + .7, T)}"{rep()}/>'
+               '<circle r="26" fill="url(#taSeal)" stroke="#fff" stroke-opacity=".35" stroke-width="2"/>'
+               '<path d="M0 -15C6 -11 11 -10 14 -10C14 4 9 12 0 16C-9 12 -14 4 -14 -10C-11 -10 -6 -11 0 -15Z" fill="#53BDEB"/>'
+               '</g></g>')
+    # the spark burst
+    cols = ['#FFD23F', '#FF8E63', '#8A5CF6', '#53BDEB']
+    for i in range(14):
+        a = i / 14 * 2 * math.pi
+        d = 70 + (i % 3) * 30
+        px, py = mx + math.cos(a) * d, -40 + math.sin(a) * d * .8
+        out.append(f'<circle r="{4 + (i % 2) * 2}" fill="{cols[i % 4]}" opacity="0">'
+                   f'<animate attributeName="cx" values="{mx};{mx};{px:.0f};{px:.0f}" keyTimes="{kt(0, t_card + .15, t_card + .85, T)}"'
+                   f' calcMode="spline" keySplines="0 0 1 1;.2 .8 .3 1;0 0 1 1"{rep()}/>'
+                   f'<animate attributeName="cy" values="20;20;{py:.0f};{py + 20:.0f};{py + 20:.0f}" keyTimes="{kt(0, t_card + .15, t_card + .85, t_card + 1.3, T)}"'
+                   f' calcMode="spline" keySplines="0 0 1 1;.2 .8 .3 1;.5 0 1 1;0 0 1 1"{rep()}/>'
+                   f'<animate attributeName="opacity" values="0;0;1;0;0" keyTimes="{kt(0, t_card + .15, t_card + .2, t_card + 1.3, T)}"{rep()}/></circle>')
+    out.append('</g></g>')
+    # the crowned bee loops round the envelope (bee-orbit), wings flapping
+    cxo, cyo = ex + mx, ey + 30
+    orbit = (f'M{cxo + 130} {cyo}A130 70 0 1 1 {cxo - 130} {cyo}A130 70 0 1 1 {cxo + 130} {cyo}')
+    wuri, ww_, wh_ = got["wing"]
+    wing = (f'<g transform="translate(46 30)"><g><animateTransform attributeName="transform" type="scale"'
+            f' values="1 1;1 .35;1 1" dur=".16s" repeatCount="indefinite"/>'
+            f'<image xlink:href="{wuri}" x="{-ww_ / 2:.1f}" y="{-wh_:.1f}" width="{ww_}" height="{wh_}"/></g></g>')
+    bw2, bh2 = got["bee"][1] * .62, got["bee"][2] * .62
+    out.append(f'<g><animateMotion path="{orbit}" dur="5.2s" repeatCount="indefinite"/>'
+               f'<g transform="translate({-bw2 / 2:.1f} {-bh2 / 2:.1f})"><g transform="scale(.62)">{wing}'
+               f'{img("bee", 0, 0)}</g></g></g>')
+    # confetti all the way down
+    rnd = random.Random(21)
+    pal = ['#FF5C8A', '#FFD23F', '#53BDEB', '#7BE07B', '#8A5CF6', '#FF8E63']
+    for i in range(18):
+        cx_ = rnd.uniform(10, 575)
+        dur = rnd.uniform(3.2, 5.2)
+        out.append(f'<rect x="-4" y="-7" width="8" height="14" rx="2" fill="{pal[i % 6]}">'
+                   f'<animateMotion path="M{cx_:.0f} -20C{cx_ + 30:.0f} 120 {cx_ - 30:.0f} 260 {cx_ + rnd.uniform(-20, 20):.0f} 410"'
+                   f' dur="{dur:.1f}s" begin="{-rnd.uniform(0, dur):.1f}s" repeatCount="indefinite" rotate="auto"/></rect>')
+    out.append('</g>')
+    return "".join(out)
+
+
+# Real or Fake Sender - a trailer of the catch: messages pop up beside Tej,
+# a magnifier sweeps them, glints on the safe ones, flares red on the one
+# with the fake link, and a FAKE stamp slams down on it; the safe ones get
+# their ticks, then the shield badge bursts in and Tej gives a thumbs up.
+RF_T = 8.0
+
+
+def _scene_defs_rf():
+    return ""
+
+
+def _scene_rf(x, y):
+    names = (("bg", "proj-rf-bg.jpg"), ("tej", "proj-rf-tej.png"), ("up", "proj-rf-tej-up.png"),
+             ("badge", "proj-rf-badge.png"))
+    got = {k: _asset_layer(v) for k, v in names}
+    if not all(got.values()):
+        uri = _photo_uri("proj-art-shield.png")
+        return (f'<image xlink:href="{uri}" x="{x}" y="{y}" width="{ART_W}" height="{CH}"'
+                f' preserveAspectRatio="xMidYMid slice"/>') if uri else ""
+    T = RF_T
+    k = CH / 384.0
+
+    def kt(*ts):
+        return ";".join(f"{t / T:.4f}" for t in ts)
+
+    def rep(extra=""):
+        return f' dur="{T}s" repeatCount="indefinite"{extra}'
+
+    def img(key, px, py, s=1.0):
+        uri, w, h = got[key]
+        return f'<image xlink:href="{uri}" x="{px}" y="{py}" width="{w * s:.1f}" height="{h * s:.1f}"/>'
+
+    out = [f'<g transform="translate({x:.2f} {y:.2f}) scale({k:.5f})">', img("bg", 0, 0),
+           '<defs><radialGradient id="rfRed"><stop offset="0" stop-color="#FF3B4E" stop-opacity=".85"/>'
+           '<stop offset="1" stop-color="#FF3B4E" stop-opacity="0"/></radialGradient>'
+           '<radialGradient id="rfSun"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".95"/>'
+           '<stop offset=".5" stop-color="#E9F7FF" stop-opacity=".45"/><stop offset="1" stop-color="#E9F7FF" stop-opacity="0"/>'
+           '</radialGradient><filter id="rfSh" x="-20%" y="-20%" width="140%" height="160%">'
+           '<feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#4B3A9C" flood-opacity=".3"/></filter></defs>']
+    # falling snow
+    rnd = random.Random(8)
+    for i in range(22):
+        sx = rnd.uniform(0, 576)
+        dur = rnd.uniform(5, 9)
+        out.append(f'<circle r="{rnd.uniform(1.2, 2.8):.1f}" fill="#fff" opacity=".85">'
+                   f'<animateMotion path="M{sx:.0f} -10C{sx + 20:.0f} 120 {sx - 20:.0f} 250 {sx + 10:.0f} 395"'
+                   f' dur="{dur:.1f}s" begin="{-rnd.uniform(0, dur):.1f}s" repeatCount="indefinite"/></circle>')
+    # Tej: presenting, then thumbs up once the catch is made
+    t_win = 4.8
+    tw, th = got["tej"][1], got["tej"][2]
+    uw, uh = got["up"][1], got["up"][2]
+    out.append(f'<g opacity="1"><animate attributeName="opacity" values="1;1;0;0;1" keyTimes="{kt(0, t_win, t_win + .2, T - .3, T)}"{rep()}/>'
+               f'{img("tej", 4, 384 - th + 8)}</g>'
+               f'<g opacity="0"><animate attributeName="opacity" values="0;0;1;1;0" keyTimes="{kt(0, t_win, t_win + .2, T - .3, T)}"{rep()}/>'
+               f'<g><animateTransform attributeName="transform" type="translate" values="0 0;0 -6;0 0" dur=".9s"'
+               f' repeatCount="indefinite"/>{img("up", 18, 384 - uh + 8)}</g></g>')
+    # three messages; the middle one carries the fake link
+    bubbles = [(236.0, 56.0, False), (262.0, 146.0, True), (236.0, 236.0, False)]
+    BW, BH = 280.0, 72.0
+    t_stamp = 3.3
+    for i, (bx, by, fake) in enumerate(bubbles):
+        t_in = 0.25 + i * 0.35
+        lines = (f'<rect x="{bx + 18}" y="{by + 18}" width="{BW - 70}" height="9" rx="4.5" fill="#C9CFE6"/>'
+                 f'<rect x="{bx + 18}" y="{by + 34}" width="{BW - 110}" height="9" rx="4.5" fill="#C9CFE6"/>')
+        if fake:
+            lines += (f'<rect x="{bx + 18}" y="{by + 50}" width="{BW - 150}" height="9" rx="4.5" fill="#3B6FE0">'
+                      f'<animate attributeName="fill" values="#3B6FE0;#3B6FE0;#FF2A3D;#FF2A3D;#3B6FE0"'
+                      f' keyTimes="{kt(0, 2.75, 2.85, T - .5, T)}"{rep()}/></rect>')
+        else:
+            lines += f'<rect x="{bx + 18}" y="{by + 50}" width="{BW - 140}" height="9" rx="4.5" fill="#C9CFE6"/>'
+        pop = (f'<animateTransform attributeName="transform" type="scale" values="0;0;1.08;1;1;0;0"'
+               f' keyTimes="{kt(0, t_in, t_in + .25, t_in + .4, t_win - .3, t_win, T)}" calcMode="spline"'
+               f' keySplines="0 0 1 1;.2 .8 .3 1;{_EASE};0 0 1 1;.5 0 1 .5;0 0 1 1"{rep()}/>')
+        shake = ""
+        if fake:
+            sv = "0 0;0 0;-6 0;6 0;-4 0;3 0;0 0;0 0"
+            shake = (f'<animateTransform attributeName="transform" type="translate" additive="sum" values="{sv}"'
+                     f' keyTimes="{kt(0, t_stamp, t_stamp + .05, t_stamp + .1, t_stamp + .15, t_stamp + .2, t_stamp + .26, T)}"{rep()}/>')
+        tint = (f'<rect x="{bx}" y="{by}" width="{BW}" height="{BH}" rx="18" fill="#FF3B4E" opacity="0">'
+                f'<animate attributeName="opacity" values="0;0;.22;.22;0" keyTimes="{kt(0, t_stamp, t_stamp + .05, T - .5, T)}"{rep()}/></rect>') if fake else ""
+        out.append(f'<g transform="translate({bx} {by + BH / 2})"><g>{pop}{shake}<g transform="translate({-bx} {-by - BH / 2})">'
+                   f'<path d="M{bx + 18} {by}H{bx + BW - 18}Q{bx + BW} {by} {bx + BW} {by + 18}V{by + BH - 18}'
+                   f'Q{bx + BW} {by + BH} {bx + BW - 18} {by + BH}H{bx + 22}L{bx} {by + BH + 10}L{bx + 6} {by + BH - 14}'
+                   f'V{by + 18}Q{bx} {by} {bx + 18} {by}Z" fill="#fff" filter="url(#rfSh)"/>{lines}{tint}')
+        if fake:
+            # the FAKE stamp slams down
+            sx_, sy_ = bx + BW - 74, by + BH / 2
+            out.append(f'<g transform="translate({sx_} {sy_}) rotate(-12)"><g opacity="0">'
+                       f'<animate attributeName="opacity" values="0;0;1;1;0" keyTimes="{kt(0, t_stamp - .12, t_stamp - .1, T - .5, T)}"{rep()}/>'
+                       f'<animateTransform attributeName="transform" type="scale" values="2.6;2.6;1;1.08;1;1"'
+                       f' keyTimes="{kt(0, t_stamp - .12, t_stamp, t_stamp + .1, t_stamp + .2, T)}" calcMode="spline"'
+                       f' keySplines="0 0 1 1;.6 0 1 .6;{_EASE};{_EASE};0 0 1 1"{rep()}/>'
+                       '<rect x="-56" y="-22" width="112" height="44" rx="8" fill="#fff" fill-opacity=".85"'
+                       ' stroke="#E8192C" stroke-width="5"/>'
+                       '<rect x="-49" y="-15" width="98" height="30" rx="4" fill="none" stroke="#E8192C" stroke-width="1.5"/>'
+                       '<text x="0" y="10" text-anchor="middle" font-family="Arial Black,Impact,Arial,sans-serif"'
+                       ' font-weight="900" font-size="28" letter-spacing="3" fill="#E8192C">FAKE</text></g></g>')
+        else:
+            # a tick for the safe ones
+            cx_, cy_ = bx + BW - 26, by + 22
+            out.append(f'<g transform="translate({cx_} {cy_})"><g><animateTransform attributeName="transform" type="scale"'
+                       f' values="0;0;1.3;1;1" keyTimes="{kt(0, 4.1 + i * .05, 4.35 + i * .05, 4.5 + i * .05, T)}"{rep()}/>'
+                       '<circle r="16" fill="#22C55E" stroke="#fff" stroke-width="3"/>'
+                       '<path d="M-7 0L-2 6L8 -6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"'
+                       ' stroke-linejoin="round"/></g></g>')
+        out.append('</g></g></g>')
+    # the shock ring off the stamp
+    sxr, syr = bubbles[1][0] + BW - 74, bubbles[1][1] + BH / 2
+    out.append(f'<circle cx="{sxr}" cy="{syr}" r="20" fill="url(#rfRed)" opacity="0">'
+               f'<animate attributeName="r" values="20;20;140;140" keyTimes="{kt(0, t_stamp, t_stamp + .5, T)}"{rep()}/>'
+               f'<animate attributeName="opacity" values="0;0;.9;0;0" keyTimes="{kt(0, t_stamp, t_stamp + .04, t_stamp + .5, T)}"{rep()}/></circle>')
+    # the magnifier sweeps the messages
+    lens = [(0, 620, 40), (1.3, 620, 40), (1.7, 420, 92), (2.2, 400, 92), (2.6, 360, 182), (3.15, 352, 182),
+            (3.6, 400, 272), (4.2, 420, 272), (4.7, 720, 430), (T, 720, 430)]
+    xs = ";".join(f"{p[1]} {p[2]}" for p in lens)
+    ks = kt(*[p[0] for p in lens])
+    spl = ";".join([".45 0 .55 1"] * (len(lens) - 1))
+    flare = (f'<circle r="34" fill="#FF3B4E" opacity="0"><animate attributeName="opacity"'
+             f' values="0;0;.55;.25;.55;0;0" keyTimes="{kt(0, 2.6, 2.8, 2.95, 3.1, 3.4, T)}"{rep()}/></circle>')
+    glint = (f'<circle r="34" fill="#7CFFB0" opacity="0"><animate attributeName="opacity"'
+             f' values="0;0;.45;0;0;.45;0;0" keyTimes="{kt(0, 1.75, 1.95, 2.25, 3.65, 3.85, 4.2, T)}"{rep()}/></circle>')
+    out.append(f'<g><animateTransform attributeName="transform" type="translate" values="{xs}" keyTimes="{ks}"'
+               f' calcMode="spline" keySplines="{spl}"{rep()}/>'
+               '<path d="M24 24L58 58" stroke="#6B3E1E" stroke-width="12" stroke-linecap="round"/>'
+               '<path d="M24 24L58 58" stroke="#A86A3B" stroke-width="7" stroke-linecap="round"/>'
+               '<circle r="34" fill="#E9F7FF" fill-opacity=".28"/>' + flare + glint +
+               '<circle r="34" fill="none" stroke="#C99A4A" stroke-width="8"/>'
+               '<circle r="34" fill="none" stroke="#F2D18A" stroke-width="3"/>'
+               '<path d="M-20 -12A24 24 0 0 1 -6 -24" stroke="#fff" stroke-width="5" stroke-linecap="round" fill="none" opacity=".8"/>'
+               '</g>')
+    # the badge bursts in
+    bw, bh = got["badge"][1] * 1.15, got["badge"][2] * 1.15
+    gx, gy = 392.0, 186.0
+    rays = "".join(f'<path d="M0 0L{120 * math.cos(math.radians(a - 5)):.1f} {120 * math.sin(math.radians(a - 5)):.1f}'
+                   f'L{120 * math.cos(math.radians(a + 5)):.1f} {120 * math.sin(math.radians(a + 5)):.1f}Z"/>'
+                   for a in range(0, 360, 24))
+    out.append(f'<g transform="translate({gx} {gy})"><circle r="120" fill="url(#rfSun)" opacity="0">'
+               f'<animate attributeName="opacity" values="0;0;1;.7;0;0" keyTimes="{kt(0, t_win, t_win + .3, T - .8, T - .4, T)}"{rep()}/></circle>'
+               f'<g fill="#FFF7C2" opacity="0"><animate attributeName="opacity" values="0;0;.6;.35;0;0"'
+               f' keyTimes="{kt(0, t_win, t_win + .3, T - .8, T - .4, T)}"{rep()}/>'
+               f'<animateTransform attributeName="transform" type="rotate" values="0;360" dur="12s" repeatCount="indefinite"/>{rays}</g>'
+               f'<g><animateTransform attributeName="transform" type="scale" values="0;0;1.3;.92;1.04;1;1;0;0"'
+               f' keyTimes="{kt(0, t_win, t_win + .3, t_win + .45, t_win + .6, t_win + .75, T - .8, T - .45, T)}" calcMode="spline"'
+               f' keySplines="0 0 1 1;.2 .8 .3 1;{_EASE};{_EASE};{_EASE};0 0 1 1;.5 0 1 .5;0 0 1 1"{rep()}/>'
+               f'<image xlink:href="{got["badge"][0]}" x="{-bw / 2:.1f}" y="{-bh / 2:.1f}" width="{bw:.1f}" height="{bh:.1f}"/></g>')
+    for i in range(12):
+        a = i / 12 * 2 * math.pi
+        d = 95 + (i % 3) * 25
+        out.append(f'<path d="M0 -7L2 -2L7 0L2 2L0 7L-2 2L-7 0L-2 -2Z" fill="#FFE066" opacity="0">'
+                   f'<animateMotion path="M0 0L{math.cos(a) * d:.0f} {math.sin(a) * d:.0f}" keyPoints="0;0;1;1"'
+                   f' keyTimes="{kt(0, t_win + .2, t_win + 1, T)}" calcMode="spline" keySplines="0 0 1 1;.2 .8 .3 1;0 0 1 1"{rep()}/>'
+                   f'<animate attributeName="opacity" values="0;0;1;0;0" keyTimes="{kt(0, t_win + .2, t_win + .3, t_win + 1.4, T)}"{rep()}/></path>')
+    out.append('</g></g>')
+    return "".join(out)
+
+
 ICON_SCENE = {"fln-animation-toolkit": (_scene_defs_stars, _scene_stars),
-              "think-ask-act": (_scene_defs_bee, _scene_bee),
+              "real-or-fake-sender": (_scene_defs_rf, _scene_rf),
+              "think-ask-act": (_scene_defs_ta, _scene_ta),
+              "calm-or-react": (_scene_defs_cr, _scene_cr),
+              "feeling-wheel-tap": (_scene_defs_fw, _scene_fw),
               "aaru_ki_cheenk": (_scene_defs_aaru, _scene_aaru),
               "Keyword-class9": (_scene_defs_kw, _scene_kw)}
 
@@ -864,14 +1374,10 @@ ICON_SCENE = {"fln-animation-toolkit": (_scene_defs_stars, _scene_stars),
 # Artwork beats a drawn mark wherever a project already has its own, and the
 # crop matters more than the source: at 46px a whole screen is mush, so each
 # of these is the one element that survives - a face, a lit card, a wheel.
-ART_PHOTO = {"feeling-wheel-tap": "proj-art-wheel.png",
-             "real-or-fake-sender": "proj-art-shield.png",
-             "calm-or-react": "proj-art-calm.png",
-             "Competition-Zone": "proj-art-zone.png",
+ART_PHOTO = {"Competition-Zone": "proj-art-zone.png",
              # Optional: drop these files into assets/ and they replace the
              # drawn star / bee scenes and the plain Portfolio icon.
              "fln-animation-toolkit": "proj-art-fln.png",
-             "think-ask-act": "proj-art-bee.png",
              "Portfolio": "proj-art-portfolio.png"}
 _PHOTO_CACHE = {}
 
@@ -966,7 +1472,7 @@ RING_GAP = 2.4                           # px of track between two slices
 # than an image that takes a few minutes to turn over on its own - raw.github
 # serves these with max-age=300, so a plain content change gets there by
 # itself.  Change the contents and wait; only bump if something is wedged.
-CARD_REV = "g"
+CARD_REV = "h"
 
 
 # The game repos are private, so the API hands back no languages for them.
