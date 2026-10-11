@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/hero-v23.svg" width="100%" alt="Ananya Goswami, senior product associate" />
+<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/hero-v25.svg" width="100%" alt="Ananya Goswami, senior product associate" />
 
 <br/><br/>
 
-<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/highscores-v2.svg" width="100%" alt="contributions, streaks and language split" />
+<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/highscores-v3.svg" width="100%" alt="contributions, commits and language split" />
 
 <br/><br/>
 
@@ -12,7 +12,7 @@
 
 <br/><br/>
 
-<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=500&size=16&duration=3600&pause=1100&color=9BE7C4&center=true&vCenter=true&width=820&height=40&lines=%2F%2F+classroom+idea+-%3E+prototype+-%3E+shipped+product;%2F%2F+bilingual+by+default%2C+built+for+low-end+tablets;%2F%2F+30%2B+browser+games+running+in+government+schools" alt="typing" />
+<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=500&size=16&duration=3600&pause=1100&color=9BE7C4&center=true&vCenter=true&width=820&height=40&lines=%2F%2F+classroom+idea+-%3E+prototype+-%3E+shipped+product;%2F%2F+bilingual+by+default%2C+built+for+low-end+tablets;%2F%2F+played+in+government+school+classrooms" alt="typing" />
 
 <br/>
 
@@ -21,19 +21,16 @@
 </div>
 
 <p>
-<a href="https://fln-animation-toolkit.vercel.app" title="HTML 92%  ·  Python 8%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-k-fln-animation-toolkit.svg" title="HTML 92%  ·  Python 8%" width="49%" alt="FLN Animation Kit" /></a>&nbsp;<a href="https://aaru-ki-cheenk.vercel.app" title="JavaScript 67%  ·  CSS 16%  ·  Python 15%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-k-aaru_ki_cheenk.svg" title="JavaScript 67%  ·  CSS 16%  ·  Python 15%" width="49%" alt="Aaru Ki Cheenk" /></a>
+<a href="https://fln-animation-toolkit.vercel.app" title="HTML 92%  ·  Python 8%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-l-fln-animation-toolkit.svg" title="HTML 92%  ·  Python 8%" width="49%" alt="FLN Animation Kit" /></a>&nbsp;<a href="https://aaru-ki-cheenk.vercel.app" title="JavaScript 67%  ·  CSS 16%  ·  Python 15%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-l-aaru_ki_cheenk.svg" title="JavaScript 67%  ·  CSS 16%  ·  Python 15%" width="49%" alt="Aaru Ki Cheenk" /></a>
 </p>
 <p>
-<a href="https://ch1-keywords-mocha.vercel.app" title="CSS 55%  ·  JavaScript 40%  ·  HTML 5%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-k-Keyword-class9.svg" title="CSS 55%  ·  JavaScript 40%  ·  HTML 5%" width="49%" alt="Tactic Decoder" /></a>&nbsp;<a href="https://feeling-wheel-tap.vercel.app" title="CSS 40%  ·  JavaScript 31%  ·  HTML 29%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-k-feeling-wheel-tap.svg" title="CSS 40%  ·  JavaScript 31%  ·  HTML 29%" width="49%" alt="Feeling Wheel Tap" /></a>
+<a href="https://ch1-keywords-mocha.vercel.app" title="CSS 55%  ·  JavaScript 40%  ·  HTML 5%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-l-Keyword-class9.svg" title="CSS 55%  ·  JavaScript 40%  ·  HTML 5%" width="49%" alt="Tactic Decoder" /></a>&nbsp;<a href="https://feeling-wheel-tap.vercel.app" title="CSS 40%  ·  JavaScript 31%  ·  HTML 29%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-l-feeling-wheel-tap.svg" title="CSS 40%  ·  JavaScript 31%  ·  HTML 29%" width="49%" alt="Feeling Wheel Tap" /></a>
 </p>
 <p>
-<a href="https://think-ask-act-builder.vercel.app" title="CSS 46%  ·  HTML 31%  ·  JavaScript 23%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-k-think-ask-act.svg" title="CSS 46%  ·  HTML 31%  ·  JavaScript 23%" width="49%" alt="Think Ask Act" /></a>&nbsp;<a href="https://real-or-fake-sender.vercel.app" title="CSS 61%  ·  JavaScript 28%  ·  HTML 11%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-k-real-or-fake-sender.svg" title="CSS 61%  ·  JavaScript 28%  ·  HTML 11%" width="49%" alt="Real or Fake Sender" /></a>
+<a href="https://think-ask-act-builder.vercel.app" title="CSS 46%  ·  HTML 31%  ·  JavaScript 23%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-l-think-ask-act.svg" title="CSS 46%  ·  HTML 31%  ·  JavaScript 23%" width="49%" alt="Think Ask Act" /></a>&nbsp;<a href="https://real-or-fake-sender.vercel.app" title="CSS 61%  ·  JavaScript 28%  ·  HTML 11%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-l-real-or-fake-sender.svg" title="CSS 61%  ·  JavaScript 28%  ·  HTML 11%" width="49%" alt="Real or Fake Sender" /></a>
 </p>
 <p>
-<a href="https://calm-or-react.vercel.app" title="HTML 38%  ·  CSS 33%  ·  JavaScript 29%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-k-calm-or-react.svg" title="HTML 38%  ·  CSS 33%  ·  JavaScript 29%" width="49%" alt="Calm or React" /></a>&nbsp;<a href="https://ananya-goswami.github.io/Competition-Zone/" title="HTML 100%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-k-Competition-Zone.svg" title="HTML 100%" width="49%" alt="Competition Zone" /></a>
-</p>
-<p>
-<a href="https://g-ananya.netlify.app/" title="HTML 100%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-k-Portfolio.svg" title="HTML 100%" width="49%" alt="Portfolio" /></a>
+<a href="https://calm-or-react.vercel.app" title="HTML 38%  ·  CSS 33%  ·  JavaScript 29%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-l-calm-or-react.svg" title="HTML 38%  ·  CSS 33%  ·  JavaScript 29%" width="49%" alt="Calm or React" /></a>&nbsp;<a href="https://g-ananya.netlify.app/" title="HTML 100%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-l-Portfolio.svg" title="HTML 100%" width="49%" alt="Portfolio" /></a>
 </p>
 
 <div align="center">
@@ -81,7 +78,6 @@ No frameworks, no build step, no install.
 
 **FLN Animation Kit**, the animation system other builders drop into their lessons.
 
-**Competition Zone**, a contest platform prototype: entries, results, trophy room.
 
 </td><td valign="top" width="33%">
 
@@ -125,8 +121,6 @@ Media delivery fixes, workflow tuning, and the unglamorous parts that keep a cha
 
 - [Aaru Ki Cheenk](https://aaru-ki-cheenk.vercel.app/) : story driven game
 - [Space Game](https://space-game-lake.vercel.app/) : prepositions
-- [Portfolio](https://g-ananya.netlify.app/) : the rest of the work
-- YouTube Chat Downloader : small utility
 
 </td></tr>
 </table>
@@ -145,6 +139,6 @@ n8n · WAHA · Railway · Claude API · Web Audio · IndexedDB · a lot of plain
 
 <br/><br/>
 
-`$ echo "happy to talk about learning games, classroom tech, and why most edtech is a worksheet with a timer"`
+`$ echo "happy to talk about learning games, classroom tech, and building for low-end devices"`
 
 </div>
