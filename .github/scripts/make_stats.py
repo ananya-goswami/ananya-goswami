@@ -728,16 +728,143 @@ def _scene_aaru(x, y):
     return f'<rect x="{x}" y="{y}" width="{ART_W}" height="{CH}" fill="#E9D8B4"/>' + "".join(out)
 
 
+# Keywords (Class 9): its Tactic Decoder screen, replayed. A torch sweeps the
+# four cards and shows the clues hidden in them (the game reveals those under
+# a 96px spotlight that follows the cursor), then the Phishing card opens: its
+# three steps drop in one by one, the definition types out line by line, and
+# the example phone slides in. It closes and starts again. Coordinates are the
+# game's screen pixels; the card shows a 3:2 window of that screen.
+KW_WIN = (247.0, 80.0, 729.0, 486.0)
+KW_MODAL = (191.0, 39.0, 608.0, 498.0)          # where the opened panel sits
+KW_T = 13.0                                     # one loop, seconds
+
+
+def _scene_defs_kw():
+    return ""
+
+
+def _scene_kw(x, y):
+    names = {"row": "proj-kw-row.jpg", "reveal": "proj-kw-reveal.jpg",
+             "panel": "proj-kw-panel.jpg", "open": "proj-kw-open.jpg"}
+    got = {k: _asset_layer(v) for k, v in names.items()}
+    if not all(got.values()):
+        uri = _photo_uri("proj-art-tactic.png")
+        return (f'<image xlink:href="{uri}" x="{x}" y="{y}" width="{ART_W}" height="{CH}"'
+                f' preserveAspectRatio="xMidYMid slice"/>') if uri else ""
+    wx, wy, ww, wh = KW_WIN
+    k = CH / wh
+    T = KW_T
+
+    def keys(pairs):
+        ts = [t for t, _ in pairs]
+        return ";".join(v for _, v in pairs), ";".join(f"{t / T:.4f}" for t in ts)
+
+    def show(a, b, fade=0.3):
+        v, kt = keys([(0, "0"), (a, "0"), (a + fade, "1"), (b, "1"), (min(T, b + fade), "0"), (T, "0")])
+        return f'<animate attributeName="opacity" values="{v}" keyTimes="{kt}" dur="{T}s" repeatCount="indefinite"/>'
+
+    # everything below is drawn in the game's screen pixels, then mapped
+    out = [f'<g transform="translate({x:.2f} {y:.2f}) scale({k:.5f}) translate({-wx} {-wy})">']
+    uri, w, h = got["row"]
+    out.append(f'<image xlink:href="{uri}" x="{wx}" y="{wy}" width="{ww}" height="{wh}"/>')
+
+    # ---- the torch: a spotlight over the cards that shows their hidden clues
+    path = [(0.0, (338, 175)), (0.5, (338, 175)), (1.4, (330, 330)), (2.2, (520, 240)),
+            (3.0, (705, 360)), (3.8, (890, 230)), (4.3, (890, 230))]
+    cxv, cxk = keys([(0, "338")] + [(t, str(p[0])) for t, p in path] + [(T, "890")])
+    cyv, _ = keys([(0, "175")] + [(t, str(p[1])) for t, p in path] + [(T, "230")])
+    on = show(0.4, 4.3, 0.35)
+    move = (f'<animate attributeName="cx" values="{cxv}" keyTimes="{cxk}" dur="{T}s"'
+            f' repeatCount="indefinite" calcMode="spline"'
+            f' keySplines="{";".join([".42 0 .58 1"] * (len(path) + 1))}"/>'
+            f'<animate attributeName="cy" values="{cyv}" keyTimes="{cxk}" dur="{T}s"'
+            f' repeatCount="indefinite" calcMode="spline"'
+            f' keySplines="{";".join([".42 0 .58 1"] * (len(path) + 1))}"/>')
+    uri, _, _ = got["reveal"]
+    out.append('<defs><radialGradient id="kwTorchG"><stop offset="0" stop-color="#fff"/>'
+               '<stop offset=".55" stop-color="#fff"/><stop offset=".63" stop-color="#fff" stop-opacity=".5"/>'
+               '<stop offset=".72" stop-color="#fff" stop-opacity="0"/></radialGradient>'
+               '<radialGradient id="kwGlow"><stop offset="0" stop-color="#FF7A93" stop-opacity=".55"/>'
+               '<stop offset=".5" stop-color="#FF4D6D" stop-opacity=".28"/>'
+               '<stop offset="1" stop-color="#FF4D6D" stop-opacity="0"/></radialGradient>'
+               f'<mask id="kwTorch" maskUnits="userSpaceOnUse" x="{wx}" y="{wy}" width="{ww}" height="{wh}">'
+               f'<circle r="96" fill="url(#kwTorchG)">{move}</circle></mask></defs>')
+    out.append(f'<g opacity="0">{on}<image xlink:href="{uri}" x="{wx}" y="{wy}" width="{ww}"'
+               f' height="{wh}" mask="url(#kwTorch)"/>'
+               f'<circle r="150" fill="url(#kwGlow)">{move}</circle></g>')
+
+    # ---- the Phishing card opens into the decoder panel
+    mx, my, mw, mh = KW_MODAL
+    t_open, t_close = 4.7, 11.6
+    out.append(f'<rect x="{wx}" y="{wy}" width="{ww}" height="{wh}" fill="#120A24" opacity="0">'
+               + show(t_open, t_close, 0.4).replace('values="0;0;1;1;0;0"', 'values="0;0;.62;.62;0;0"')
+               + '</rect>')
+    # it grows out of the Phishing card, then settles in the middle of the window
+    fit = min(ww / mw, wh / mh) * 0.97
+    ccx, ccy = wx + ww / 2, wy + wh / 2
+    card_cx, card_cy = 338.0, 310.0
+    sv, sk = keys([(0, "0.35"), (t_open, "0.35"), (t_open + 0.55, f"{fit:.3f}"),
+                   (t_close, f"{fit:.3f}"), (t_close + 0.4, "0.35"), (T, "0.35")])
+    tv, _ = keys([(0, f"{card_cx} {card_cy}"), (t_open, f"{card_cx} {card_cy}"),
+                  (t_open + 0.55, f"{ccx:.1f} {ccy:.1f}"), (t_close, f"{ccx:.1f} {ccy:.1f}"),
+                  (t_close + 0.4, f"{card_cx} {card_cy}"), (T, f"{card_cx} {card_cy}")])
+    ease = ";".join([".25 .8 .3 1"] * 5)
+    panel_uri, _, _ = got["panel"]
+    open_uri, _, _ = got["open"]
+    # pieces of the finished panel, in the panel's own pixels (x, y, w, h, appear at)
+    pieces = [((48, 51, 224, 66), 5.4), ((149, 112, 22, 26), 5.85), ((48, 136, 224, 66), 5.95),
+              ((149, 196, 22, 26), 6.4), ((48, 219, 224, 66), 6.5),
+              ((321, 81, 260, 337), 7.0)]
+    lines = [(311 + 25 * i, 7.0 + 0.32 * i) for i in range(5)]     # the definition, typed
+    inner = [f'<image xlink:href="{panel_uri}" x="{-mw / 2}" y="{-mh / 2}" width="{mw}" height="{mh}"/>',
+             ]
+    clips = (f'<image id="kwOpen" xlink:href="{open_uri}" x="{-mw / 2}" y="{-mh / 2}" width="{mw}"'
+             f' height="{mh}"/>')
+    for i, ((px, py, pw, ph), t0) in enumerate(pieces):
+        clips += (f'<clipPath id="kwP{i}"><rect x="{px - mw / 2}" y="{py - mh / 2}" width="{pw}"'
+                  f' height="{ph}"/></clipPath>')
+        slide = (f'<animateTransform attributeName="transform" type="translate"'
+                 f' values="{"24 0" if i == 5 else "0 10"};{"24 0" if i == 5 else "0 10"};0 0;0 0"'
+                 f' keyTimes="0;{t0 / T:.4f};{(t0 + 0.35) / T:.4f};1" dur="{T}s" repeatCount="indefinite"'
+                 f' calcMode="spline" keySplines="0 0 1 1;.25 .8 .3 1;0 0 1 1"/>')
+        inner.append(f'<g opacity="0">{show(t0, t_close - 0.1, 0.35)}<g>{slide}'
+                     f'<use xlink:href="#kwOpen" clip-path="url(#kwP{i})"/></g></g>')
+    # the definition box, then its text one line at a time
+    clips += (f'<clipPath id="kwDefBox"><rect x="{48 - mw / 2}" y="{296 - mh / 2}" width="224"'
+              f' height="152"/></clipPath>')
+    inner.append(f'<g opacity="0">{show(6.85, t_close - 0.1, 0.25)}'
+                 f'<use xlink:href="#kwOpen" clip-path="url(#kwDefBox)"/></g>')
+    for j, (ly, t0) in enumerate(lines):
+        clips += (f'<clipPath id="kwL{j}"><rect x="{58 - mw / 2}" y="{ly - mh / 2}" height="25" width="0">'
+                  f'<animate attributeName="width" values="0;0;190;190;0" keyTimes="0;{t0 / T:.4f};'
+                  f'{(t0 + 0.3) / T:.4f};{t_close / T:.4f};1" dur="{T}s" repeatCount="indefinite"/>'
+                  f'</rect></clipPath>')
+    # the box itself is shown without its words, then each line is wiped in
+    inner.append(f'<g opacity="0">{show(6.85, t_close - 0.1, 0.25)}'
+                 f'<rect x="{56 - mw / 2}" y="{306 - mh / 2}" width="206" height="136" fill="#161B2E"/></g>')
+    for j in range(len(lines)):
+        inner.append(f'<use xlink:href="#kwOpen" clip-path="url(#kwL{j})"/>')
+    out.append(f'<defs>{clips}</defs>')
+    out.append(f'<g opacity="0">{show(t_open, t_close + 0.1, 0.3)}<g>'
+               f'<animateTransform attributeName="transform" type="translate" values="{tv}"'
+               f' keyTimes="{sk}" dur="{T}s" repeatCount="indefinite" calcMode="spline" keySplines="{ease}"/>'
+               f'<g><animateTransform attributeName="transform" type="scale" values="{sv}"'
+               f' keyTimes="{sk}" dur="{T}s" repeatCount="indefinite" calcMode="spline" keySplines="{ease}"/>'
+               + "".join(inner) + '</g></g></g>')
+    out.append('</g>')
+    return "".join(out)
+
+
 ICON_SCENE = {"fln-animation-toolkit": (_scene_defs_stars, _scene_stars),
               "think-ask-act": (_scene_defs_bee, _scene_bee),
-              "aaru_ki_cheenk": (_scene_defs_aaru, _scene_aaru)}
+              "aaru_ki_cheenk": (_scene_defs_aaru, _scene_aaru),
+              "Keyword-class9": (_scene_defs_kw, _scene_kw)}
 
 
 # Artwork beats a drawn mark wherever a project already has its own, and the
 # crop matters more than the source: at 46px a whole screen is mush, so each
 # of these is the one element that survives - a face, a lit card, a wheel.
-ART_PHOTO = {"Keyword-class9": "proj-art-tactic.png",
-             "feeling-wheel-tap": "proj-art-wheel.png",
+ART_PHOTO = {"feeling-wheel-tap": "proj-art-wheel.png",
              "real-or-fake-sender": "proj-art-shield.png",
              "calm-or-react": "proj-art-calm.png",
              "Competition-Zone": "proj-art-zone.png",
