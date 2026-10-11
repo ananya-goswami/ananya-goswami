@@ -2103,6 +2103,262 @@ def girl_runner(jumps, T, baseline=6.0):
     return gate(run, wins, T) + air
 
 
+# ---------------------------------------------------------------- endless runner preview
+# The profile panel: a side-scroller that never visibly restarts. The world
+# (her last 30 weeks of contribution squares and the ground) slides left under
+# her while she runs in place, exactly one strip-width per loop, so the end of a
+# loop is the start of the next. She head-butts </> blocks for coins and jumps
+# the turtle and the snake. It is a picture, not a game: GitHub never runs code
+# in a README, so the playable version lives on the Pages site (play/).
+EP_W, EP_H = 1200.0, 570.0          # viewBox; ~2.1:1 so it shows large in a README
+EP_COLS = 30                         # weeks in the strip (the recent, active ones)
+EP_PITCH, EP_CELL = 44.0, 34.0       # grid spacing and square size
+EP_GY0 = 64.0                        # top of the grid
+EP_GROUND = 530.0                    # top of the ground line
+EP_AX = 300.0                        # where she runs on screen
+EP_SPEED = RUN_SPEED                 # world speed, matched to her stride
+EP_BLOCK_ROWS = (3, 4, 5, 6)         # rows she can reach with a jump
+EP_GAP = 1.15                        # seconds kept clear between two jumps
+EP_HUD_X, EP_HUD_Y = 40.0, 34.0
+
+
+def _ep_windows(intervals, T):
+    """Discrete 0/1 opacity values+keyTimes: visible inside the intervals (mod T)."""
+    marks = []
+    for a, b in intervals:
+        a, b = a % T, b % T
+        if a <= b:
+            marks.append((a, b))
+        else:
+            marks += [(0.0, b), (a, T)]
+    marks.sort()
+    times, vals = [0.0], ["0"]
+    for a, b in marks:
+        times += [a, b]
+        vals += ["1", "0"]
+    times.append(T)
+    vals.append(vals[-1])
+    return _keys(vals, times, T)
+
+
+def _ep_shown(svg, intervals, T):
+    v, k = _ep_windows(intervals, T)
+    return (f'<g opacity="0"><animate attributeName="opacity" dur="{T:.3f}s"'
+            f' repeatCount="indefinite" calcMode="discrete" values="{v}"'
+            f' keyTimes="{k}"/>{svg}</g>')
+
+
+def build_endless_panel(weeks, total=None):
+    grid = _levels(weeks)[-EP_COLS:]
+    cols = len(grid)
+    S = cols * EP_PITCH                   # strip width = distance per loop
+    T = S / EP_SPEED
+    girl_h = GIRL_TARGET_H
+
+    def cell_xy(c, r, copy=0):
+        return (copy * S + c * EP_PITCH, EP_GY0 + r * EP_PITCH)
+
+    def hit_time(x_world):
+        # the block's centre passes her head when x_world - v t == EP_AX
+        return ((x_world - EP_AX) / EP_SPEED) % T
+
+    # ---- pick blocks: lit squares in reachable rows, spaced out in time ----
+    cands = []
+    for c in range(cols):
+        for r in EP_BLOCK_ROWS[::-1]:
+            if grid[c][r] > 0:
+                cands.append((c, r))
+                break
+    blocks, used_t = [], []
+    for c, r in cands:
+        x, y = cell_xy(c, r)
+        t = hit_time(x + EP_CELL / 2)
+        if all(min(abs(t - u), T - abs(t - u)) >= EP_GAP * 1.6 for u in used_t):
+            blocks.append({"c": c, "r": r, "x": x, "y": y, "t": t})
+            used_t.append(t)
+    blocks.sort(key=lambda b: b["t"])
+
+    # ---- her jumps: block head-butts first, then a hop over each enemy ----
+    G = 2.0 * LIFT_MAX / (JD_MAX / 2.0) ** 2
+
+    def window(hit, clear, apex):
+        v0 = math.sqrt(2.0 * G * apex)
+        v_hit = math.sqrt(max(0.0, v0 * v0 - 2.0 * G * clear))
+        t_up = (v0 - v_hit) / G
+        t_down = math.sqrt(2.0 * clear / G)
+        return {"t0": hit - t_up, "hit": hit, "t1": hit + t_down, "t_up": t_up,
+                "t_down": t_down, "resume": hit + t_down + 0.14,
+                "clear": clear, "v0": v0}
+
+    def fits(w, taken):
+        if w["t0"] < 0.1 or w["resume"] > T - 0.1:
+            return False                   # never straddle the loop
+        return all(w["t0"] > o["resume"] + 0.2 or w["resume"] < o["t0"] - 0.2
+                   for o in taken)
+
+    jinfo = []
+    for b in list(blocks):
+        clear = max(30.0, EP_GROUND - girl_h - (b["y"] + EP_CELL))
+        w = window(b["t"], clear, clear + 8.0)
+        if fits(w, jinfo):
+            jinfo.append(w)
+        else:
+            blocks.remove(b)
+
+    # the turtle and the snake reach her where there is most room to hop them
+    turtle_v = EP_SPEED + 34.0              # they walk left while the world scrolls
+    snake_v = EP_SPEED + 48.0
+    enemies = []
+    for kind, v, h in (("turtle", turtle_v, 46.0), ("snake", snake_v, 56.0)):
+        best = None
+        tt = 0.6
+        while tt < T - 0.6:
+            w = window(tt, h + 26.0, h + 26.0)
+            if fits(w, jinfo):
+                room = min([abs(tt - o["hit"]) for o in jinfo] or [T])
+                if best is None or room > best[0]:
+                    best = (room, w)
+            tt += 0.05
+        if best:
+            jinfo.append(best[1])
+            enemies.append((kind, best[1]["hit"], v, h))
+    jinfo.sort(key=lambda w: w["t0"])
+
+    samples = [(0.0, 0.0)]
+    for w in jinfo:
+        t0, hit, t_up, t_down, clear, v0 = (w[k] for k in
+                                             ("t0", "hit", "t_up", "t_down", "clear", "v0"))
+        samples.append((t0, 0.0))
+        n = max(1, math.ceil(t_up / JUMP_SAMPLE_DT))
+        for i in range(1, n + 1):
+            dt = t_up * i / n
+            samples.append((t0 + dt, v0 * dt - 0.5 * G * dt * dt))
+        n = max(1, math.ceil(t_down / JUMP_SAMPLE_DT))
+        for i in range(1, n + 1):
+            dt = t_down * i / n
+            samples.append((hit + dt, clear - 0.5 * G * dt * dt))
+    samples.append((T, 0.0))
+    jump_v, jump_k = _keys([f"0,{-h:.2f}" for _, h in samples],
+                           [t for t, _ in samples], T)
+
+    # ---- the world strip: two copies of the grid, then ground stripes ----
+    hit_at = {}
+    for b in blocks:
+        # whichever copy reaches her inside this loop is the one that gets hit
+        copy = 0 if b["x"] + EP_CELL / 2 >= EP_AX else 1
+        hit_at[(b["c"], b["r"], copy)] = b
+    world = []
+    for copy in (0, 1):
+        for c in range(cols):
+            for r in range(7):
+                x, y = cell_xy(c, r, copy)
+                world.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{EP_CELL}"'
+                             f' height="{EP_CELL}" rx="7" fill="{LEVELS[grid[c][r]]}"/>')
+    pops = []
+    for (c, r, copy), b in hit_at.items():
+        x, y = cell_xy(c, r, copy)
+        cx, cy = x + EP_CELL / 2, y + EP_CELL / 2
+        t = b["t"]
+        # normal until hit, flash, spent, then normal again once it is off
+        # screen (the other copy comes round as a fresh block)
+        back = t + (EP_AX + EP_CELL) / EP_SPEED + 0.1
+        bump_v, bump_k = _keys(["0,0", "0,0", "0,-14", "0,4", "0,0", "0,0"],
+                               [0.0, t, t + 0.12, t + 0.34, t + 0.52, T], T)
+        face = (_ep_shown(_bc_use("blk0", EP_CELL * 1.25), [(back, t + T)], T)
+                + _ep_shown(_bc_use("blk1", EP_CELL * 1.25), [(t, t + 0.25)], T)
+                + _ep_shown(_bc_use("blk2", EP_CELL * 1.25), [(t + 0.25, back)], T))
+        world.append(f'<g transform="translate({cx:.1f} {cy:.1f})"><g>'
+                     f'<animateTransform attributeName="transform" type="translate"'
+                     f' dur="{T:.3f}s" repeatCount="indefinite" values="{bump_v}"'
+                     f' keyTimes="{bump_k}"/>{face}</g></g>')
+        pops.append(pop_coin(cx, y - 6.0, t, T, r=14.0))
+    for copy in (0, 1):
+        for k in range(int(S // 74) + 1):
+            x = copy * S + k * 74
+            world.append(f'<rect x="{x}" y="{EP_GROUND + 6}" width="2"'
+                         f' height="{EP_H - EP_GROUND - 6}" fill="#07202A"/>')
+    world_svg = (f'<g><animateTransform attributeName="transform" type="translate"'
+                 f' dur="{T:.3f}s" repeatCount="indefinite" calcMode="linear"'
+                 f' values="0 0;{-S:.1f} 0"/>{"".join(world)}{"".join(pops)}</g>')
+
+    # ---- enemies walk in from the right, pass under her, leave on the left ----
+    enemy_svg = ""
+    for kind, t_cross, v, _ in enemies:
+        x_in, x_out = EP_W + 120.0, -160.0
+        t_in = t_cross - (x_in - EP_AX) / v
+        t_out = t_cross + (EP_AX - x_out) / v
+        if kind == "turtle":
+            body = bob(flipbook(sheet_row("twalk", TURTLE_S), WALK_CYCLE),
+                       WALK_CYCLE / 2.0, TURTLE_BOB)
+        else:
+            slither = sheet_row("sslith", SNAKE_S)
+            tongue = sheet_row("stongue", SNAKE_S)
+            body = flipbook(slither + tongue + tongue[::-1] + sheet_row("scont", SNAKE_S),
+                            SLITHER_CYCLE,
+                            weights=[1.0] * 8 + [2.0, 2.8, 2.8, 2.0, 1.0, 1.0])
+        # position keyframes, unwrapped onto 0..T
+        pts = []
+        for tt in sorted({0.0, T, t_in % T, t_out % T}):
+            off = (tt - t_in) % T
+            x = x_in - v * off if off <= (t_out - t_in) else x_out
+            pts.append((tt, x))
+        # the wrap point jumps from x_out back to x_in while hidden
+        mv, mk = _keys([f"{x:.1f},{EP_GROUND + 4:.1f}" for _, x in pts],
+                       [t for t, _ in pts], T)
+        enemy_svg += _ep_shown(
+            f'<g><animateTransform attributeName="transform" type="translate"'
+            f' dur="{T:.3f}s" repeatCount="indefinite" calcMode="linear"'
+            f' values="{mv}" keyTimes="{mk}"/>{body}</g>', [(t_in, t_out)], T)
+
+    # ---- her, running in place, jumping on schedule ----
+    girl = (f'<g transform="translate({EP_AX:.1f} {EP_GROUND:.1f})">'
+            f'<ellipse cx="0" cy="-2" rx="30" ry="6" fill="#000" fill-opacity=".3"/>'
+            f'<g><animateTransform attributeName="transform" type="translate"'
+            f' dur="{T:.3f}s" repeatCount="indefinite" calcMode="linear"'
+            f' values="{jump_v}" keyTimes="{jump_k}"/>'
+            f'{girl_runner(jinfo, T, baseline=6.0)}</g></g>')
+
+    # ---- coin counter: goes up by one for every block she hits ----
+    hud = ""
+    base = (total or 0)
+    hits = sorted(b["t"] for b in blocks)
+    edges = [0.0] + [h + 0.3 for h in hits] + [T]
+    for i in range(len(edges) - 1):
+        hud += _ep_shown(
+            f'<text class="rmono" x="{EP_HUD_X + 34:.0f}" y="{EP_HUD_Y + 11:.0f}"'
+            f' font-size="30" fill="#CFEAE3">x {base + i}</text>',
+            [(edges[i], edges[i + 1])], T)
+    hud = (f'<g transform="translate({EP_HUD_X + 14:.1f} {EP_HUD_Y:.1f})">'
+           f'{coin_spin(HUD_SPIN, 0.0, 15.0)}</g>' + hud)
+
+    stars = ""
+    for k in range(18):
+        sx = 60 + (k * 331) % (EP_W - 120)
+        sy = 70 + (k * 137) % 400
+        stars += (f'<rect x="{sx}" y="{sy}" width="4" height="4" fill="#9BEFD9"'
+                  f' fill-opacity=".4"><animate attributeName="fill-opacity"'
+                  f' values=".1;.55;.1" dur="{2.0 + (k % 5) * 0.6}s"'
+                  f' repeatCount="indefinite"/></rect>')
+
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+    viewBox="0 0 {EP_W:.0f} {EP_H:.0f}" width="1000" height="{EP_H * 1000 / EP_W:.0f}" role="img" aria-label="endless contribution runner">
+<defs>{sprite_defs()}{COIN_DEFS}</defs>
+<style>.rmono {{ font-family: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace; }}</style>
+<rect width="{EP_W:.0f}" height="{EP_H:.0f}" fill="#081420"/>
+<clipPath id="ep"><rect width="{EP_W:.0f}" height="{EP_H:.0f}"/></clipPath>
+<g clip-path="url(#ep)">
+{stars}
+<rect x="0" y="{EP_GROUND}" width="{EP_W:.0f}" height="{EP_H - EP_GROUND}" fill="#0B2A33"/>
+<rect x="0" y="{EP_GROUND}" width="{EP_W:.0f}" height="6" fill="#3CEDA5"/>
+{world_svg}
+{enemy_svg}
+{girl}
+{hud}
+</g>
+</svg>
+'''
+
+
 if __name__ == "__main__":
     data = collect()
     try:
@@ -2125,9 +2381,23 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v15.svg"), "w", encoding="utf-8").write(
-            build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v15.svg")
+        open(os.path.join(out_dir, "runner-v16.svg"), "w", encoding="utf-8").write(
+            build_endless_panel(g["weeks"], total=g.get("contributions")))
+        print("wrote runner-v16.svg")
     else:
         print("no calendar data - runner panel skipped")
+    # The playable game, served by Pages at /play/: the page, the art it
+    # draws with, and her contribution levels for it to build the world from.
+    import shutil
+    play = os.path.join(out_dir, "play")
+    os.makedirs(os.path.join(play, "assets"), exist_ok=True)
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
+    shutil.copy(os.path.join(root, "game", "index.html"), os.path.join(play, "index.html"))
+    for name in ("runner-avatar-sheet-v9.png", "turtle-sheet-v1.png", "snake-sheet-v1.png",
+                 "leaf-sheet-v1.png", "blockcoin-sheet-v1.png"):
+        shutil.copy(os.path.join(_ASSETS, name), os.path.join(play, "assets", name))
+    if g.get("weeks"):
+        json.dump({"levels": _levels(g["weeks"])},
+                  open(os.path.join(play, "contrib.json"), "w"))
+    print("wrote play/")
     print("panels:", data["repos"], "repos,", data["deployed"], "live,", g.get("contributions"), "contributions")
