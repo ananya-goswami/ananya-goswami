@@ -2098,7 +2098,7 @@ def girl_runner(jumps, T, baseline=6.0):
         fall_extend = hit + jump["t_down"] * 0.72
         edges = [t0, rise_reach, hit, fall_tuck, fall_open,
                  fall_extend, t1, resume]
-        for pose, a, b in zip(AIR_POSES, edges, edges[1:]):
+        for pose, a, b in zip(jump.get("poses", AIR_POSES), edges, edges[1:]):
             air += sequence([avatar_frame(pose, baseline)], a, b, T)
     return gate(run, wins, T) + air
 
@@ -2196,32 +2196,52 @@ def build_endless_panel(weeks, total=None):
         return all(w["t0"] > o["resume"] + 0.2 or w["resume"] < o["t0"] - 0.2
                    for o in taken)
 
-    jinfo = []
-    for b in list(blocks):
-        clear = max(30.0, EP_GROUND - girl_h - (b["y"] + EP_CELL))
-        w = window(b["t"], clear, clear + 8.0)
-        if fits(w, jinfo):
-            jinfo.append(w)
-        else:
-            blocks.remove(b)
-
-    # the turtle and the snake reach her where there is most room to hop them
-    turtle_v = EP_SPEED + 34.0              # they walk left while the world scrolls
-    snake_v = EP_SPEED + 48.0
-    enemies = []
-    for kind, v, h in (("turtle", turtle_v, 46.0), ("snake", snake_v, 56.0)):
-        best = None
-        tt = 0.6
-        while tt < T - 0.6:
-            w = window(tt, h + 26.0, h + 26.0)
+    def plan(blocks):
+        """Jumps for these blocks, then a hop over each enemy where it fits."""
+        jinfo = []
+        for b in list(blocks):
+            clear = max(30.0, EP_GROUND - girl_h - (b["y"] + EP_CELL))
+            w = window(b["t"], clear, clear + 8.0)
             if fits(w, jinfo):
-                room = min([abs(tt - o["hit"]) for o in jinfo] or [T])
-                if best is None or room > best[0]:
-                    best = (room, w)
-            tt += 0.05
-        if best:
-            jinfo.append(best[1])
-            enemies.append((kind, best[1]["hit"], v, h))
+                jinfo.append(w)
+            else:
+                blocks.remove(b)
+    
+        # the turtle and the snake reach her where there is most room to hop them
+        turtle_v = EP_SPEED + 34.0              # they walk left while the world scrolls
+        snake_v = EP_SPEED + 48.0
+        # Sprite sizes above the ground line (drawn at GROUND + 4): the turtle is
+        # ~40 tall plus its bob, the snake ~63; both are ~84 wide. Her feet are
+        # ~44 wide. Her feet must stay above the body for the whole time the two
+        # overlap, so the hop's apex comes from that time, not from the height.
+        HOP_FEET_W, HOP_MARGIN = 44.0, 12.0
+        enemies = []
+        for kind, v, h, ew in (("turtle", turtle_v, 40.0 + TURTLE_BOB, 84.0),
+                               ("snake", snake_v, 63.0, 84.0)):
+            need = (ew + HOP_FEET_W) / v           # seconds the bodies overlap in x
+            apex = h + HOP_MARGIN + G * need * need / 8.0
+            best = None
+            tt = 0.6
+            while tt < T - 0.6:
+                w = window(tt, apex, apex)
+                w["poses"] = [9, 9, 11, 11, 11, 11, 12]
+                if fits(w, jinfo):
+                    room = min([abs(tt - o["hit"]) for o in jinfo] or [T])
+                    if best is None or room > best[0]:
+                        best = (room, w)
+                tt += 0.05
+            if best:
+                jinfo.append(best[1])
+                enemies.append((kind, best[1]["hit"], v, h))
+        return blocks, jinfo, enemies
+
+    # Both enemies always appear: if a hop cannot fit, give up the last block.
+    all_blocks = list(blocks)
+    while True:
+        blocks, jinfo, enemies = plan(list(all_blocks))
+        if len(enemies) == 2 or not all_blocks:
+            break
+        all_blocks.pop()
     jinfo.sort(key=lambda w: w["t0"])
 
     samples = [(0.0, 0.0)]
@@ -2244,9 +2264,13 @@ def build_endless_panel(weeks, total=None):
     # ---- the world strip: two copies of the grid, then ground stripes ----
     hit_at = {}
     for b in blocks:
-        # whichever copy reaches her inside this loop is the one that gets hit
+        # Whichever copy reaches her inside this loop gets hit (and pops a
+        # coin), but both copies wear the block, with the same state timeline:
+        # the other copy is off screen at the hit, and it is the one on screen
+        # across the loop seam, so a block never appears from nowhere.
         copy = 0 if b["x"] + EP_CELL / 2 >= EP_AX else 1
         hit_at[(b["c"], b["r"], copy)] = b
+        hit_at[(b["c"], b["r"], 1 - copy)] = dict(b, ghost=True)
     world = []
     for copy in (0, 1):
         for c in range(cols):
@@ -2271,7 +2295,8 @@ def build_endless_panel(weeks, total=None):
                      f'<animateTransform attributeName="transform" type="translate"'
                      f' dur="{T:.3f}s" repeatCount="indefinite" values="{bump_v}"'
                      f' keyTimes="{bump_k}"/>{face}</g></g>')
-        pops.append(pop_coin(cx, y - 6.0, t, T, r=14.0))
+        if not b.get("ghost"):
+            pops.append(pop_coin(cx, y - 6.0, t, T, r=14.0))
     for copy in (0, 1):
         for k in range(int(S // 74) + 1):
             x = copy * S + k * 74
@@ -2319,15 +2344,19 @@ def build_endless_panel(weeks, total=None):
             f'{girl_runner(jinfo, T, baseline=6.0)}</g></g>')
 
     # ---- coin counter: goes up by one for every block she hits ----
+    # The counter runs on a period of many loops (a few minutes), so it keeps
+    # climbing like a real run instead of dropping back at every loop seam.
     hud = ""
     base = (total or 0)
+    loops = 40
+    TL = T * loops
     hits = sorted(b["t"] for b in blocks)
-    edges = [0.0] + [h + 0.3 for h in hits] + [T]
+    edges = [0.0] + [k * T + h + 0.3 for k in range(loops) for h in hits] + [TL]
     for i in range(len(edges) - 1):
         hud += _ep_shown(
             f'<text class="rmono" x="{EP_HUD_X + 34:.0f}" y="{EP_HUD_Y + 11:.0f}"'
             f' font-size="30" fill="#CFEAE3">x {base + i}</text>',
-            [(edges[i], edges[i + 1])], T)
+            [(edges[i], edges[i + 1])], TL)
     hud = (f'<g transform="translate({EP_HUD_X + 14:.1f} {EP_HUD_Y:.1f})">'
            f'{coin_spin(HUD_SPIN, 0.0, 15.0)}</g>' + hud)
 
@@ -2381,9 +2410,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v16.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v17.svg"), "w", encoding="utf-8").write(
             build_endless_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v16.svg")
+        print("wrote runner-v17.svg")
     else:
         print("no calendar data - runner panel skipped")
     # The playable game, served by Pages at /play/: the page, the art it
