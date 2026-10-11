@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/hero-v25.svg" width="100%" alt="Ananya Goswami, senior product associate" />
+<img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/hero-v26.svg" width="100%" alt="Ananya Goswami, senior product associate" />
 
 <br/><br/>
 
@@ -21,16 +21,16 @@
 </div>
 
 <p>
-<a href="https://fln-animation-toolkit.vercel.app" title="HTML 92%  ·  Python 8%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-l-fln-animation-toolkit.svg" title="HTML 92%  ·  Python 8%" width="49%" alt="FLN Animation Kit" /></a>&nbsp;<a href="https://aaru-ki-cheenk.vercel.app" title="JavaScript 67%  ·  CSS 16%  ·  Python 15%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-l-aaru_ki_cheenk.svg" title="JavaScript 67%  ·  CSS 16%  ·  Python 15%" width="49%" alt="Aaru Ki Cheenk" /></a>
+<a href="https://fln-animation-toolkit.vercel.app" title="HTML 92%  ·  Python 8%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-m-fln-animation-toolkit.svg" title="HTML 92%  ·  Python 8%" width="49%" alt="FLN Animation Kit" /></a>&nbsp;<a href="https://aaru-ki-cheenk.vercel.app" title="JavaScript 67%  ·  CSS 16%  ·  Python 15%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-m-aaru_ki_cheenk.svg" title="JavaScript 67%  ·  CSS 16%  ·  Python 15%" width="49%" alt="Aaru Ki Cheenk" /></a>
 </p>
 <p>
-<a href="https://ch1-keywords-mocha.vercel.app" title="CSS 55%  ·  JavaScript 40%  ·  HTML 5%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-l-Keyword-class9.svg" title="CSS 55%  ·  JavaScript 40%  ·  HTML 5%" width="49%" alt="Tactic Decoder" /></a>&nbsp;<a href="https://feeling-wheel-tap.vercel.app" title="CSS 40%  ·  JavaScript 31%  ·  HTML 29%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-l-feeling-wheel-tap.svg" title="CSS 40%  ·  JavaScript 31%  ·  HTML 29%" width="49%" alt="Feeling Wheel Tap" /></a>
+<a href="https://ch1-keywords-mocha.vercel.app" title="CSS 55%  ·  JavaScript 40%  ·  HTML 5%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-m-Keyword-class9.svg" title="CSS 55%  ·  JavaScript 40%  ·  HTML 5%" width="49%" alt="Tactic Decoder" /></a>&nbsp;<a href="https://feeling-wheel-tap.vercel.app" title="CSS 40%  ·  JavaScript 31%  ·  HTML 29%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-m-feeling-wheel-tap.svg" title="CSS 40%  ·  JavaScript 31%  ·  HTML 29%" width="49%" alt="Feeling Wheel Tap" /></a>
 </p>
 <p>
-<a href="https://think-ask-act-builder.vercel.app" title="CSS 46%  ·  HTML 31%  ·  JavaScript 23%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-l-think-ask-act.svg" title="CSS 46%  ·  HTML 31%  ·  JavaScript 23%" width="49%" alt="Think Ask Act" /></a>&nbsp;<a href="https://real-or-fake-sender.vercel.app" title="CSS 61%  ·  JavaScript 28%  ·  HTML 11%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-l-real-or-fake-sender.svg" title="CSS 61%  ·  JavaScript 28%  ·  HTML 11%" width="49%" alt="Real or Fake Sender" /></a>
+<a href="https://think-ask-act-builder.vercel.app" title="CSS 46%  ·  HTML 31%  ·  JavaScript 23%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-m-think-ask-act.svg" title="CSS 46%  ·  HTML 31%  ·  JavaScript 23%" width="49%" alt="Think Ask Act" /></a>&nbsp;<a href="https://real-or-fake-sender.vercel.app" title="CSS 61%  ·  JavaScript 28%  ·  HTML 11%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-m-real-or-fake-sender.svg" title="CSS 61%  ·  JavaScript 28%  ·  HTML 11%" width="49%" alt="Real or Fake Sender" /></a>
 </p>
 <p>
-<a href="https://calm-or-react.vercel.app" title="HTML 38%  ·  CSS 33%  ·  JavaScript 29%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-l-calm-or-react.svg" title="HTML 38%  ·  CSS 33%  ·  JavaScript 29%" width="49%" alt="Calm or React" /></a>&nbsp;<a href="https://g-ananya.netlify.app/" title="HTML 100%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-l-Portfolio.svg" title="HTML 100%" width="49%" alt="Portfolio" /></a>
+<a href="https://calm-or-react.vercel.app" title="HTML 38%  ·  CSS 33%  ·  JavaScript 29%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-m-calm-or-react.svg" title="HTML 38%  ·  CSS 33%  ·  JavaScript 29%" width="49%" alt="Calm or React" /></a>&nbsp;<a href="https://ananya-goswami.vercel.app/" title="HTML 100%"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/proj-m-Portfolio.svg" title="HTML 100%" width="49%" alt="Portfolio" /></a>
 </p>
 
 <div align="center">
@@ -45,7 +45,7 @@
 
 <a href="https://www.linkedin.com/in/ananyagos/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/social-linkedin.svg" alt="LinkedIn" /></a>
 &nbsp;
-<a href="https://g-ananya.netlify.app/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/social-portfolio.svg" alt="Portfolio" /></a>
+<a href="https://ananya-goswami.vercel.app/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/social-portfolio.svg" alt="Portfolio" /></a>
 &nbsp;
 <a href="mailto:goswamiananya54@gmail.com"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/social-email.svg" alt="Email" /></a>
 
