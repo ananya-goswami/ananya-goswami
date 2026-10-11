@@ -1349,10 +1349,10 @@ LEVELS = ["#06313E", "#128070", "#18A088", "#20D898", "#9BEFD9"]
 # character is all that is needed to land it at the size the panel used before.
 GIRL_TARGET_H = 128.0                # her displayed height, unchanged
 GIRL_S = GIRL_TARGET_H / 104.0
-TURTLE_S, LEAF_S, SNAKE_S = 0.50, 0.45, 0.50
+TURTLE_S, LEAF_S, SNAKE_S = 0.50, 0.75, 0.50
 V_LEAF, V_TURTLE, V_SNAKE, V_LIMP = 19.0, 34.0, 48.0, 22.0
 EAT = 3.0                            # a readable set of bites, not a rapid flicker
-LEAF_GAP = 39.0                      # smaller leaf halts with its edge at the mouth
+LEAF_GAP = 52.0                      # the leaf halts with its edge at the mouth
 # Flipbook speeds. Each is the time for one full loop of that character's cycle.
 # Her cycle is derived below from the avatar's measured contact stride and the
 # panel's ground speed.
@@ -2497,9 +2497,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v20.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v21.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v20.svg")
+        print("wrote runner-v21.svg")
     else:
         print("no calendar data - runner panel skipped")
     # The playable game, served by Pages at /play/: the page, the art it
