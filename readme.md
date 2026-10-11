@@ -8,9 +8,7 @@
 
 <br/><br/>
 
-<a href="https://ananya-goswami.github.io/ananya-goswami/play/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/runner-v17.svg" width="100%" alt="contribution runner - click to play" /></a>
-
-<a href="https://ananya-goswami.github.io/ananya-goswami/play/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/main/assets/btn-play.svg" alt="Play the game" /></a>
+<a href="https://ananya-goswami.github.io/ananya-goswami/play/"><img src="https://raw.githubusercontent.com/ananya-goswami/ananya-goswami/output/runner-v18.svg" width="100%" alt="contribution runner - click to play" /></a>
 
 <br/><br/>
 
