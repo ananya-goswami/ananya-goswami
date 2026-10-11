@@ -1837,7 +1837,7 @@ TUMBLE_SHEET_PATH = os.path.join(_ASSETS, "leaf-tumble-sheet-v1.png")  # 8 x 256
 # spring lime, summer teal (the art as drawn), gold, orange, red, dry brown
 TUMBLE_LIFE = [1, 0, 2, 3, 4, 5]
 TUMBLE_CELL = 256
-OUTRO_WIPE = 1.5          # seconds for the storm to cross the panel
+OUTRO_WIPE = 3.2          # seconds for the storm to cross the panel: slow enough to watch
 OUTRO_FADE = 0.6          # the play screen fades back into the story's first frame
 PLAY_BTN_H = 176.0        # the button's height on screen
 PLAY_BTN_CX, PLAY_BTN_CY = 1086.0, 300.0
@@ -2082,23 +2082,23 @@ def story_outro(t_cut, T):
     # The storm is a year going by: fresh leaves lead, the oldest trail.
     leaves = ""
     lives = [_tumble_leaf(70.0, r) for r in TUMBLE_LIFE]
-    for i in range(34):
-        y = py0 + (i + 0.5) * H / 34 + rnd.uniform(-14, 14)
-        lead = rnd.uniform(-30.0, 170.0)    # where it rides: <0 ahead of the edge, >0 behind
-        late = rnd.uniform(0.0, 0.18)
-        a, z = t_cut + late, t_cover + late + 0.25
+    for i in range(44):
+        y = py0 + (i + 0.5) * H / 44 + rnd.uniform(-14, 14)
+        lead = rnd.uniform(-60.0, 260.0)    # where it rides: <0 ahead of the edge, >0 behind
+        late = rnd.uniform(0.0, 0.3)
+        a, z = t_cut + late, t_cover + late + 0.5
         x_a, x_z = px1 + 40 + lead, px0 - 260 + lead
-        wob = rnd.uniform(14, 34) * (1 if i % 2 else -1)
+        wob = rnd.uniform(24, 60) * (1 if i % 2 else -1)
         mid = (a + z) / 2
         mv, mk = _keys([f"{x_a:.1f},{y:.1f}", f"{x_a:.1f},{y:.1f}",
                         f"{(x_a + x_z) / 2:.1f},{y + wob:.1f}",
                         f"{x_z:.1f},{y:.1f}", f"{x_z:.1f},{y:.1f}"],
                        [0.0, a, mid, z, T], T)
         size = rnd.uniform(0.7, 1.25)
-        age = (lead + 30.0) / 200.0 + rnd.uniform(-0.12, 0.12)    # 0 front, 1 back
+        age = (lead + 60.0) / 320.0 + rnd.uniform(-0.12, 0.12)    # 0 front, 1 back
         frames = lives[min(len(lives) - 1, max(0, int(age * len(lives))))]
         spin = flipbook(frames[i % len(frames):] + frames[:i % len(frames)],
-                        rnd.uniform(0.45, 0.7))
+                        rnd.uniform(0.8, 1.2))
         leaves += _ep_shown(
             f'<g><animateTransform attributeName="transform" type="translate"'
             f' dur="{T}s" repeatCount="indefinite" calcMode="linear" values="{mv}"'
@@ -2444,9 +2444,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v18.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v19.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v18.svg")
+        print("wrote runner-v19.svg")
     else:
         print("no calendar data - runner panel skipped")
     # The playable game, served by Pages at /play/: the page, the art it
