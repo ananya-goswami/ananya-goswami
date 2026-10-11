@@ -301,7 +301,7 @@ def _pill(x, y, text):
     w = 10.0 + len(text) * 6.0
     return (f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="17" rx="8.5"'
             f' fill="#0A1F1C" stroke="#22D3EE" stroke-opacity=".34"/>'
-            f'<text class="mono" x="{x + w / 2:.1f}" y="{y + 12.1:.1f}" font-size="9.5"'
+            f'<text class="mono" x="{x + w / 2:.1f}" y="{y + 12.1:.1f}" font-size="9"'
             f' text-anchor="middle" fill="#7FD8EE">{esc(text)}</text>'), w
 
 
@@ -1357,7 +1357,132 @@ def _scene_rf(x, y):
     return "".join(out)
 
 
+# Portfolio - a trailer of the site's hero: the arch portrait rises out of
+# the dark, the serif name lifts in with its pink-lilac shimmer, the open-to-
+# opportunities pill blinks on, and the site's butterflies and heart cursor
+# drift across. Window pixels, 576 x 384.
+PF_T = 9.0
+
+
+def _scene_defs_pf():
+    return ""
+
+
+def _scene_pf(x, y):
+    names = (("photo", "proj-pf-photo.jpg"), ("ananya", "proj-pf-ananya.png"), ("goswami", "proj-pf-goswami.png"))
+    got = {k: _asset_layer(v) for k, v in names}
+    if not all(got.values()):
+        return f'<rect x="{x}" y="{y}" width="{ART_W}" height="{CH}" fill="#140E18"/>'
+    T = PF_T
+    k = CH / 384.0
+
+    def kt(*ts):
+        return ";".join(f"{t / T:.4f}" for t in ts)
+
+    def rep(extra=""):
+        return f' dur="{T}s" repeatCount="indefinite"{extra}'
+
+    fade_out = f'<animate attributeName="opacity" values="1;1;0;0" keyTimes="{kt(0, T - .7, T - .2, T)}"{rep()}/>'
+    out = [f'<g transform="translate({x:.2f} {y:.2f}) scale({k:.5f})">',
+           '<defs><linearGradient id="pfBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#17101C"/>'
+           '<stop offset="1" stop-color="#0E0A12"/></linearGradient>'
+           '<radialGradient id="pfBlobA"><stop offset="0" stop-color="#E8A5C0" stop-opacity=".32"/>'
+           '<stop offset="1" stop-color="#E8A5C0" stop-opacity="0"/></radialGradient>'
+           '<radialGradient id="pfBlobB"><stop offset="0" stop-color="#9F86E0" stop-opacity=".3"/>'
+           '<stop offset="1" stop-color="#9F86E0" stop-opacity="0"/></radialGradient>'
+           # the name's shimmer: the site's 135deg pink-lilac gradient, sliding
+           '<linearGradient id="pfShim" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="300" y2="60">'
+           '<stop offset="0" stop-color="#E8A5C0"/><stop offset=".35" stop-color="#C4B0E8"/>'
+           '<stop offset=".55" stop-color="#FFFFFF"/><stop offset=".75" stop-color="#E8A5C0"/>'
+           '<stop offset="1" stop-color="#C4B0E8"/>'
+           '<animateTransform attributeName="gradientTransform" type="translate" values="-300 0;300 0" dur="3.2s"'
+           ' repeatCount="indefinite"/></linearGradient>']
+    gu, gw, gh = got["goswami"]
+    out.append(f'<mask id="pfGos" maskUnits="userSpaceOnUse" x="0" y="0" width="576" height="384">'
+               f'<image xlink:href="{gu}" x="32" y="186" width="{gw}" height="{gh}"/></mask>')
+    # the arch the portrait sits in
+    ax, ay, aw, ah = 352.0, 52.0, 196.0, 262.0
+    arch = (f'M{ax} {ay + aw / 2}A{aw / 2} {aw / 2} 0 0 1 {ax + aw} {ay + aw / 2}V{ay + ah - 34}'
+            f'Q{ax + aw} {ay + ah} {ax + aw - 34} {ay + ah}H{ax + 34}Q{ax} {ay + ah} {ax} {ay + ah - 34}Z')
+    out.append(f'<clipPath id="pfArch"><path d="{arch}"/></clipPath>'
+               f'<clipPath id="pfRise"><rect x="{ax - 4}" y="{ay + ah}" width="{aw + 8}" height="0">'
+               f'<animate attributeName="y" values="{ay + ah};{ay + ah};{ay - 4};{ay - 4}" keyTimes="{kt(0, .3, 1.5, T)}"'
+               f' calcMode="spline" keySplines="0 0 1 1;.25 .8 .3 1;0 0 1 1"{rep()}/>'
+               f'<animate attributeName="height" values="0;0;{ah + 8};{ah + 8}" keyTimes="{kt(0, .3, 1.5, T)}"'
+               f' calcMode="spline" keySplines="0 0 1 1;.25 .8 .3 1;0 0 1 1"{rep()}/></rect></clipPath></defs>')
+    out.append('<rect width="576" height="384" fill="url(#pfBg)"/>')
+    # drifting glow, like the site's gshift
+    out.append('<ellipse cx="140" cy="120" rx="240" ry="170" fill="url(#pfBlobA)"><animateTransform attributeName="transform"'
+               ' type="translate" values="0 0;60 40;0 0" dur="11s" repeatCount="indefinite"/></ellipse>'
+               '<ellipse cx="450" cy="300" rx="230" ry="170" fill="url(#pfBlobB)"><animateTransform attributeName="transform"'
+               ' type="translate" values="0 0;-70 -30;0 0" dur="13s" repeatCount="indefinite"/></ellipse>')
+    out.append(f'<g>{fade_out}')
+    # the portrait: rises out of the dark and settles from a slow zoom
+    pu, pw, ph = got["photo"]
+    s = aw / pw
+    cxp, cyp = ax + aw / 2, ay + ah / 2
+    zoom = (f'<animateTransform attributeName="transform" type="scale" values="1.18;1.18;1;1"'
+            f' keyTimes="{kt(0, .3, 3.2, T)}" calcMode="spline" keySplines="0 0 1 1;.2 .6 .3 1;0 0 1 1"{rep()}/>')
+    out.append(f'<g clip-path="url(#pfRise)"><g clip-path="url(#pfArch)"><g transform="translate({cxp} {cyp})"><g>{zoom}'
+               f'<image xlink:href="{pu}" x="{-aw / 2:.1f}" y="{-ph * s / 2 + 6:.1f}" width="{aw:.1f}" height="{ph * s:.1f}"/>'
+               '</g></g></g>'
+               f'<path d="{arch}" fill="none" stroke="#E8A5C0" stroke-opacity=".45" stroke-width="1.5"/></g>')
+    # the name lifts in, line by line
+    au, aw_, ah_ = got["ananya"]
+
+    def lift(t0):
+        return (f'<animateTransform attributeName="transform" type="translate" values="0 26;0 26;0 0;0 0"'
+                f' keyTimes="{kt(0, t0, t0 + .9, T)}" calcMode="spline" keySplines="0 0 1 1;.2 .8 .3 1;0 0 1 1"{rep()}/>'
+                f'<animate attributeName="opacity" values="0;0;1;1" keyTimes="{kt(0, t0, t0 + .7, T)}"{rep()}/>')
+    out.append(f'<g opacity="0">{lift(.9)}<image xlink:href="{au}" x="28" y="106" width="{aw_}" height="{ah_}"/></g>')
+    out.append(f'<g opacity="0">{lift(1.35)}<rect x="28" y="182" width="290" height="70" fill="url(#pfShim)"'
+               ' mask="url(#pfGos)"/></g>')
+    # the pill, with its green dot breathing
+    px_, py_ = ax + aw / 2, ay + ah + 26
+    out.append(f'<g transform="translate({px_} {py_})"><g><animateTransform attributeName="transform" type="scale"'
+               f' values="0;0;1.12;1;1" keyTimes="{kt(0, 2.1, 2.4, 2.55, T)}"{rep()}/>'
+               '<rect x="-96" y="-13" width="192" height="26" rx="13" fill="#1C1620" stroke="#3A2F40"/>'
+               '<circle cx="-82" cy="0" r="3.5" fill="#4ADE80"><animate attributeName="opacity" values="1;.25;1"'
+               ' dur="1.4s" repeatCount="indefinite"/></circle>'
+               '<circle cx="-82" cy="0" r="3.5" fill="none" stroke="#4ADE80"><animate attributeName="r" values="3.5;9"'
+               ' dur="1.4s" repeatCount="indefinite"/><animate attributeName="opacity" values=".8;0" dur="1.4s"'
+               ' repeatCount="indefinite"/></circle>'
+               '<text x="8" y="3.5" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9"'
+               ' letter-spacing="1.6" fill="#D9D2E4">OPEN TO OPPORTUNITIES</text></g></g>')
+    out.append('</g>')
+    # butterflies drifting across (the site's pink and white ones)
+    rnd = random.Random(14)
+    for i in range(7):
+        col = "#F472B6" if i % 3 else "#F5F0FF"
+        sz = rnd.uniform(.7, 1.25)
+        y0 = rnd.uniform(40, 360)
+        dur = rnd.uniform(9, 14)
+        ltr = i % 2 == 0
+        xa, xb = (-30, 610) if ltr else (610, -30)
+        path = (f'M{xa} {y0:.0f}C{(xa + xb) / 3:.0f} {y0 - 70:.0f} {2 * (xa + xb) / 3:.0f} {y0 + 70:.0f} {xb} {y0 - 20:.0f}')
+        flap = (f'<animateTransform attributeName="transform" type="scale" values="1 1;.25 1;1 1"'
+                f' dur="{rnd.uniform(.28, .4):.2f}s" repeatCount="indefinite"/>')
+        wings = (f'<path d="M0 0C-6 -9 -14 -9 -13 -2C-12 3 -5 3 0 0Z" fill="{col}"/>'
+                 f'<path d="M0 0C-5 4 -10 9 -6 10C-2 11 0 5 0 0Z" fill="{col}" opacity=".85"/>'
+                 f'<path d="M0 0C6 -9 14 -9 13 -2C12 3 5 3 0 0Z" fill="{col}"/>'
+                 f'<path d="M0 0C5 4 10 9 6 10C2 11 0 5 0 0Z" fill="{col}" opacity=".85"/>')
+        out.append(f'<g opacity=".9"><animateMotion path="{path}" dur="{dur:.1f}s" begin="{-rnd.uniform(0, dur):.1f}s"'
+                   f' repeatCount="indefinite"/><g transform="scale({sz:.2f})"><g>{flap}{wings}</g>'
+                   f'<rect x="-.8" y="-4" width="1.6" height="9" rx=".8" fill="#2A1F2E"/></g></g>')
+    # the heart cursor gliding, leaving a fading pink trail
+    hp = 'M90 330C160 250 230 330 300 250S420 160 330 120S180 160 120 220S60 320 90 330Z'
+    for j in range(6):
+        out.append(f'<circle r="{3.2 - j * .4:.1f}" fill="#E8A5C0" opacity="{.5 - j * .07:.2f}">'
+                   f'<animateMotion path="{hp}" dur="8s" begin="{-j * .09:.2f}s" repeatCount="indefinite"/></circle>')
+    out.append(f'<g><animateMotion path="{hp}" dur="8s" repeatCount="indefinite"/>'
+               '<path d="M0 4C-7 -1 -9 -6 -6 -9C-3 -11 0 -9 0 -6C0 -9 3 -11 6 -9C9 -6 7 -1 0 4Z" fill="#F472B6"'
+               ' stroke="#fff" stroke-opacity=".6" stroke-width=".8"/></g>')
+    out.append('</g>')
+    return "".join(out)
+
+
 ICON_SCENE = {"fln-animation-toolkit": (_scene_defs_stars, _scene_stars),
+              "Portfolio": (_scene_defs_pf, _scene_pf),
               "real-or-fake-sender": (_scene_defs_rf, _scene_rf),
               "think-ask-act": (_scene_defs_ta, _scene_ta),
               "calm-or-react": (_scene_defs_cr, _scene_cr),
@@ -1373,7 +1498,7 @@ ART_PHOTO = {"Competition-Zone": "proj-art-zone.png",
              # Optional: drop these files into assets/ and they replace the
              # drawn star / bee scenes and the plain Portfolio icon.
              "fln-animation-toolkit": "proj-art-fln.png",
-             "Portfolio": "proj-art-portfolio.png"}
+}
 _PHOTO_CACHE = {}
 
 
@@ -1467,7 +1592,7 @@ RING_GAP = 2.4                           # px of track between two slices
 # than an image that takes a few minutes to turn over on its own - raw.github
 # serves these with max-age=300, so a plain content change gets there by
 # itself.  Change the contents and wait; only bump if something is wedged.
-CARD_REV = "j"
+CARD_REV = "k"
 
 
 # The game repos are private, so the API hands back no languages for them.
@@ -1519,7 +1644,7 @@ def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
     <circle cx="{x + TEXT_X + 4}" cy="{y + 16}" r="3" fill="{'#00FF9C' if live else '#33534e'}"/>
     <text class="mono" x="{x + TEXT_X + 15}" y="{y + 20}" font-size="10.5"
           fill="#557a73">{esc(USER)}/{esc(repo)}</text>
-    <text class="mono" x="{x + CW - 15}" y="{y + 20}" font-size="9.5" text-anchor="end"
+    <text class="mono" x="{x + CW - 15}" y="{y + 20}" font-size="9" text-anchor="end"
           letter-spacing="1.2" fill="{'#00FF9C' if live else '#3f5f58'}"
           fill-opacity=".85">{'LIVE' if live else ''}</text>
 
@@ -1530,7 +1655,7 @@ def _card(i, repo, title, tag, blurb, meta, x=2, y=2):
     {pills}
     <text class="mono" x="{x + TEXT_X}" y="{y + 158}" font-size="10.5" fill="#557a73"
           xml:space="preserve">{('★ ' + str(meta['stars']) + '   ') if meta.get('stars') else ''}{esc(_ago(meta.get('pushed')))}</text>
-    <text class="mono" x="{x + CW - 15}" y="{y + 158}" font-size="9.5" text-anchor="end"
+    <text class="mono" x="{x + CW - 15}" y="{y + 158}" font-size="9" text-anchor="end"
           letter-spacing="1.3" fill="#3ddc97" fill-opacity=".75">{esc(tag)}</text>
 
     {_donut(x + RING_CX, y + RING_CY, RING_R, slices, 0.25 + i * 0.09)}
