@@ -1837,7 +1837,7 @@ TUMBLE_SHEET_PATH = os.path.join(_ASSETS, "leaf-tumble-sheet-v1.png")  # 8 x 256
 # spring lime, summer teal (the art as drawn), gold, orange, red, dry brown
 TUMBLE_LIFE = [1, 0, 2, 3, 4, 5]
 TUMBLE_CELL = 256
-OUTRO_WIPE = 3.2          # seconds for the storm to cross the panel: slow enough to watch
+OUTRO_WIPE = 2.9          # gust start -> the hero leaf covers the screen and the scene swaps
 OUTRO_FADE = 0.6          # the play screen fades back into the story's first frame
 PLAY_BTN_H = 176.0        # the button's height on screen
 PLAY_BTN_CX, PLAY_BTN_CY = 1086.0, 300.0
@@ -1995,9 +1995,11 @@ def story_outro(t_cut, T):
     t_cover = t_cut + OUTRO_WIPE
     rnd = random.Random(7)
 
-    # the curtain trails the storm's front edge; the play screen is clipped to it
-    edge_v = f"{px1 + 40:.1f};{px1 + 40:.1f};{px0:.1f};{px0:.1f}"
-    edge_v, edge_k = _keys(edge_v.split(";"), [0.0, t_cut, t_cover, T], T)
+    # The play screen is swapped in all at once, at the moment the hero leaf
+    # fills the whole panel; until then it is clipped away entirely.
+    t_switch = t_cover
+    edge_v, edge_k = _keys([f"{px1 + 40:.1f}", f"{px1 + 40:.1f}", f"{px0:.1f}", f"{px0:.1f}"],
+                           [0.0, t_switch - 0.01, t_switch, T], T)
     fade_v, fade_k = _keys(["0", "0", "1", "1", "0", "0"],
                            [0.0, t_cut, t_cut + 0.01, T - OUTRO_FADE, T - 0.01, T], T)
     curtain_anim = (f'<animate attributeName="x" dur="{T}s" repeatCount="indefinite"'
@@ -2005,7 +2007,7 @@ def story_outro(t_cut, T):
 
     # ---- the play screen ----
     faces, drawn_bump = _play_faces()
-    t_on = t_cut + OUTRO_WIPE * 0.55
+    t_on = t_switch + 0.3
     bonks, b = [], t_on + 1.4
     while b < T - OUTRO_FADE - 1.2:
         bonks.append(b)
@@ -2131,32 +2133,92 @@ def story_outro(t_cut, T):
               f'<rect x="{px0}" y="{py0}" width="{W}" height="{H}" fill="#081420"/>'
               f'{sky}{ground}{halo}{ring}{orbit_back}{coins}{button}{orbit_front}{her}</g>')
 
-    # ---- the storm: leaves riding just ahead of the curtain's edge ----
-    # The storm is a year going by: fresh leaves lead, the oldest trail.
-    leaves = ""
+    # ---- the gust: leaves on curved, swirling paths, with depth ----
+    # Near leaves are big, fast and bright; far ones small, slow and dim. The
+    # gust is a year going by: the first leaves in are spring green, the last
+    # ones dry brown.
     lives = [_tumble_leaf(70.0, r) for r in TUMBLE_LIFE]
-    for i in range(44):
-        y = py0 + (i + 0.5) * H / 44 + rnd.uniform(-14, 14)
-        lead = rnd.uniform(-60.0, 260.0)    # where it rides: <0 ahead of the edge, >0 behind
-        late = rnd.uniform(0.0, 0.3)
-        a, z = t_cut + late, t_cover + late + 0.5
-        x_a, x_z = px1 + 40 + lead, px0 - 260 + lead
-        wob = rnd.uniform(24, 60) * (1 if i % 2 else -1)
-        mid = (a + z) / 2
-        mv, mk = _keys([f"{x_a:.1f},{y:.1f}", f"{x_a:.1f},{y:.1f}",
-                        f"{(x_a + x_z) / 2:.1f},{y + wob:.1f}",
-                        f"{x_z:.1f},{y:.1f}", f"{x_z:.1f},{y:.1f}"],
-                       [0.0, a, mid, z, T], T)
-        size = rnd.uniform(0.7, 1.25)
-        age = (lead + 60.0) / 320.0 + rnd.uniform(-0.12, 0.12)    # 0 front, 1 back
-        frames = lives[min(len(lives) - 1, max(0, int(age * len(lives))))]
-        spin = flipbook(frames[i % len(frames):] + frames[:i % len(frames)],
-                        rnd.uniform(0.8, 1.2))
+    specs = []
+    for i in range(48):
+        d = rnd.random()                          # depth: 0 far .. 1 near
+        a = t_cut + rnd.uniform(0.0, 1.1)
+        dur = 2.7 - 1.1 * d + rnd.uniform(-0.15, 0.15)
+        specs.append((d, a, dur, i))
+    specs.sort()                                  # far leaves are drawn first
+    leaves = ""
+    for d, a, dur, i in specs:
+        z = a + dur
+        y0 = py0 + rnd.uniform(-20, H + 20)
+        y1 = y0 + rnd.uniform(-160, 120)
+        x_a, x_z = px1 + 120, px0 - 220
+        amp = rnd.uniform(60, 190) * (1 if i % 2 else -1)
+        path = (f"M {x_a:.0f},{y0:.0f} C {x_a - W * 0.35:.0f},{y0 - amp:.0f}"
+                f" {x_z + W * 0.35:.0f},{y1 + amp:.0f} {x_z:.0f},{y1:.0f}")
+        if i % 6 == 0:                            # some get caught in a little eddy
+            mx, my = px0 + W * rnd.uniform(0.35, 0.7), y0 + amp * 0.3
+            r = rnd.uniform(40, 80)
+            path = (f"M {x_a:.0f},{y0:.0f} Q {(x_a + mx) / 2:.0f},{y0 - amp:.0f} {mx:.0f},{my:.0f}"
+                    f" a {r:.0f},{r:.0f} 0 1,1 0,{2 * r:.0f} a {r:.0f},{r:.0f} 0 1,1 0,{-2 * r:.0f}"
+                    f" Q {(mx + x_z) / 2:.0f},{my + amp:.0f} {x_z:.0f},{y1:.0f}")
+        kt = f"0;{a / T:.5f};{min(z, T - 0.01) / T:.5f};1"
+        stage = min(len(lives) - 1, int((a - t_cut) / 1.1 * len(lives)))
+        frames = lives[stage]
+        k = i % len(frames)
+        spin = flipbook(frames[k:] + frames[:k], rnd.uniform(0.7, 1.1))
+        size = 0.55 + 0.95 * d
         leaves += _ep_shown(
-            f'<g><animateTransform attributeName="transform" type="translate"'
-            f' dur="{T}s" repeatCount="indefinite" calcMode="linear" values="{mv}"'
-            f' keyTimes="{mk}"/><g transform="scale({size:.2f}) rotate({rnd.uniform(-40, 40):.0f})">'
-            f'{spin}</g></g>', [(a, z)], T)
+            f'<g opacity="{0.45 + 0.55 * d:.2f}"><animateMotion path="{path}" dur="{T}s"'
+            f' repeatCount="indefinite" calcMode="linear" keyPoints="0;0;1;1" keyTimes="{kt}"/>'
+            f'<g transform="scale({size:.2f}) rotate({rnd.uniform(-30, 30):.0f})">{spin}</g></g>',
+            [(a, z)], T)
+
+    # ---- the hero leaf: one leaf comes out of the gust towards the camera ----
+    # It drifts to the middle tumbling, turns face on, grows until it fills the
+    # whole panel (the scene is swapped under it then), and rushes past.
+    cx, cy = px0 + W / 2, py0 + H / 2
+    h_in, h_mid, h_grow = t_cut + 0.35, t_cut + 1.45, t_cut + 1.85
+    h_gone = t_switch + 0.6
+    hero_frames = _strip_frames("herotumble", TUMBLE_SHEET_PATH, TUMBLE_CELL, 8, 0)
+    if hero_frames:
+        ref = max(f[2] for f in hero_frames)
+        tumble = [_strip_use(f, 80.0, TUMBLE_CELL, ref) for f in hero_frames]
+        face = tumble[0]
+    else:
+        tumble = lives[1]
+        face = tumble[0]
+    # where it is: in from the upper right, curving to the centre, then still
+    mv, mk = _keys([f"{px1 + 100:.0f},{py0 + 60:.0f}", f"{px1 + 100:.0f},{py0 + 60:.0f}",
+                    f"{px0 + W * 0.75:.0f},{py0 + 40:.0f}", f"{cx:.0f},{cy:.0f}",
+                    f"{cx:.0f},{cy:.0f}"],
+                   [0.0, h_in, (h_in + h_mid) / 2, h_mid, T], T)
+    # how big: 1 while it travels, then an accelerating zoom (exponential, so it
+    # feels like it is coming at you), covering the panel at t_switch
+    COVER, PAST = 70.0, 140.0
+    sv, st = ["1 1", "1 1"], [0.0, h_grow]
+    n = 14
+    for j in range(1, n + 1):
+        f = j / n
+        k = math.exp(math.log(COVER) * f ** 1.6)
+        sv.append(f"{k:.3f} {k:.3f}")
+        st.append(h_grow + (t_switch - h_grow) * f)
+    sv += [f"{PAST:.1f} {PAST:.1f}", f"{PAST:.1f} {PAST:.1f}"]
+    st += [h_gone, T]
+    sv_, sk_ = _keys(sv, st, T)
+    rv, rk = _keys(["0", "0", "28", "28"], [0.0, h_grow, h_gone, T], T)
+    ov, ok = _keys(["0", "0", "1", "1", "0", "0"],
+                   [0.0, h_in, h_in + 0.05, t_switch + 0.08, h_gone, T], T)
+    look = (sequence([flipbook(tumble, 0.9)], h_in, h_grow, T)
+            + sequence([face], h_grow, h_gone, T))
+    hero = (f'<g opacity="0" style="image-rendering:pixelated"><animate attributeName="opacity" dur="{T}s" repeatCount="indefinite"'
+            f' calcMode="linear" values="{ov}" keyTimes="{ok}"/>'
+            f'<g><animateTransform attributeName="transform" type="translate" dur="{T}s"'
+            f' repeatCount="indefinite" calcMode="linear" values="{mv}" keyTimes="{mk}"/>'
+            f'<g><animateTransform attributeName="transform" type="scale" dur="{T}s"'
+            f' repeatCount="indefinite" calcMode="linear" values="{sv_}" keyTimes="{sk_}"/>'
+            f'<g><animateTransform attributeName="transform" type="rotate" dur="{T}s"'
+            f' repeatCount="indefinite" calcMode="linear" values="{rv}" keyTimes="{rk}"/>'
+            f'{look}</g></g></g></g>')
+    leaves += hero
 
     return (f'<g opacity="0"><animate attributeName="opacity" dur="{T}s"'
             f' repeatCount="indefinite" calcMode="linear" values="{fade_v}"'
@@ -2497,9 +2559,9 @@ if __name__ == "__main__":
     if g.get("weeks"):
         # Every sprite revision gets a fresh URL so GitHub's image proxy cannot
         # keep serving a superseded gait after the output branch is rebuilt.
-        open(os.path.join(out_dir, "runner-v21.svg"), "w", encoding="utf-8").write(
+        open(os.path.join(out_dir, "runner-v22.svg"), "w", encoding="utf-8").write(
             build_runner_panel(g["weeks"], total=g.get("contributions")))
-        print("wrote runner-v21.svg")
+        print("wrote runner-v22.svg")
     else:
         print("no calendar data - runner panel skipped")
     # The playable game, served by Pages at /play/: the page, the art it
