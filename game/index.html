@@ -24,7 +24,7 @@
 <body>
 <div id="wrap"><canvas id="c" width="1800" height="570" tabindex="0" aria-label="Commit Runner game"></canvas></div>
 <div class="bar">
-  <span>space / ↑ / tap: jump (hold for higher) · p: pause · m: sound · stomp bugs, head-butt &lt;/&gt; blocks</span>
+  <span>space / tap: jump · hold: higher · p: pause · m: sound</span>
   <a href="https://github.com/ananya-goswami">← back to GitHub</a>
 </div>
 <script>
@@ -124,24 +124,6 @@ function levelAt(col, row) { return weeks[((col % weeks.length) + weeks.length) 
 // a stable random number per column, so the level is the same every frame
 function rnd(col, salt) { const x = Math.sin(col * 12.9898 + salt * 78.233) * 43758.5453; return x - Math.floor(x); }
 
-// the background: a code editor scrolling slowly behind the graph
-const CODE = [
-  "const streak = commits.filter(c => c.day === today).length;",
-  "git commit -m \"feat: ship the thing\"",
-  "if (bug) { fix(bug); test(); push(); }",
-  "export default function Game({ grade }) {",
-  "await deploy({ env: 'prod', tablets: 'low-end' });",
-  "// TODO: sleep",
-  "for (const week of contributions) render(week);",
-  "npm run build && npm run test",
-  "fetch('/api/claude', { method: 'POST', body })",
-  "while (alive) { run(); jump(); learn(); }",
-  "git rebase -i HEAD~3",
-  "const lang = 'hi-IN'; // bilingual by default",
-  "n8n.trigger('on-commit').then(notify);",
-  "return <Level kg={0} class={9} />;",
-];
-
 // ---------------------------------------------------------------- level features, made per column
 // Blocks sit at heights a normal jump reaches (rows 4-6), with the odd one in
 // row 3 that needs a held jump. Every 9th block hides the PR-approved leaf.
@@ -161,19 +143,25 @@ function features(col) {
       let row = [6, 5, 4, 4, 5][Math.floor(rnd(col, 2) * 5)];
       if (rnd(col, 3) < 0.12) row = 3;
       blockCount++;
-      f.block = { row, state: 0, bump: 0, kind: blockCount % 9 === 0 ? "leaf" : "coin" };
+      const kind = blockCount % 9 === 0 ? "leaf" : rnd(col, 8) < 0.08 ? "gold" : "coin";
+      f.block = { row, state: 0, bump: 0, kind };
+    } else if (!near && rnd(col, 9) < 0.05) {
+      // a hidden commit: an invisible block that only shows when she hits it
+      f.block = { row: 6, state: 0, bump: 0, kind: "coin", hidden: true };
     }
     const prevPlat = [1, 2, 3, 4, 5, 6, 7].some(k => { const p = feat.get(col - k); return p && p.plat; });
-    if (!prevPlat && !f.block && rnd(col, 4) < 0.09) {
+    if (!prevPlat && !f.block && rnd(col, 4) < 0.04) {
       const len = 3 + Math.floor(rnd(col, 5) * 3);
       const y = PLAT_Y[Math.floor(rnd(col, 6) * PLAT_Y.length)];
       f.plat = { x0: col * PITCH, x1: col * PITCH + len * PITCH - (PITCH - CELL), y };
       for (let k = 0; k < len; k++) f.coins.push({ x: col * PITCH + k * PITCH + CELL / 2, y: y - 30, got: false });
-    } else if (!f.block && rnd(col, 7) < 0.1) {
+    } else if (!f.block && rnd(col, 7) < 0.02) {
       // a short arc of coins in the open, to pull her into a jump
       for (let k = 0; k < 3; k++) f.coins.push({ x: col * PITCH + k * 26, y: GROUND - 120 - (k === 1 ? 26 : 0), got: false });
     }
   }
+  // a rare cup of coffee, floating at jump height
+  if (col > 30 && !f.plat && rnd(col, 10) < 0.012) f.coffee = { x: col * PITCH + CELL / 2, y: GROUND - 150, got: false };
   feat.set(col, f);
   if (feat.size > 600) feat.delete(feat.keys().next().value);
   return f;
@@ -184,6 +172,8 @@ const P = { x: 300, y: GROUND, vy: 0, h: 110, w: 46, onGround: true, hold: 0, sh
 let state = "title", t = 0, speed = 360, dist = 0, coins = 0, fixed = 0, streak = 0, scroll = 0, version = 0;
 let enemies = [], pops = [], leaves = [], parts = [], texts = [], nextEnemy = 1.2, flash = 0, paused = false;
 let bonus = 0, shake = 0, banner = null, lit = new Map(), killer = null, overT = 0;
+// surprises: one random event at a time, plus timed power-ups
+let ev = null, nextEv = 18, coinMult = 1, gravMul = 1, caffeine = 0, god = 0, drops = [], keybuf = "";
 const GRAV = 2600, JUMP_V = 980, HOLD_G = 0.45, MAX_HOLD = 0.22;
 const DEPLOY_EVERY = 250;            // metres between releases
 
@@ -192,8 +182,49 @@ function reset() {
   t = 0; speed = 360; dist = 0; coins = 0; fixed = 0; streak = 0; scroll = 0; version = 0;
   enemies = []; pops = []; leaves = []; parts = []; texts = []; nextEnemy = 1.2; flash = 0;
   bonus = 0; shake = 0; banner = null; lit = new Map(); killer = null; feat.clear(); blockCount = 0;
+  ev = null; nextEv = 18; coinMult = 1; gravMul = 1; caffeine = 0; god = 0; drops = [];
 }
 const metres = () => Math.floor(dist / 40);
+const col0 = () => Math.floor((scroll + P.x) / PITCH);
+
+// ---------------------------------------------------------------- random events
+// Every 20-35 s of play, one of these takes over for a few seconds.
+const EVENTS = {
+  incident: { dur: 7, text: "🚨 prod incident: three bugs incoming" },
+  hackathon: { dur: 8, text: "hackathon: every commit counts double" },
+  lowgrav:  { dur: 7, text: "zero-gravity refactor" },
+};
+function startEvent(kind) {
+  ev = { kind, age: 0, dur: EVENTS[kind].dur, alive: true };
+  banner = { text: EVENTS[kind].text, age: 0 };
+  if (kind === "incident") {
+    SFX.hurt();
+    const tags = ["P0 bug", "500 error", "memory leak"];
+    for (let i = 0; i < 3; i++) {
+      const img = S.snake[0], h = 52, w = img ? img.width * h / img.height * 0.8 : 54;
+      enemies.push({ kind: "snake", x: W + 80 + i * 300, walk: 70, w, h, dead: 0, tag: tags[i] });
+    }
+    nextEnemy = 4;
+  }
+  if (kind === "hackathon") { coinMult = 2; SFX.deploy(); }
+  if (kind === "lowgrav") { gravMul = 0.5; SFX.deploy(); }
+}
+function endEvent() {
+  if (ev.kind === "incident" && ev.alive) { bonus += 100; say(W / 2, 200, "incident resolved +100", "#20D898", 28); SFX.deploy(); }
+  coinMult = 1; gravMul = 1; ev = null; nextEv = 20 + Math.random() * 15;
+}
+function runEvents(dt) {
+  if (ev) {
+    ev.age += dt;
+    if (ev.kind === "incident" && ev.age < 2 && Math.floor(ev.age * 4) !== Math.floor((ev.age - dt) * 4)) beep(880, 660, 0.18, "square", 0.04);
+    if (ev.kind === "hackathon" && Math.random() < dt * 7)
+      drops.push({ x: scroll + 500 + Math.random() * 1200, y: -20, vy: 0, got: false });
+    if (ev.age >= ev.dur) endEvent();
+    return;
+  }
+  nextEv -= dt;
+  if (nextEv <= 0) startEvent(["incident", "hackathon", "lowgrav"][Math.floor(Math.random() * 3)]);
+}
 function score() { return metres() + coins * 10 + fixed * 25 + bonus; }
 
 // ---------------------------------------------------------------- effects
@@ -229,6 +260,13 @@ document.addEventListener("keydown", e => {
   if (JUMP_KEYS.includes(e.code)) { e.preventDefault(); if (!e.repeat) press(); }
   if (e.code === "KeyP" || e.code === "Escape") { if (state === "play") paused = !paused; }
   if (e.code === "KeyM") { muted = !muted; saveMute(); }
+  if (e.key && e.key.length === 1) {
+    keybuf = (keybuf + e.key.toLowerCase()).slice(-4);
+    if (keybuf === "sudo" && state === "play") {
+      god = 6; SFX.power(); flash = 0.2; keybuf = "";
+      banner = { text: "sudo: permission granted", age: 0 };
+    }
+  }
 });
 document.addEventListener("keyup", e => { if (JUMP_KEYS.includes(e.code)) release(); });
 cv.addEventListener("pointerdown", e => { e.preventDefault(); cv.focus(); press(); });
@@ -258,7 +296,15 @@ function hitBlock(c, b) {
   lit.set(c + "," + b.row, 1);                  // her new commit lights its square
   for (let r = 0; r < 7; r++) if (r !== b.row) lit.set(c + "," + r, Math.max(lit.get(c + "," + r) || 0, 0.001));
   if (b.kind === "leaf") { leaves.push({ x: bx, y: by - 10, vy: -380, got: false }); say(bx - scroll, by - 30, "PR opened", "#CFEAE3", 18); }
-  else { coins++; pops.push({ x: bx, y: by - 6, age: 0 }); say(bx - scroll, by - 40, "+1 commit", "#FFD24A", 18); SFX.coin(); }
+  else if (b.kind === "gold") {
+    // a golden commit: five coins in a fountain
+    for (let i = 0; i < 5; i++) pops.push({ x: bx + (i - 2) * 14, y: by - 6, age: -i * 0.09 });
+    coins += 5 * coinMult; SFX.power(); shake = 0.1;
+    say(bx - scroll, by - 44, `golden commit +${5 * coinMult}`, "#FFD24A", 20);
+  } else {
+    coins += coinMult; pops.push({ x: bx, y: by - 6, age: 0 }); SFX.coin();
+    say(bx - scroll, by - 40, b.hidden ? "hidden commit found!" : `+${coinMult}`, "#FFD24A", 18);
+  }
 }
 
 function die(e) {
@@ -288,7 +334,7 @@ function update(dt) {
   if (state !== "play" || paused) return;
 
   // steady ramp, plus a step at every release
-  speed = Math.min(660, 360 + t * 4 + version * 25);
+  speed = Math.min(660, 360 + t * 4 + version * 25) * (caffeine > 0 ? 1.35 : 1);
   const dx = speed * dt;
   scroll += dx; dist += dx;
   if (metres() >= (version + 1) * DEPLOY_EVERY) {
@@ -302,7 +348,7 @@ function update(dt) {
     P.onGround = false; P.plat = null; P.vy = 0;          // walked off the end
   }
   if (!P.onGround) {
-    let g = GRAV;
+    let g = GRAV * gravMul;
     if (down && P.vy < 0 && P.hold < MAX_HOLD) { g *= HOLD_G; P.hold += dt; }
     P.vy += g * dt;
     const prevHead = P.y - P.h;
@@ -334,15 +380,36 @@ function update(dt) {
   for (const f of feat.values()) if (f.block && f.block.bump > 0) f.block.bump -= dt;
   for (const p of pops) p.age += dt;
   pops = pops.filter(p => p.age < 0.6);
+  runEvents(dt);
+  if (caffeine > 0) caffeine -= dt;
+  if (god > 0) god -= dt;
+
+  // coffee: five seconds of caffeinated sprinting, bugs bounce off her
+  for (let c = col0() - 1; c <= col0() + 1; c++) {
+    const k = features(c).coffee;
+    if (k && !k.got && Math.abs(k.x - scroll - P.x) < 36 && k.y > P.y - P.h - 20 && k.y < P.y + 10) {
+      k.got = true; caffeine = 5; SFX.power(); flash = 0.15;
+      banner = { text: "☕ caffeinated: nothing can stop her", age: 0 };
+    }
+  }
+  // hackathon coin rain
+  for (const d of drops) {
+    if (!d.got) { d.vy = Math.min(d.vy + 900 * dt, 520); d.y = Math.min(d.y + d.vy * dt, GROUND - 60); }
+    const sx = d.x - scroll;
+    if (!d.got && Math.abs(sx - P.x) < 34 && d.y > P.y - P.h - 16 && d.y < P.y + 10) {
+      d.got = true; coins += coinMult; SFX.coin(); say(sx, d.y - 20, `+${coinMult}`, "#FFD24A", 16);
+    }
+  }
+  drops = drops.filter(d => !d.got && d.x - scroll > -40);
 
   // floating commit coins
-  const col = Math.floor((scroll + P.x) / PITCH);
+  const col = col0();
   for (let c = col - 2; c <= col + 2; c++) for (const k of features(c).coins) {
     if (k.got) continue;
     const sx = k.x - scroll;
     if (Math.abs(sx - P.x) < 34 && k.y > P.y - P.h - 16 && k.y < P.y + 10) {
-      k.got = true; coins++; SFX.coin(); burst(sx, k.y, 6, ["#FFD24A", "#FFF6C4"]);
-      say(sx, k.y - 20, "+1", "#FFD24A", 18);
+      k.got = true; coins += coinMult; SFX.coin(); burst(sx, k.y, 6, ["#FFD24A", "#FFF6C4"]);
+      say(sx, k.y - 20, `+${coinMult}`, "#FFD24A", 18);
     }
   }
 
@@ -360,26 +427,51 @@ function update(dt) {
   nextEnemy -= dt; if (nextEnemy <= 0) spawnEnemy();
   for (const e of enemies) {
     if (e.dead) { e.dead += dt; e.x -= dx; continue; }
+    if (e.shell) {
+      // a stomped turtle's shell: run into it and it slides off, taking bugs with it
+      if (!e.kick) {
+        e.x -= dx;
+        if (Math.abs(e.x - P.x) < (e.w + P.w) / 2 - 6 && P.y > GROUND - e.h - 4 && e.cool <= 0) {
+          e.kick = true; e.combo = 0; SFX.stomp(); say(e.x, GROUND - 90, "kick!", "#CFEAE3", 20);
+        }
+        e.cool -= dt;
+      } else {
+        e.x += 760 * dt;
+        for (const o of enemies) if (o !== e && !o.dead && !o.shell && Math.abs(o.x - e.x) < (o.w + e.w) / 2) {
+          o.dead = 0.001; fixed++; e.combo++; bonus += 50 * e.combo; SFX.stomp();
+          burst(o.x, GROUND - o.h, 8, ["#9BEFD9", "#20D898"], ["0", "1"]);
+          say(o.x, GROUND - o.h - 30, `shell combo x${e.combo}`, "#9BEFD9", 20);
+        }
+      }
+      continue;
+    }
     e.x -= dx + e.walk * dt;
     const overlapX = Math.abs(e.x - P.x) < (e.w + P.w) / 2 - 8;
     const feet = P.y, top = GROUND - e.h;
     if (overlapX && feet > top + 6) {
       // a stomp is judged by where her feet were last frame, so a fast fall
       // (up to ~35 px a frame) cannot skip past the top of the enemy
+      if (caffeine > 0 || god > 0) {
+        e.dead = 0.001; fixed++; streak++; SFX.stomp(); shake = 0.1;
+        burst(e.x, top, 8, ["#FFD24A", "#9BEFD9"], ["0", "1"]); say(e.x, top - 30, "smashed ✓", "#FFD24A", 20);
+        continue;
+      }
       if (P.vy > 0 && prevFeet <= top + 14) {
-        e.dead = 0.001; fixed++; streak++; P.vy = -620; P.onGround = false; P.plat = null; P.hold = MAX_HOLD;
+        if (e.kind === "turtle") { e.shell = true; e.kick = false; e.cool = 0.25; e.h = 34; }
+        else e.dead = 0.001;
+        fixed++; streak++; P.vy = -620; P.onGround = false; P.plat = null; P.hold = MAX_HOLD;
         SFX.stomp(); shake = 0.12;
-        burst(e.x, top, 12, ["#9BEFD9", "#20D898"], ["0", "1", "{", "}"]);
-        say(e.x, top - 30, streak > 1 ? `fixed ✓  x${streak}` : "fixed ✓", "#20D898", 22);
+        burst(e.x, top, 8, ["#9BEFD9", "#20D898"], ["0", "1"]);
+        say(e.x, top - 30, streak >= 5 ? `on fire x${streak}` : streak > 1 ? `fixed ✓ x${streak}` : "fixed ✓", streak >= 5 ? "#FFD24A" : "#20D898", 22);
         say(e.x, top - 56, `+${25 * Math.max(1, streak)}`, "#CFEAE3", 18);
         bonus += 25 * Math.max(0, streak - 1);   // a chain of fixes pays more
       } else if (P.hurt <= 0) {
         if (P.shield) { P.shield = 0; P.hurt = 1.0; flash = 0.3; shake = 0.25; e.dead = 0.001; streak = 0; SFX.hurt(); say(P.x, P.y - P.h - 20, "review saved you", "#FFD24A", 20); }
-        else die(e);
+        else { if (ev && ev.kind === "incident") ev.alive = false; die(e); }
       }
     }
   }
-  enemies = enemies.filter(e => e.x > -150 && e.dead < 0.6);
+  enemies = enemies.filter(e => e.x > -150 && e.x < W + 1000 && e.dead < 0.6);
   if (P.hurt > 0) P.hurt -= dt;
 }
 
@@ -397,28 +489,12 @@ function frameAt(list, weights, period, time) {
   return list[list.length - 1];
 }
 const EVEN = n => Array(n).fill(1);
-const stars = Array.from({ length: 30 }, (_, k) => [60 + (k * 331) % (W - 120), 70 + (k * 137) % 400, k]);
-
-function drawCode() {
-  // far layer: an editor drifting at a quarter of the speed, very faint
-  ctx.font = `500 15px ${MONO}`; ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
-  const off = scroll * 0.25, LW = 900;
-  for (let r = 0; r < 26; r++) {
-    const y = 24 + r * 21;
-    for (let k = -1; k < 3; k++) {
-      const i = Math.floor(off / LW) + k, line = CODE[((i * 5 + r * 3) % CODE.length + CODE.length) % CODE.length];
-      const x = i * LW - off + (r * 37) % 120;
-      ctx.fillStyle = r % 3 === 0 ? "rgba(32,216,152,.09)" : "rgba(155,239,217,.06)";
-      ctx.fillText(`${String(r + 1 + Math.max(0, i) * 26).padStart(3, " ")}  ${line}`, x, y);
-    }
-  }
-}
+const stars = Array.from({ length: 16 }, (_, k) => [60 + (k * 331) % (W - 120), 70 + (k * 137) % 400, k]);
 
 function draw() {
   ctx.save();
   if (shake > 0) ctx.translate((Math.random() - 0.5) * 14 * shake / 0.45, (Math.random() - 0.5) * 10 * shake / 0.45);
   ctx.fillStyle = "#081420"; ctx.fillRect(-20, -20, W + 40, H + 40);
-  drawCode();
   for (const [x, y, k] of stars) { ctx.globalAlpha = 0.12 + 0.3 * (0.5 + 0.5 * Math.sin(t * 1.5 + k)); ctx.fillStyle = "#9BEFD9"; ctx.fillRect(x, y, 3, 3); }
   ctx.globalAlpha = 1;
 
@@ -426,24 +502,26 @@ function draw() {
   const c0 = Math.floor(scroll / PITCH) - 1, c1 = c0 + Math.ceil(W / PITCH) + 2;
   for (let c = c0; c <= c1; c++) {
     const x = c * PITCH - scroll, f = features(c), b = f.block;
+    const shown = b && !(b.hidden && !b.state);
     for (let r = 0; r < 7; r++) {
-      if (b && b.row === r) continue;
+      if (shown && b.row === r) continue;
       const y = GY0 + r * PITCH, l = lit.get(c + "," + r);
       if (l === 1) {
         ctx.shadowColor = "#20D898"; ctx.shadowBlur = 14; rrect(x, y, CELL, CELL, 7, "#9BEFD9"); ctx.shadowBlur = 0;
       } else {
-        rrect(x, y, CELL, CELL, 7, LEVELS[levelAt(c, r)]);
+        ctx.globalAlpha = 0.5; rrect(x, y, CELL, CELL, 7, LEVELS[levelAt(c, r)]); ctx.globalAlpha = 1;
         if (l !== undefined) { ctx.globalAlpha = Math.max(0, 0.6 - l) ; rrect(x, y, CELL, CELL, 7, "#20D898"); ctx.globalAlpha = 1; }
       }
     }
-    if (b) {
+    if (shown) {
       const y = GY0 + b.row * PITCH - (b.bump > 0 ? Math.sin((0.25 - b.bump) / 0.25 * Math.PI) * 14 : 0);
       const img = b.state ? (b.bump > 0.12 ? S.block[1] : S.block[2]) : S.block[0];
-      if (!b.state) { ctx.globalAlpha = 0.35 + 0.25 * Math.sin(t * 4 + c); ctx.shadowColor = "#20D898"; ctx.shadowBlur = 16; }
-      if (img) ctx.drawImage(img, x - CELL * 0.12, y - CELL * 0.12, CELL * 1.24, CELL * 1.24);
-      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+      const gold = b.kind === "gold" && !b.state;
+      if (gold) ctx.filter = "sepia(1) saturate(5) hue-rotate(-12deg) brightness(1.15)";
+      if (!b.state) { ctx.shadowColor = gold ? "#FFD24A" : "#20D898"; ctx.shadowBlur = 5 + 3 * Math.sin(t * 4 + c); }
       if (img) ctx.drawImage(img, x - CELL * 0.12, y - CELL * 0.12, CELL * 1.24, CELL * 1.24);
       else rrect(x, y, CELL, CELL, 7, b.state ? "#0a6b5c" : "#20D898");
+      ctx.shadowBlur = 0; ctx.filter = "none";
     }
     // platforms: a run of lit squares she can stand on
     if (f.plat) {
@@ -455,13 +533,19 @@ function draw() {
         rrect(sx + 3, pl.y + 2, CELL - 6, 5, 3, "#9BEFD9");
       }
     }
+    if (f.coffee && !f.coffee.got) drawCoffee(f.coffee.x - scroll, f.coffee.y + Math.sin(t * 3) * 4);
     for (const k of f.coins) if (!k.got) {
       const img = frameAt(S.coin, [3, 1, 1, 1], 1.4, t + c * 0.3);
       if (img) sprite(img, k.x - scroll, k.y + 13 + Math.sin(t * 3 + c) * 3, 26);
     }
   }
+  for (const d of drops) {
+    const img = frameAt(S.coin, [3, 1, 1, 1], 1.2, t + d.x * 0.01);
+    if (img) sprite(img, d.x - scroll, d.y + 13, 24);
+  }
   // coins popping out of blocks
   for (const p of pops) {
+    if (p.age < 0) continue;
     const y = p.y - Math.sin(Math.min(1, p.age / 0.6) * Math.PI) * 90;
     const img = frameAt(S.coin, [1,1,1,1], 0.4, p.age);
     if (img) sprite(img, p.x - scroll, y + 14, 28);
@@ -475,18 +559,15 @@ function draw() {
   for (const l of leaves) sprite(frameAt(S.leaf, [1,1,1], 0.6, t), l.x - scroll, l.y + 4, 30);
 
   // bugs, each with its tag
-  ctx.font = `600 15px ${MONO}`; ctx.textAlign = "center";
+  ctx.font = `600 14px ${MONO}`; ctx.textAlign = "center";
   for (const e of enemies) {
     const squash = e.dead ? Math.max(0.25, 1 - e.dead * 3) : 1;
     ctx.save(); ctx.translate(e.x, GROUND + 4); ctx.scale(1, squash);
-    if (e.kind === "turtle") sprite(e.dead ? S.shell[0] : frameAt(S.turtle, EVEN(6), 0.62, t), 0, 0, e.h);
+    if (e.shell) { if (e.kick) ctx.rotate(Math.sin(t * 40) * 0.08); sprite(S.shell[0], 0, 0, 34); }
+    else if (e.kind === "turtle") sprite(e.dead ? S.shell[0] : frameAt(S.turtle, EVEN(6), 0.62, t), 0, 0, e.h);
     else sprite(frameAt(S.snake, EVEN(8), 0.8, t), 0, 0, e.h);
     ctx.restore();
-    if (!e.dead) {
-      const label = e.tag, tw = ctx.measureText(label).width + 14, ty = GROUND - e.h - 26;
-      rrect(e.x - tw / 2, ty - 15, tw, 22, 5, "rgba(120,20,40,.85)");
-      ctx.fillStyle = "#FFD0D8"; ctx.fillText(label, e.x, ty + 1);
-    }
+    if (!e.dead && !e.shell) { ctx.fillStyle = "rgba(255,143,163,.8)"; ctx.fillText(e.tag, e.x, GROUND - e.h - 14); }
   }
   ctx.textAlign = "left";
 
@@ -505,9 +586,15 @@ function draw() {
       ctx.save(); ctx.strokeStyle = `rgba(155,239,217,${0.5 + 0.3 * Math.sin(t * 6)})`; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.ellipse(P.x, P.y - P.h / 2, 46, 64, 0, 0, 7); ctx.stroke(); ctx.restore();
     }
+    if ((caffeine > 0 || god > 0) && state === "play") {
+      for (let i = 3; i >= 1; i--) { ctx.globalAlpha = 0.12 * (4 - i); sprite(img, P.x - i * 22, P.y, P.h); }
+      ctx.globalAlpha = 1;
+      ctx.shadowColor = god > 0 ? `hsl(${(t * 300) % 360},90%,65%)` : "#FFD24A"; ctx.shadowBlur = 18;
+    }
     if (state === "dying" || state === "over") {
       ctx.save(); ctx.translate(P.x, P.y - P.h / 2); ctx.rotate(P.rot); sprite(img, 0, P.h / 2, P.h); ctx.restore();
     } else sprite(img, P.x, P.y, P.h);
+    ctx.shadowBlur = 0;
   }
 
   // particles: dust, sparks and flying bits
@@ -524,12 +611,25 @@ function draw() {
   ctx.globalAlpha = 1; ctx.textAlign = "left";
   ctx.restore();
 
+  if (ev && ev.kind === "incident" && ev.age < 3) {
+    ctx.fillStyle = `rgba(255,60,90,${0.08 + 0.06 * Math.sin(ev.age * 12)})`; ctx.fillRect(0, 0, W, H);
+  }
   hud();
+  if (ev) {   // what is going on, and how long it lasts
+    const k = 1 - ev.age / ev.dur;
+    rrect(W / 2 - 120, 160, 240, 4, 2, "rgba(155,239,217,.15)");
+    rrect(W / 2 - 120, 160, 240 * k, 4, 2, ev.kind === "incident" ? "#FF6B81" : "#9BEFD9");
+  }
+  for (const [tm, c] of [[caffeine, "#FFD24A"], [god, "#CFEAE3"]]) if (tm > 0 && state === "play") {
+    rrect(P.x - 30, P.y - P.h - 18, 60 * Math.min(1, tm / 5), 4, 2, c);
+  }
   if (banner) {
     const a = banner.age < 0.2 ? banner.age / 0.2 : banner.age > 1.7 ? Math.max(0, (2.2 - banner.age) / 0.5) : 1;
     ctx.globalAlpha = a; ctx.textAlign = "center";
-    rrect(W / 2 - 230, 96, 460, 54, 10, "rgba(8,20,32,.85)");
-    ctx.fillStyle = "#9BEFD9"; ctx.font = `700 30px ${MONO}`; ctx.textBaseline = "middle";
+    ctx.font = `700 28px ${MONO}`; ctx.textBaseline = "middle";
+    const bw = ctx.measureText(banner.text).width + 60;
+    rrect(W / 2 - bw / 2, 96, bw, 52, 10, "rgba(8,20,32,.88)");
+    ctx.fillStyle = "#9BEFD9";
     ctx.fillText(banner.text, W / 2, 123); ctx.textAlign = "left"; ctx.globalAlpha = 1;
   }
   if (flash > 0) { ctx.fillStyle = `rgba(155,239,217,${flash})`; ctx.fillRect(0, 0, W, H); }
@@ -537,31 +637,34 @@ function draw() {
 }
 
 function hud() {
-  ctx.textBaseline = "middle";
-  rrect(18, 14, 760, 42, 8, "rgba(5,12,20,.72)");
-  ctx.font = `600 22px ${MONO}`; ctx.textAlign = "left";
+  // minimal: commits on the left, score on the right, the rest only when it matters
+  ctx.textBaseline = "middle"; ctx.textAlign = "left";
   const coinImg = frameAt(S.coin, [3,1,1,1], 1.6, t);
-  if (coinImg) sprite(coinImg, 46, 49, 26);
-  const items = [["commits", coins, "#FFD24A"], ["fixed", fixed, "#20D898"], ["streak", streak, "#CFEAE3"]];
-  let x = 70;
-  for (const [k, v, c] of items) {
-    ctx.fillStyle = "#4e6b66"; ctx.fillText(k, x, 36); x += ctx.measureText(k + " ").width;
-    ctx.fillStyle = c; ctx.fillText(String(v), x, 36); x += ctx.measureText(String(v) + "   ").width;
-  }
-  const ok = state !== "dying" && state !== "over";
-  ctx.fillStyle = "#4e6b66"; ctx.fillText("build", x, 36); x += ctx.measureText("build ").width;
-  ctx.fillStyle = ok ? "#20D898" : "#FF6B81"; ctx.fillText(ok ? "✓ passing" : "✗ failed", x, 36);
-  if (P.shield && ok) { x += ctx.measureText("✓ passing   ").width; ctx.fillStyle = "#9BEFD9"; ctx.fillText("PR ✓", x, 36); }
-
+  if (coinImg) sprite(coinImg, 40, 46, 26);
+  ctx.fillStyle = "#CFEAE3"; ctx.font = `700 26px ${MONO}`; ctx.fillText(String(coins), 62, 34);
+  let x = 62 + ctx.measureText(String(coins)).width + 26;
+  ctx.font = `600 18px ${MONO}`;
+  if (fixed) { ctx.fillStyle = "#4e6b66"; ctx.fillText(`${fixed} fixed`, x, 35); x += ctx.measureText(`${fixed} fixed`).width + 20; }
+  if (streak > 1) { ctx.fillStyle = streak >= 5 ? "#FFD24A" : "#20D898"; ctx.fillText(`x${streak}`, x, 35); x += 50; }
+  if (P.shield && state === "play") { ctx.fillStyle = "#9BEFD9"; ctx.fillText("PR ✓", x, 35); }
   ctx.textAlign = "right";
-  rrect(W - 470, 14, 452, 42, 8, "rgba(5,12,20,.72)");
-  ctx.fillStyle = "#CFEAE3"; ctx.font = `700 24px ${MONO}`;
-  ctx.fillText(`${metres()}m · v1.${version} · ${score()}`, W - 34, 36);
-  const sw = ctx.measureText(`${metres()}m · v1.${version} · ${score()}`).width;
-  ctx.fillStyle = "#4e6b66"; ctx.font = `600 18px ${MONO}`;
-  ctx.fillText(`best ${best}`, W - 34 - sw - 22, 37);
-  ctx.fillText(muted ? "♪ off" : "", W - 34, 76);
+  ctx.fillStyle = "#CFEAE3"; ctx.font = `700 26px ${MONO}`; ctx.fillText(String(score()), W - 34, 34);
+  const sw = ctx.measureText(String(score())).width;
+  ctx.fillStyle = "#4e6b66"; ctx.font = `600 16px ${MONO}`;
+  ctx.fillText(`${metres()}m · best ${best}${muted ? " · ♪ off" : ""}`, W - 34 - sw - 20, 36);
   ctx.textAlign = "left";
+}
+
+function drawCoffee(x, y) {
+  // a pixel mug with steam
+  ctx.save(); ctx.shadowColor = "#FFD24A"; ctx.shadowBlur = 10 + 4 * Math.sin(t * 5);
+  rrect(x - 13, y - 12, 26, 26, 4, "#F4E9D8");
+  rrect(x - 10, y - 9, 20, 6, 2, "#6B3E26");
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#F4E9D8"; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x + 15, y + 1, 6, -1.4, 1.4); ctx.stroke();
+  ctx.fillStyle = "rgba(207,234,227,.6)";
+  for (let i = 0; i < 3; i++) { const sy = y - 20 - ((t * 30 + i * 8) % 24); ctx.fillRect(x - 6 + i * 6 + Math.sin(t * 4 + i) * 2, sy, 3, 6); }
+  ctx.restore();
 }
 
 function termBox(lines, y0) {
@@ -585,7 +688,7 @@ function overlay() {
     termBox([
       ["$ " + cmd.slice(0, n) + (done ? "" : cursor), "#9BE7C4", 26],
       [done ? "> an endless run through Ananya's contribution graph" : "", "#CFEAE3"],
-      [done ? "> stomp bugs · head-butt </> blocks for commits · leaf = PR approved" : "", "#7FA9A1", 19],
+      [done ? "> stomp bugs · head-butt </> blocks · watch for surprises" : "", "#7FA9A1", 19],
       [done ? "> space / tap to jump, hold for higher · m sound" : "", "#7FA9A1", 19],
       [done ? "press space to deploy " + cursor : "", "#20D898", 24],
     ], 120);
