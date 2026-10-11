@@ -1830,7 +1830,7 @@ def build_runner_panel(weeks, total=None):
 # </> block as a play button, which she keeps bonking like any other block.
 # GitHub never runs code in a README and links the whole image, so the button
 # is a picture; clicking anywhere on the panel opens the game.
-PLAY_SHEET_PATH = os.path.join(_ASSETS, "play-block-sheet-v1.png")    # 3 x 320px: idle, glow, bump
+PLAY_SHEET_PATH = os.path.join(_ASSETS, "play-block-sheet-v1.png")    # 3 x 320px: idle, glow, squashed bump
 PLAY_CELL = 320
 TUMBLE_SHEET_PATH = os.path.join(_ASSETS, "leaf-tumble-sheet-v1.png")  # 8 x 256px tumble
 TUMBLE_CELL = 256
@@ -1945,9 +1945,8 @@ def story_outro(t_cut, T):
     quiet = [(bk, bk + bump_len) for bk in bonks]
     glow = gate(flipbook(faces[:2], 1.3), quiet, T)
     bumps = "".join(sequence([faces[2]], bk, bk + bump_len, T) for bk in bonks)
-    if drawn_bump:
-        lift = ""
-    else:
+    # the bump frame is drawn squashed, not raised, so it is lifted here too
+    if True:
         vals, times = ["0,0"], [0.0]
         for bk in bonks:
             vals += ["0,0", "0,-18", "0,3", "0,0"]
