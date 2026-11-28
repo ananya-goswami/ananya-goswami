@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Commit Runner</title>
+<meta name="description" content="An endless runner built from Ananya Goswami's GitHub contributions.">
+<style>
+  :root { --bg:#081420; --ink:#CFEAE3; --mint:#9BE7C4; --teal:#20D898; --dim:#4e6b66; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font:600 14px/1.5 ui-monospace,"SF Mono","JetBrains Mono",Consolas,monospace; }
+  body { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px;
+    padding:16px; box-sizing:border-box; }
+  #wrap { width:min(1200px, 100%, calc((100vh - 90px) * 1800 / 570)); }
+  canvas { display:block; width:100%; height:auto; image-rendering:pixelated; outline:none;
+    border-radius:12px; background:#081420; touch-action:manipulation; cursor:pointer;
+    box-shadow:0 0 0 1px #13302c, 0 18px 50px rgba(0,0,0,.45); }
+  .bar { width:min(1200px, 100%, calc((100vh - 90px) * 1800 / 570)); display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;
+    color:var(--dim); font-size:12px; }
+  a { color:var(--mint); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c" width="1800" height="570" tabindex="0" aria-label="Commit Runner game"></canvas></div>
+<div class="bar">
+  <span>space / tap: jump · hold: higher · p: pause · m: sound</span>
+  <a href="https://github.com/ananya-goswami">← back to GitHub</a>
+</div>
+<script>
+(() => {
+"use strict";
+const W = 1800, H = 570, GROUND = 530, GY0 = 64, PITCH = 44, CELL = 34;
+const LEVELS = ["#06313E", "#128070", "#18A088", "#20D898", "#9BEFD9"];
+const MONO = "ui-monospace,'SF Mono','JetBrains Mono',Consolas,monospace";
+const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+ctx.imageSmoothingEnabled = false;
+
+// ---------------------------------------------------------------- storage (best score, sound)
+let best = 0, muted = false;
+try { best = +localStorage.getItem("commitRunnerBest") || 0; muted = localStorage.getItem("commitRunnerMute") === "1"; } catch (e) {}
+function saveBest() { try { localStorage.setItem("commitRunnerBest", String(best)); } catch (e) {} }
+function saveMute() { try { localStorage.setItem("commitRunnerMute", muted ? "1" : "0"); } catch (e) {} }
+
+// ---------------------------------------------------------------- 8-bit sound, made in code
+let ac = null;
+function audio() {
+  if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ac = null; } }
+  if (ac && ac.state === "suspended") ac.resume();
+  return ac;
+}
+function beep(f0, f1, dur, type = "square", vol = 0.06, delay = 0) {
+  if (muted) return; const a = audio(); if (!a) return;
+  const t = a.currentTime + delay, o = a.createOscillator(), g = a.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + dur + 0.02);
+}
+const SFX = {
+  jump:  () => beep(330, 660, 0.12),
+  coin:  () => { beep(988, 988, 0.06); beep(1319, 1319, 0.14, "square", 0.06, 0.06); },
+  bump:  () => beep(160, 90, 0.08, "triangle", 0.09),
+  stomp: () => { beep(520, 120, 0.12, "square", 0.07); },
+  power: () => [523, 659, 784, 1047].forEach((f, i) => beep(f, f, 0.09, "square", 0.05, i * 0.07)),
+  deploy:() => [392, 523, 659, 784, 1047].forEach((f, i) => beep(f, f * 1.01, 0.08, "triangle", 0.07, i * 0.06)),
+  hurt:  () => beep(300, 80, 0.3, "sawtooth", 0.06),
+  fail:  () => [392, 330, 262, 196].forEach((f, i) => beep(f, f * 0.98, 0.16, "square", 0.06, i * 0.15)),
+};
+
+// ---------------------------------------------------------------- sprites
+function load(src) {
+  return new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+}
+// cut a cell, trim it to its visible pixels; anchor = bottom centre
+function cut(img, x, y, w, h) {
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const g = c.getContext("2d"); g.drawImage(img, x, y, w, h, 0, 0, w, h);
+  const d = g.getImageData(0, 0, w, h).data;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+    if (d[(yy * w + xx) * 4 + 3] > 20) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; }
+  }
+  if (x1 < 0) return null;
+  const o = document.createElement("canvas"); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
+  o.getContext("2d").drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
+  return o;
+}
+const S = {};
+async function loadSprites() {
+  const [av, tu, sn, lf, bc] = await Promise.all([
+    load("assets/runner-avatar-sheet-v9.png"), load("assets/turtle-sheet-v1.png"),
+    load("assets/snake-sheet-v1.png"), load("assets/leaf-sheet-v1.png"),
+    load("assets/blockcoin-sheet-v1.png")]);
+  const grid = (img, cw, ch, cells) => img ? cells.map(([c, r]) => cut(img, c * cw, r * ch, cw, ch)) : [];
+  // her run, in stride order, then rising / head-butt / falling / landing
+  S.run = grid(av, 362, 362, [[0,0],[1,0],[2,0],[3,0],[0,1],[1,1],[2,1]]);
+  S.runW = [1, 1, 1, 4/3, 4/3, 4/3, 1];
+  S.air = grid(av, 362, 362, [[1,2],[2,2],[3,2],[0,3]]);
+  S.turtle = grid(tu, 200, 200, [0,1,2,3,4,5].map(i => [i, 0]));
+  S.shell = grid(tu, 200, 200, [[4, 2]]);
+  S.snake = grid(sn, 260, 260, [0,1,2,3,4,5,6,7].map(i => [i, 0]));
+  S.leaf = grid(lf, 140, 140, [[2,0],[3,0],[4,0]]);
+  S.block = grid(bc, 128, 128, [[0,0],[1,0],[2,0]]);
+  S.coin = grid(bc, 128, 128, [[0,1],[1,1],[2,1],[3,1]]);
+}
+
+// ---------------------------------------------------------------- the world from her contributions
+let weeks = null;
+async function loadWeeks() {
+  try {
+    const r = await fetch("contrib.json", { cache: "no-store" });
+    const j = await r.json();
+    if (Array.isArray(j.levels) && j.levels.length) weeks = j.levels;
+  } catch (e) {}
+  if (!weeks) {               // offline / first build: a made-up but plausible grid
+    weeks = [];
+    for (let c = 0; c < 52; c++) weeks.push([0,1,2,3,4,5,6].map(() => Math.random() < .35 ? 1 + (Math.random() * 4 | 0) : 0));
+  }
+  // drop the empty stretch at the start so the run begins where the work does
+  const first = weeks.findIndex(w => w.some(v => v > 0));
+  if (first > 0) weeks = weeks.slice(first);
+}
+function levelAt(col, row) { return weeks[((col % weeks.length) + weeks.length) % weeks.length][row]; }
+// a stable random number per column, so the level is the same every frame
+function rnd(col, salt) { const x = Math.sin(col * 12.9898 + salt * 78.233) * 43758.5453; return x - Math.floor(x); }
+
+// ---------------------------------------------------------------- level features, made per column
+// Blocks sit at heights a normal jump reaches (rows 4-6), with the odd one in
+// row 3 that needs a held jump. Every 9th block hides the PR-approved leaf.
+// Platforms are short runs of lit squares in the open band above the ground,
+// with commit coins floating over them.
+const PLAT_Y = [GROUND - 100, GROUND - 124, GROUND - 146];   // all below the graph
+const feat = new Map();
+let blockCount = 0;
+function features(col) {
+  let f = feat.get(col);
+  if (f) return f;
+  f = { block: null, plat: null, coins: [] };
+  if (col >= 4) {
+    const prev = [1, 2].map(k => feat.get(col - k)).filter(Boolean);
+    const near = prev.some(p => p.block);
+    if (!near && rnd(col, 1) < 0.3) {
+      let row = [6, 5, 4, 4, 5][Math.floor(rnd(col, 2) * 5)];
+      if (rnd(col, 3) < 0.12) row = 3;
+      blockCount++;
+      const kind = blockCount % 9 === 0 ? "leaf" : rnd(col, 8) < 0.08 ? "gold" : "coin";
+      f.block = { row, state: 0, bump: 0, kind };
+    } else if (!near && rnd(col, 9) < 0.05) {
+      // a hidden commit: an invisible block that only shows when she hits it
+      f.block = { row: 6, state: 0, bump: 0, kind: "coin", hidden: true };
+    }
+    const prevPlat = [1, 2, 3, 4, 5, 6, 7].some(k => { const p = feat.get(col - k); return p && p.plat; });
+    if (!prevPlat && !f.block && rnd(col, 4) < 0.04) {
+      const len = 3 + Math.floor(rnd(col, 5) * 3);
+      const y = PLAT_Y[Math.floor(rnd(col, 6) * PLAT_Y.length)];
+      f.plat = { x0: col * PITCH, x1: col * PITCH + len * PITCH - (PITCH - CELL), y };
+      for (let k = 0; k < len; k++) f.coins.push({ x: col * PITCH + k * PITCH + CELL / 2, y: y - 30, got: false });
+    } else if (!f.block && rnd(col, 7) < 0.02) {
+      // a short arc of coins in the open, to pull her into a jump
+      for (let k = 0; k < 3; k++) f.coins.push({ x: col * PITCH + k * 26, y: GROUND - 120 - (k === 1 ? 26 : 0), got: false });
+    }
+  }
+  // a rare cup of coffee, floating at jump height
+  if (col > 30 && !f.plat && rnd(col, 10) < 0.012) f.coffee = { x: col * PITCH + CELL / 2, y: GROUND - 150, got: false };
+  feat.set(col, f);
+  if (feat.size > 600) feat.delete(feat.keys().next().value);
+  return f;
+}
+
+// ---------------------------------------------------------------- state
+const P = { x: 300, y: GROUND, vy: 0, h: 110, w: 46, onGround: true, hold: 0, shield: 0, hurt: 0, rot: 0, plat: null };
+let state = "title", t = 0, speed = 240, dist = 0, coins = 0, fixed = 0, streak = 0, scroll = 0, version = 0;
+let enemies = [], pops = [], leaves = [], parts = [], texts = [], nextEnemy = 3, flash = 0, paused = false;
+let bonus = 0, shake = 0, banner = null, lit = new Map(), killer = null, overT = 0;
+// surprises: one random event at a time, plus timed power-ups
+let ev = null, nextEv = 35, coinMult = 1, gravMul = 1, caffeine = 0, god = 0, drops = [], keybuf = "";
+const GRAV = 2600, JUMP_V = 980, HOLD_G = 0.45, MAX_HOLD = 0.22;
+const DEPLOY_EVERY = 250;            // metres between releases
+
+function reset() {
+  Object.assign(P, { y: GROUND, vy: 0, onGround: true, shield: 0, hurt: 0, hold: 0, rot: 0, plat: null });
+  t = 0; speed = 240; dist = 0; coins = 0; fixed = 0; streak = 0; scroll = 0; version = 0;
+  enemies = []; pops = []; leaves = []; parts = []; texts = []; nextEnemy = 3; flash = 0;
+  bonus = 0; shake = 0; banner = null; lit = new Map(); killer = null; feat.clear(); blockCount = 0;
+  ev = null; nextEv = 35; coinMult = 1; gravMul = 1; caffeine = 0; god = 0; drops = [];
+}
+const metres = () => Math.floor(dist / 40);
+
+// ---------------------------------------------------------------- difficulty: slow and easy first
+// 0.0 at the start, 1.0 after about three minutes. Speed, how often bugs come,
+// how many of them are fast snakes, and which events can fire all follow it.
+const level = () => Math.min(1, t / 180);
+function pace() {
+  // a gentle warm-up, then steady growth, plus a small step at every release
+  return Math.min(640, 240 + 330 * level() + version * 12);
+}
+const col0 = () => Math.floor((scroll + P.x) / PITCH);
+
+// ---------------------------------------------------------------- random events
+// Every 20-35 s of play, one of these takes over for a few seconds.
+const EVENTS = {
+  incident: { dur: 7, text: "🚨 prod incident: three bugs incoming" },
+  hackathon: { dur: 8, text: "hackathon: every commit counts double" },
+  lowgrav:  { dur: 7, text: "zero-gravity refactor" },
+};
+function startEvent(kind) {
+  ev = { kind, age: 0, dur: EVENTS[kind].dur, alive: true };
+  banner = { text: EVENTS[kind].text, age: 0 };
+  if (kind === "incident") {
+    SFX.hurt();
+    const tags = ["P0 bug", "500 error", "memory leak"];
+    for (let i = 0; i < 3; i++) {
+      const img = S.snake[0], h = 52, w = img ? img.width * h / img.height * 0.8 : 54;
+      enemies.push({ kind: "snake", x: W + 80 + i * 300, walk: 70, w, h, dead: 0, tag: tags[i] });
+    }
+    nextEnemy = 4;
+  }
+  if (kind === "hackathon") { coinMult = 2; SFX.deploy(); }
+  if (kind === "lowgrav") { gravMul = 0.5; SFX.deploy(); }
+}
+function endEvent() {
+  if (ev.kind === "incident" && ev.alive) { bonus += 100; say(W / 2, 200, "incident resolved +100", "#20D898", 28); SFX.deploy(); }
+  coinMult = 1; gravMul = 1; ev = null; nextEv = 20 + Math.random() * 15;
+}
+function runEvents(dt) {
+  if (ev) {
+    ev.age += dt;
+    if (ev.kind === "incident" && ev.age < 2 && Math.floor(ev.age * 4) !== Math.floor((ev.age - dt) * 4)) beep(880, 660, 0.18, "square", 0.04);
+    if (ev.kind === "hackathon" && Math.random() < dt * 7)
+      drops.push({ x: scroll + 500 + Math.random() * 1200, y: -20, vy: 0, got: false });
+    if (ev.age >= ev.dur) endEvent();
+    return;
+  }
+  nextEv -= dt;
+  if (nextEv <= 0) {
+    // the prod incident (three bugs at once) only after the first minute
+    const pool = t > 60 ? ["incident", "hackathon", "lowgrav"] : ["hackathon", "lowgrav"];
+    startEvent(pool[Math.floor(Math.random() * pool.length)]);
+  }
+}
+function score() { return metres() + coins * 10 + fixed * 25 + bonus; }
+
+// ---------------------------------------------------------------- effects
+function say(x, y, text, color = "#9BEFD9", size = 22) { texts.push({ x, y, text, color, size, age: 0 }); }
+function burst(x, y, n, colors, glyphs) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, v = 120 + Math.random() * 260;
+    parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 140, age: 0, life: 0.5 + Math.random() * 0.4,
+      c: colors[i % colors.length], g: glyphs ? glyphs[i % glyphs.length] : null, s: 4 + Math.random() * 4 });
+  }
+}
+function dust(x, y) {
+  for (let i = 0; i < 7; i++) parts.push({ x: x + (Math.random() - 0.5) * 30, y, vx: (Math.random() - 0.5) * 160 - 60,
+    vy: -40 - Math.random() * 80, age: 0, life: 0.35, c: "#3b6f68", s: 5 });
+}
+
+// ---------------------------------------------------------------- input
+let down = false;
+function press() {
+  audio();
+  if (state === "title" || state === "over") {
+    if (state === "over" && overT < 0.7) return;
+    reset(); state = "play"; return;
+  }
+  if (state !== "play") return;
+  if (paused) { paused = false; return; }
+  down = true;
+  if (P.onGround) { P.vy = -JUMP_V; P.onGround = false; P.plat = null; P.hold = 0; SFX.jump(); }
+}
+function release() { down = false; }
+const JUMP_KEYS = ["Space", "ArrowUp", "KeyW", "Enter"];
+document.addEventListener("keydown", e => {
+  if (JUMP_KEYS.includes(e.code)) { e.preventDefault(); if (!e.repeat) press(); }
+  if (e.code === "KeyP" || e.code === "Escape") { if (state === "play") paused = !paused; }
+  if (e.code === "KeyM") { muted = !muted; saveMute(); }
+  if (e.key && e.key.length === 1) {
+    keybuf = (keybuf + e.key.toLowerCase()).slice(-4);
+    if (keybuf === "sudo" && state === "play") {
+      god = 6; SFX.power(); flash = 0.2; keybuf = "";
+      banner = { text: "sudo: permission granted", age: 0 };
+    }
+  }
+});
+document.addEventListener("keyup", e => { if (JUMP_KEYS.includes(e.code)) release(); });
+cv.addEventListener("pointerdown", e => { e.preventDefault(); cv.focus(); press(); });
+addEventListener("pointerup", release);
+addEventListener("blur", () => { if (state === "play") paused = true; });
+// the page takes keys straight away, no click needed first
+addEventListener("load", () => { try { window.focus(); cv.focus({ preventScroll: true }); } catch (e) {} });
+
+// ---------------------------------------------------------------- update
+const BUGS = { snake: ["bug", "TypeError", "null ref", "race condition", "off-by-one"],
+               turtle: ["slow CI", "legacy code", "tech debt", "flaky test"] };
+function spawnEnemy() {
+  // early on it is mostly slow turtles; snakes (faster) join in as she goes
+  const kind = Math.random() < 0.15 + 0.4 * level() ? "snake" : "turtle";
+  const h = kind === "turtle" ? 46 : 52;
+  // hitbox = the drawn sprite's width, trimmed a little so grazes are forgiven
+  const img = kind === "turtle" ? S.turtle[0] : S.snake[0];
+  const w = img ? img.width * h / img.height * 0.8 : (kind === "turtle" ? 70 : 54);
+  const tags = BUGS[kind];
+  enemies.push({ kind, x: W + 80, walk: kind === "turtle" ? 40 : 70, w, h, dead: 0,
+                 tag: tags[Math.floor(Math.random() * tags.length)] });
+  // a bug every ~3.5 s at first, down to ~1.2 s at full difficulty
+  nextEnemy = 3.4 - 2.2 * level() + Math.random() * (1.6 - 0.6 * level());
+}
+
+function hitBlock(c, b) {
+  b.state = 1; b.bump = 0.25; SFX.bump();
+  const bx = c * PITCH + CELL / 2, by = GY0 + b.row * PITCH;
+  lit.set(c + "," + b.row, 1);                  // her new commit lights its square
+  for (let r = 0; r < 7; r++) if (r !== b.row) lit.set(c + "," + r, Math.max(lit.get(c + "," + r) || 0, 0.001));
+  if (b.kind === "leaf") { leaves.push({ x: bx, y: by - 10, vy: -380, got: false }); say(bx - scroll, by - 30, "PR opened", "#CFEAE3", 18); }
+  else if (b.kind === "gold") {
+    // a golden commit: five coins in a fountain
+    for (let i = 0; i < 5; i++) pops.push({ x: bx + (i - 2) * 14, y: by - 6, age: -i * 0.09 });
+    coins += 5 * coinMult; SFX.power(); shake = 0.1;
+    say(bx - scroll, by - 44, `golden commit +${5 * coinMult}`, "#FFD24A", 20);
+  } else {
+    coins += coinMult; pops.push({ x: bx, y: by - 6, age: 0 }); SFX.coin();
+    say(bx - scroll, by - 40, b.hidden ? "hidden commit found!" : `+${coinMult}`, "#FFD24A", 18);
+  }
+}
+
+function die(e) {
+  state = "dying"; overT = 0; killer = e; P.vy = -760; P.onGround = false; shake = 0.45; flash = 0.25;
+  SFX.hurt(); setTimeout(SFX.fail, 350);
+  const s = score(); if (s > best) { best = s; saveBest(); }
+}
+
+function update(dt) {
+  t += dt;
+  for (const p of parts) { p.age += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 900 * dt; }
+  parts = parts.filter(p => p.age < p.life);
+  for (const s of texts) { s.age += dt; s.y -= 40 * dt; }
+  texts = texts.filter(s => s.age < 0.9);
+  if (shake > 0) shake -= dt;
+  if (flash > 0) flash -= dt;
+  if (banner) { banner.age += dt; if (banner.age > 2.2) banner = null; }
+  if (lit.size > 3000) lit = new Map([...lit].slice(-1500));
+  for (const k of lit.keys()) { const v = lit.get(k); if (v < 1) { if (v > 0.6) lit.delete(k); else lit.set(k, v + dt * 1.5); } }
+
+  if (state === "dying") {
+    overT += dt; P.vy += GRAV * 0.8 * dt; P.y += P.vy * dt; P.rot += dt * 7;
+    if (overT > 1.1) { state = "over"; overT = 0; }
+    return;
+  }
+  if (state === "over") { overT += dt; return; }
+  if (state !== "play" || paused) return;
+
+  // steady ramp, plus a step at every release
+  speed = pace() * (caffeine > 0 ? 1.35 : 1);
+  const dx = speed * dt;
+  scroll += dx; dist += dx;
+  if (metres() >= (version + 1) * DEPLOY_EVERY) {
+    version++; banner = { text: `▲ v1.${version} deployed`, age: 0 }; SFX.deploy();
+    burst(W / 2, 120, 24, ["#9BEFD9", "#20D898", "#FFD24A"], ["0", "1"]);
+  }
+
+  // ---- her ----
+  const prevFeet = P.y;
+  if (P.onGround && P.plat && (P.x - P.w / 2 > P.plat.x1 - scroll || P.x + P.w / 2 < P.plat.x0 - scroll)) {
+    P.onGround = false; P.plat = null; P.vy = 0;          // walked off the end
+  }
+  if (!P.onGround) {
+    let g = GRAV * gravMul;
+    if (down && P.vy < 0 && P.hold < MAX_HOLD) { g *= HOLD_G; P.hold += dt; }
+    P.vy += g * dt;
+    const prevHead = P.y - P.h;
+    P.y += P.vy * dt;
+    // head-butt: moving up through the bottom of a block above her
+    if (P.vy < 0) {
+      const col = Math.floor((scroll + P.x) / PITCH);
+      for (const c of [col - 1, col, col + 1]) {
+        const b = features(c).block; if (!b || b.state) continue;
+        const bx = c * PITCH - scroll, bottom = GY0 + b.row * PITCH + CELL * 1.12;
+        if (P.x + P.w / 2 > bx && P.x - P.w / 2 < bx + CELL && prevHead >= bottom - 2 && P.y - P.h <= bottom) {
+          P.vy = 60; P.y = bottom + P.h; hitBlock(c, b);
+        }
+      }
+    }
+    // land on a platform from above (they are one-way, like clouds)
+    if (P.vy > 0) {
+      const col = Math.floor((scroll + P.x) / PITCH);
+      for (let c = col - 6; c <= col + 1; c++) {
+        const pl = features(c).plat; if (!pl) continue;
+        const x0 = pl.x0 - scroll, x1 = pl.x1 - scroll;
+        if (P.x + P.w / 2 > x0 && P.x - P.w / 2 < x1 && prevFeet <= pl.y && P.y >= pl.y) {
+          P.y = pl.y; P.vy = 0; P.onGround = true; P.plat = pl; dust(P.x, P.y);
+        }
+      }
+    }
+    if (P.y >= GROUND) { P.y = GROUND; P.vy = 0; P.onGround = true; P.plat = null; dust(P.x, GROUND); }
+  }
+  for (const f of feat.values()) if (f.block && f.block.bump > 0) f.block.bump -= dt;
+  for (const p of pops) p.age += dt;
+  pops = pops.filter(p => p.age < 0.6);
+  runEvents(dt);
+  if (caffeine > 0) caffeine -= dt;
+  if (god > 0) god -= dt;
+
+  // coffee: five seconds of caffeinated sprinting, bugs bounce off her
+  for (let c = col0() - 1; c <= col0() + 1; c++) {
+    const k = features(c).coffee;
+    if (k && !k.got && Math.abs(k.x - scroll - P.x) < 36 && k.y > P.y - P.h - 20 && k.y < P.y + 10) {
+      k.got = true; caffeine = 5; SFX.power(); flash = 0.15;
+      banner = { text: "☕ caffeinated: nothing can stop her", age: 0 };
+    }
+  }
+  // hackathon coin rain
+  for (const d of drops) {
+    if (!d.got) { d.vy = Math.min(d.vy + 900 * dt, 520); d.y = Math.min(d.y + d.vy * dt, GROUND - 60); }
+    const sx = d.x - scroll;
+    if (!d.got && Math.abs(sx - P.x) < 34 && d.y > P.y - P.h - 16 && d.y < P.y + 10) {
+      d.got = true; coins += coinMult; SFX.coin(); say(sx, d.y - 20, `+${coinMult}`, "#FFD24A", 16);
+    }
+  }
+  drops = drops.filter(d => !d.got && d.x - scroll > -40);
+
+  // floating commit coins
+  const col = col0();
+  for (let c = col - 2; c <= col + 2; c++) for (const k of features(c).coins) {
+    if (k.got) continue;
+    const sx = k.x - scroll;
+    if (Math.abs(sx - P.x) < 34 && k.y > P.y - P.h - 16 && k.y < P.y + 10) {
+      k.got = true; coins += coinMult; SFX.coin(); burst(sx, k.y, 6, ["#FFD24A", "#FFF6C4"]);
+      say(sx, k.y - 20, `+${coinMult}`, "#FFD24A", 18);
+    }
+  }
+
+  // PR-approved leaf: pops up, falls, slides with the world until she touches it
+  for (const l of leaves) {
+    l.vy = Math.min(l.vy + 1400 * dt, 500); l.y = Math.min(l.y + l.vy * dt, GROUND - 4);
+    const sx = l.x - scroll;
+    if (!l.got && Math.abs(sx - P.x) < 40 && Math.abs((P.y - P.h / 2) - l.y) < P.h / 2 + 20) {
+      l.got = true; P.shield = 1; flash = 0.3; SFX.power(); say(P.x, P.y - P.h - 20, "LGTM ✓ PR approved", "#9BEFD9", 22);
+    }
+  }
+  leaves = leaves.filter(l => !l.got && l.x - scroll > -60);
+
+  // ---- bugs ----
+  nextEnemy -= dt; if (nextEnemy <= 0) spawnEnemy();
+  for (const e of enemies) {
+    if (e.dead) { e.dead += dt; e.x -= dx; continue; }
+    if (e.shell) {
+      // a stomped turtle's shell: run into it and it slides off, taking bugs with it
+      if (!e.kick) {
+        e.x -= dx;
+        if (Math.abs(e.x - P.x) < (e.w + P.w) / 2 - 6 && P.y > GROUND - e.h - 4 && e.cool <= 0) {
+          e.kick = true; e.combo = 0; SFX.stomp(); say(e.x, GROUND - 90, "kick!", "#CFEAE3", 20);
+        }
+        e.cool -= dt;
+      } else {
+        e.x += 760 * dt;
+        for (const o of enemies) if (o !== e && !o.dead && !o.shell && Math.abs(o.x - e.x) < (o.w + e.w) / 2) {
+          o.dead = 0.001; fixed++; e.combo++; bonus += 50 * e.combo; SFX.stomp();
+          burst(o.x, GROUND - o.h, 8, ["#9BEFD9", "#20D898"], ["0", "1"]);
+          say(o.x, GROUND - o.h - 30, `shell combo x${e.combo}`, "#9BEFD9", 20);
+        }
+      }
+      continue;
+    }
+    e.x -= dx + e.walk * dt;
+    const overlapX = Math.abs(e.x - P.x) < (e.w + P.w) / 2 - 8;
+    const feet = P.y, top = GROUND - e.h;
+    if (overlapX && feet > top + 6) {
+      // a stomp is judged by where her feet were last frame, so a fast fall
+      // (up to ~35 px a frame) cannot skip past the top of the enemy
+      if (caffeine > 0 || god > 0) {
+        e.dead = 0.001; fixed++; streak++; SFX.stomp(); shake = 0.1;
+        burst(e.x, top, 8, ["#FFD24A", "#9BEFD9"], ["0", "1"]); say(e.x, top - 30, "smashed ✓", "#FFD24A", 20);
+        continue;
+      }
+      if (P.vy > 0 && prevFeet <= top + 14) {
+        if (e.kind === "turtle") { e.shell = true; e.kick = false; e.cool = 0.25; e.h = 34; }
+        else e.dead = 0.001;
+        fixed++; streak++; P.vy = -620; P.onGround = false; P.plat = null; P.hold = MAX_HOLD;
+        SFX.stomp(); shake = 0.12;
+        burst(e.x, top, 8, ["#9BEFD9", "#20D898"], ["0", "1"]);
+        say(e.x, top - 30, streak >= 5 ? `on fire x${streak}` : streak > 1 ? `fixed ✓ x${streak}` : "fixed ✓", streak >= 5 ? "#FFD24A" : "#20D898", 22);
+        say(e.x, top - 56, `+${25 * Math.max(1, streak)}`, "#CFEAE3", 18);
+        bonus += 25 * Math.max(0, streak - 1);   // a chain of fixes pays more
+      } else if (P.hurt <= 0) {
+        if (P.shield) { P.shield = 0; P.hurt = 1.0; flash = 0.3; shake = 0.25; e.dead = 0.001; streak = 0; SFX.hurt(); say(P.x, P.y - P.h - 20, "review saved you", "#FFD24A", 20); }
+        else { if (ev && ev.kind === "incident") ev.alive = false; die(e); }
+      }
+    }
+  }
+  enemies = enemies.filter(e => e.x > -150 && e.x < W + 1000 && e.dead < 0.6);
+  if (P.hurt > 0) P.hurt -= dt;
+}
+
+// ---------------------------------------------------------------- draw
+function rrect(x, y, w, h, r, fill) { ctx.fillStyle = fill; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); ctx.fill(); }
+function sprite(img, cx, bottom, height, flip) {
+  if (!img) return;
+  const k = height / img.height, w = img.width * k;
+  ctx.save(); ctx.translate(cx, bottom); if (flip) ctx.scale(-1, 1);
+  ctx.drawImage(img, -w / 2, -height, w, height); ctx.restore();
+}
+function frameAt(list, weights, period, time) {
+  const tot = weights.reduce((a, b) => a + b, 0); let x = (time % period) / period * tot;
+  for (let i = 0; i < list.length; i++) { x -= weights[i]; if (x < 0) return list[i]; }
+  return list[list.length - 1];
+}
+const EVEN = n => Array(n).fill(1);
+const stars = Array.from({ length: 16 }, (_, k) => [60 + (k * 331) % (W - 120), 70 + (k * 137) % 400, k]);
+
+function draw() {
+  ctx.save();
+  if (shake > 0) ctx.translate((Math.random() - 0.5) * 14 * shake / 0.45, (Math.random() - 0.5) * 10 * shake / 0.45);
+  ctx.fillStyle = "#081420"; ctx.fillRect(-20, -20, W + 40, H + 40);
+  for (const [x, y, k] of stars) { ctx.globalAlpha = 0.12 + 0.3 * (0.5 + 0.5 * Math.sin(t * 1.5 + k)); ctx.fillStyle = "#9BEFD9"; ctx.fillRect(x, y, 3, 3); }
+  ctx.globalAlpha = 1;
+
+  // her contribution graph, scrolling as the world; her hits light it up
+  const c0 = Math.floor(scroll / PITCH) - 1, c1 = c0 + Math.ceil(W / PITCH) + 2;
+  for (let c = c0; c <= c1; c++) {
+    const x = c * PITCH - scroll, f = features(c), b = f.block;
+    const shown = b && !(b.hidden && !b.state);
+    for (let r = 0; r < 7; r++) {
+      if (shown && b.row === r) continue;
+      const y = GY0 + r * PITCH, l = lit.get(c + "," + r);
+      if (l === 1) {
+        ctx.shadowColor = "#20D898"; ctx.shadowBlur = 14; rrect(x, y, CELL, CELL, 7, "#9BEFD9"); ctx.shadowBlur = 0;
+      } else {
+        ctx.globalAlpha = 0.5; rrect(x, y, CELL, CELL, 7, LEVELS[levelAt(c, r)]); ctx.globalAlpha = 1;
+        if (l !== undefined) { ctx.globalAlpha = Math.max(0, 0.6 - l) ; rrect(x, y, CELL, CELL, 7, "#20D898"); ctx.globalAlpha = 1; }
+      }
+    }
+    if (shown) {
+      const y = GY0 + b.row * PITCH - (b.bump > 0 ? Math.sin((0.25 - b.bump) / 0.25 * Math.PI) * 14 : 0);
+      const img = b.state ? (b.bump > 0.12 ? S.block[1] : S.block[2]) : S.block[0];
+      const gold = b.kind === "gold" && !b.state;
+      if (gold) ctx.filter = "sepia(1) saturate(5) hue-rotate(-12deg) brightness(1.15)";
+      if (!b.state) { ctx.shadowColor = gold ? "#FFD24A" : "#20D898"; ctx.shadowBlur = 5 + 3 * Math.sin(t * 4 + c); }
+      if (img) ctx.drawImage(img, x - CELL * 0.12, y - CELL * 0.12, CELL * 1.24, CELL * 1.24);
+      else rrect(x, y, CELL, CELL, 7, b.state ? "#0a6b5c" : "#20D898");
+      ctx.shadowBlur = 0; ctx.filter = "none";
+    }
+    // platforms: a run of lit squares she can stand on
+    if (f.plat) {
+      const pl = f.plat;
+      for (let px = pl.x0; px < pl.x1; px += PITCH) {
+        const sx = px - scroll;
+        rrect(sx - 1, pl.y - 1, CELL + 2, 22, 6, "#0B2A33");
+        rrect(sx, pl.y, CELL, 20, 5, "#18A088");
+        rrect(sx + 3, pl.y + 2, CELL - 6, 5, 3, "#9BEFD9");
+      }
+    }
+    if (f.coffee && !f.coffee.got) drawCoffee(f.coffee.x - scroll, f.coffee.y + Math.sin(t * 3) * 4);
+    for (const k of f.coins) if (!k.got) {
+      const img = frameAt(S.coin, [3, 1, 1, 1], 1.4, t + c * 0.3);
+      if (img) sprite(img, k.x - scroll, k.y + 13 + Math.sin(t * 3 + c) * 3, 26);
+    }
+  }
+  for (const d of drops) {
+    const img = frameAt(S.coin, [3, 1, 1, 1], 1.2, t + d.x * 0.01);
+    if (img) sprite(img, d.x - scroll, d.y + 13, 24);
+  }
+  // coins popping out of blocks
+  for (const p of pops) {
+    if (p.age < 0) continue;
+    const y = p.y - Math.sin(Math.min(1, p.age / 0.6) * Math.PI) * 90;
+    const img = frameAt(S.coin, [1,1,1,1], 0.4, p.age);
+    if (img) sprite(img, p.x - scroll, y + 14, 28);
+  }
+  // ground
+  ctx.fillStyle = "#0B2A33"; ctx.fillRect(0, GROUND, W, H - GROUND);
+  ctx.fillStyle = "#3CEDA5"; ctx.fillRect(0, GROUND, W, 6);
+  ctx.fillStyle = "#07202A";
+  for (let x = -((scroll) % 74); x < W; x += 74) ctx.fillRect(x, GROUND + 6, 2, H - GROUND - 6);
+
+  for (const l of leaves) sprite(frameAt(S.leaf, [1,1,1], 0.6, t), l.x - scroll, l.y + 4, 30);
+
+  // bugs, each with its tag
+  ctx.font = `600 14px ${MONO}`; ctx.textAlign = "center";
+  for (const e of enemies) {
+    const squash = e.dead ? Math.max(0.25, 1 - e.dead * 3) : 1;
+    ctx.save(); ctx.translate(e.x, GROUND + 4); ctx.scale(1, squash);
+    if (e.shell) { if (e.kick) ctx.rotate(Math.sin(t * 40) * 0.08); sprite(S.shell[0], 0, 0, 34); }
+    else if (e.kind === "turtle") sprite(e.dead ? S.shell[0] : frameAt(S.turtle, EVEN(6), 0.62, t), 0, 0, e.h);
+    else sprite(frameAt(S.snake, EVEN(8), 0.8, t), 0, 0, e.h);
+    ctx.restore();
+    if (!e.dead && !e.shell) { ctx.fillStyle = "rgba(255,143,163,.8)"; ctx.fillText(e.tag, e.x, GROUND - e.h - 14); }
+  }
+  ctx.textAlign = "left";
+
+  // her
+  const blink = P.hurt > 0 && Math.floor(t * 12) % 2;
+  if (!blink) {
+    let img;
+    if (state === "title") img = frameAt(S.run, S.runW, 0.9, t);
+    else if (state === "dying" || state === "over") img = S.air[2];
+    else if (!P.onGround) img = P.vy < -250 ? S.air[0] : P.vy < 120 ? S.air[1] : S.air[2];
+    // an unhurried cadence: ~8 frames a second at the start, never above ~10,
+    // however fast the world scrolls (tying it to the scroll made a blur)
+    else img = frameAt(S.run, S.runW, Math.min(0.9, Math.max(0.7, 210 / speed)), t);
+    if (P.y > GROUND - 200 && state !== "dying") {
+      ctx.beginPath(); ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.ellipse(P.x, (P.plat ? P.plat.y : GROUND) - 2, 30, 6, 0, 0, 7); ctx.fill();
+    }
+    if (P.shield) {
+      ctx.save(); ctx.strokeStyle = `rgba(155,239,217,${0.5 + 0.3 * Math.sin(t * 6)})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.ellipse(P.x, P.y - P.h / 2, 46, 64, 0, 0, 7); ctx.stroke(); ctx.restore();
+    }
+    if ((caffeine > 0 || god > 0) && state === "play") {
+      for (let i = 3; i >= 1; i--) { ctx.globalAlpha = 0.12 * (4 - i); sprite(img, P.x - i * 22, P.y, P.h); }
+      ctx.globalAlpha = 1;
+      ctx.shadowColor = god > 0 ? `hsl(${(t * 300) % 360},90%,65%)` : "#FFD24A"; ctx.shadowBlur = 18;
+    }
+    if (state === "dying" || state === "over") {
+      ctx.save(); ctx.translate(P.x, P.y - P.h / 2); ctx.rotate(P.rot); sprite(img, 0, P.h / 2, P.h); ctx.restore();
+    } else sprite(img, P.x, P.y, P.h);
+    ctx.shadowBlur = 0;
+  }
+
+  // particles: dust, sparks and flying bits
+  for (const p of parts) {
+    ctx.globalAlpha = Math.max(0, 1 - p.age / p.life);
+    if (p.g) { ctx.fillStyle = p.c; ctx.font = `700 ${12 + p.s * 2}px ${MONO}`; ctx.fillText(p.g, p.x, p.y); }
+    else { ctx.fillStyle = p.c; ctx.fillRect(p.x, p.y, p.s, p.s); }
+  }
+  ctx.globalAlpha = 1;
+  for (const s of texts) {
+    ctx.globalAlpha = Math.max(0, 1 - s.age / 0.9); ctx.fillStyle = s.color;
+    ctx.font = `700 ${s.size}px ${MONO}`; ctx.textAlign = "center"; ctx.fillText(s.text, s.x, s.y);
+  }
+  ctx.globalAlpha = 1; ctx.textAlign = "left";
+  ctx.restore();
+
+  if (ev && ev.kind === "incident" && ev.age < 3) {
+    ctx.fillStyle = `rgba(255,60,90,${0.08 + 0.06 * Math.sin(ev.age * 12)})`; ctx.fillRect(0, 0, W, H);
+  }
+  hud();
+  if (ev) {   // what is going on, and how long it lasts
+    const k = 1 - ev.age / ev.dur;
+    rrect(W / 2 - 120, 160, 240, 4, 2, "rgba(155,239,217,.15)");
+    rrect(W / 2 - 120, 160, 240 * k, 4, 2, ev.kind === "incident" ? "#FF6B81" : "#9BEFD9");
+  }
+  for (const [tm, c] of [[caffeine, "#FFD24A"], [god, "#CFEAE3"]]) if (tm > 0 && state === "play") {
+    rrect(P.x - 30, P.y - P.h - 18, 60 * Math.min(1, tm / 5), 4, 2, c);
+  }
+  if (banner) {
+    const a = banner.age < 0.2 ? banner.age / 0.2 : banner.age > 1.7 ? Math.max(0, (2.2 - banner.age) / 0.5) : 1;
+    ctx.globalAlpha = a; ctx.textAlign = "center";
+    ctx.font = `700 28px ${MONO}`; ctx.textBaseline = "middle";
+    const bw = ctx.measureText(banner.text).width + 60;
+    rrect(W / 2 - bw / 2, 96, bw, 52, 10, "rgba(8,20,32,.88)");
+    ctx.fillStyle = "#9BEFD9";
+    ctx.fillText(banner.text, W / 2, 123); ctx.textAlign = "left"; ctx.globalAlpha = 1;
+  }
+  if (flash > 0) { ctx.fillStyle = `rgba(155,239,217,${flash})`; ctx.fillRect(0, 0, W, H); }
+  if (state === "title" || state === "over" || paused) overlay();
+}
+
+function hud() {
+  // minimal: commits on the left, score on the right, the rest only when it matters
+  ctx.textBaseline = "middle"; ctx.textAlign = "left";
+  const coinImg = frameAt(S.coin, [3,1,1,1], 1.6, t);
+  if (coinImg) sprite(coinImg, 40, 46, 26);
+  ctx.fillStyle = "#CFEAE3"; ctx.font = `700 26px ${MONO}`; ctx.fillText(String(coins), 62, 34);
+  let x = 62 + ctx.measureText(String(coins)).width + 26;
+  ctx.font = `600 18px ${MONO}`;
+  if (fixed) { ctx.fillStyle = "#4e6b66"; ctx.fillText(`${fixed} fixed`, x, 35); x += ctx.measureText(`${fixed} fixed`).width + 20; }
+  if (streak > 1) { ctx.fillStyle = streak >= 5 ? "#FFD24A" : "#20D898"; ctx.fillText(`x${streak}`, x, 35); x += 50; }
+  if (P.shield && state === "play") { ctx.fillStyle = "#9BEFD9"; ctx.fillText("PR ✓", x, 35); }
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#CFEAE3"; ctx.font = `700 26px ${MONO}`; ctx.fillText(String(score()), W - 34, 34);
+  const sw = ctx.measureText(String(score())).width;
+  ctx.fillStyle = "#4e6b66"; ctx.font = `600 16px ${MONO}`;
+  ctx.fillText(`${metres()}m · best ${best}${muted ? " · ♪ off" : ""}`, W - 34 - sw - 20, 36);
+  ctx.textAlign = "left";
+}
+
+function drawCoffee(x, y) {
+  // a pixel mug with steam
+  ctx.save(); ctx.shadowColor = "#FFD24A"; ctx.shadowBlur = 10 + 4 * Math.sin(t * 5);
+  rrect(x - 13, y - 12, 26, 26, 4, "#F4E9D8");
+  rrect(x - 10, y - 9, 20, 6, 2, "#6B3E26");
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#F4E9D8"; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x + 15, y + 1, 6, -1.4, 1.4); ctx.stroke();
+  ctx.fillStyle = "rgba(207,234,227,.6)";
+  for (let i = 0; i < 3; i++) { const sy = y - 20 - ((t * 30 + i * 8) % 24); ctx.fillRect(x - 6 + i * 6 + Math.sin(t * 4 + i) * 2, sy, 3, 6); }
+  ctx.restore();
+}
+
+function termBox(lines, y0) {
+  const lh = 34, h = lines.length * lh + 40, w = 900, x = W / 2 - w / 2, y = y0;
+  rrect(x, y, w, h, 12, "rgba(5,10,18,.92)");
+  ctx.strokeStyle = "#13302c"; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, 12) : ctx.rect(x, y, w, h); ctx.stroke();
+  [["#FF6B81", 0], ["#FFD24A", 1], ["#20D898", 2]].forEach(([c, i]) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x + 22 + i * 20, y + 18, 6, 0, 7); ctx.fill(); });
+  ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  lines.forEach(([text, color, size], i) => {
+    ctx.fillStyle = color; ctx.font = `600 ${size || 22}px ${MONO}`;
+    ctx.fillText(text, x + 34, y + 52 + i * lh);
+  });
+}
+function overlay() {
+  ctx.fillStyle = "rgba(5,10,20,.55)"; ctx.fillRect(0, 0, W, H);
+  const cursor = Math.floor(t * 2) % 2 === 0 ? "█" : " ";
+  if (paused) { termBox([["$ git stash", "#9BE7C4"], ["> run paused. press p or tap to pop it back", "#CFEAE3"]], 190); return; }
+  if (state === "title") {
+    const cmd = "npm run commit-runner", n = Math.min(cmd.length, Math.floor(t * 16));
+    const done = n >= cmd.length;
+    termBox([
+      ["$ " + cmd.slice(0, n) + (done ? "" : cursor), "#9BE7C4", 26],
+      [done ? "> an endless run through Ananya's contribution graph" : "", "#CFEAE3"],
+      [done ? "> stomp bugs · head-butt </> blocks · watch for surprises" : "", "#7FA9A1", 19],
+      [done ? "> space / tap to jump, hold for higher · m sound" : "", "#7FA9A1", 19],
+      [done ? "press space to deploy " + cursor : "", "#20D898", 24],
+    ], 120);
+    return;
+  }
+  // game over: a failed CI run
+  const e = killer || { tag: "bug", kind: "snake" };
+  termBox([
+    ["$ git push origin main", "#9BE7C4"],
+    ["remote: running checks...", "#7FA9A1", 19],
+    [`✗ build failed: ${e.tag} (${e.kind}) at ${metres()}m`, "#FF6B81", 24],
+    [`  commits ${coins} · fixed ${fixed} · score ${score()} · best ${best}`, "#CFEAE3", 20],
+    [overT > 0.7 ? `↵ git commit --amend   (space / tap to retry) ${cursor}` : "", "#20D898", 22],
+  ], 110);
+}
+
+// ---------------------------------------------------------------- loop
+let last = 0;
+function frame(now) {
+  const dt = Math.min(0.033, (now - last) / 1000 || 0); last = now;
+  if (state === "title") { scroll += 120 * dt; }        // the world idles past behind the title
+  update(dt); draw(); requestAnimationFrame(frame);
+}
+Promise.all([loadSprites(), loadWeeks()]).then(() => requestAnimationFrame(frame));
+})();
+</script>
+<style>
+#glow,#glowDot{position:fixed;left:0;top:0;pointer-events:none;z-index:99;opacity:0;transition:opacity .4s}
+#glow{width:420px;height:420px;margin:-210px 0 0 -210px;border-radius:50%;mix-blend-mode:screen;
+  background:radial-gradient(closest-side,var(--g,#00FF9C) 0%,transparent 100%);filter:blur(6px);
+}
+#glowDot{width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:var(--g,#00FF9C);
+  box-shadow:0 0 14px 3px var(--g,#00FF9C)}
+body.glow-on #glow{opacity:.34} body.glow-on #glowDot{opacity:.85}
+@media (hover:none),(prefers-reduced-motion:reduce){#glow,#glowDot{display:none}}
+</style>
+<div id="glow"></div><div id="glowDot"></div>
+<script>(()=>{
+  if (matchMedia('(hover:none),(prefers-reduced-motion:reduce)').matches) return;
+  const g=document.getElementById('glow'), d=document.getElementById('glowDot');
+  let mx=-999,my=-999,gx=-999,gy=-999,dx=-999,dy=-999;
+  addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY;document.body.classList.add('glow-on');
+    const c=e.target.closest&&e.target.closest('[data-glow]');
+    document.documentElement.style.setProperty('--g',c?c.dataset.glow:'#00FF9C');},{passive:true});
+  document.addEventListener('pointerleave',()=>document.body.classList.remove('glow-on'));
+  (function f(){gx+=(mx-gx)*.09;gy+=(my-gy)*.09;dx+=(mx-dx)*.35;dy+=(my-dy)*.35;
+    g.style.transform=`translate(${gx}px,${gy}px)`;d.style.transform=`translate(${dx}px,${dy}px)`;
+    requestAnimationFrame(f);})();
+})();</script></body>
+</html>
